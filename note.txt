@@ -1,0 +1,42 @@
+Mở phiếu
+
+  open /Users/tuyet/Study/PneuComplete/docs/REVIEW-A3.md
+
+  Mở PDF đối chiếu — trang cụ thể cho từng mục
+
+  ┌─────────────────────────┬───────────────────────┬────────────────────────────────────┐
+  │           mục           │        mở file        │               trang                │
+  ├─────────────────────────┼───────────────────────┼────────────────────────────────────┤
+  │ A3-1 cột D = đường kính │ pdfs/CM2-CDM2-Z-E.pdf │ 14 (bảng kích thước + bản vẽ)      │
+  │  cần?                   │                       │                                    │
+  ├─────────────────────────┼───────────────────────┼────────────────────────────────────┤
+  │ A3-2 quy ước D-M9       │ pdfs/CM2-CDM2-Z-E.pdf │ 6 (bảng Applicable Auto Switches,  │
+  │                         │                       │ nửa dưới)                          │
+  ├─────────────────────────┼───────────────────────┼────────────────────────────────────┤
+  │ A3-3 TU0604 = OD6/ID4?  │ pdfs/TU-E.pdf         │ 1–2                                │
+  ├─────────────────────────┼───────────────────────┼────────────────────────────────────┤
+  │ A3-4 dây N              │ pdfs/CM2-CDM2-Z-E.pdf │ 6 (chú thích lead wire)            │
+  ├─────────────────────────┼───────────────────────┼────────────────────────────────────┤
+  │ A3-5 3 m ống/mối nối    │ —                     │ kinh nghiệm của bạn, không có      │
+  │                         │                       │ trong catalog                      │
+  ├─────────────────────────┼───────────────────────┼────────────────────────────────────┤
+  │ A3-6 CM2 single acting  │ pdfs/CM2-CDM2-Z-E.pdf │ 6 (ô Type of actuation)            │
+  ├─────────────────────────┼───────────────────────┼────────────────────────────────────┤
+  │ A3-7 cột MM = ren đầu   │ pdfs/CM2-CDM2-Z-E.pdf │ 14                                 │
+  │ cần?                    │                       │                                    │
+  └─────────────────────────┴───────────────────────┴────────────────────────────────────┘
+
+  Thư mục pdfs/ là symlink vào cache, không chiếm thêm đĩa, đã cho vào .gitignore.
+
+  Ghi quyết định
+
+  python3 -m crawler.review ok A3-1
+  python3 -m crawler.review no A3-2 "ghi rõ sai ở đâu"
+  python3 -m crawler.review status
+
+  Nếu chỉ có thời gian cho 2 mục: A3-1 (ảnh hưởng số liệu lực kéo) và A3-2 (ảnh hưởng mã cảm
+  biến bạn đặt hàng).
+
+  Tôi dừng ở đây, chờ kết quả duyệt của bạn. Xong thì cho tôi biết — mục nào no tôi sửa
+  trước, rồi mới sang giai đoạn B. Nếu trong lúc duyệt bạn thấy chỗ nào tôi hiểu sai ngoài 7
+  mục này, cứ nói luôn.
