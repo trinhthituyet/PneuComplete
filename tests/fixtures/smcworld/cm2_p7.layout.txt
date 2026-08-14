@@ -1,0 +1,84 @@
+                                                                                                      Air Cylinder: Standard Type
+                                                                                                       Double Acting, Single Rod                           CM2 Series
+
+                                                                           Specifications
+
+                                                                                         Bore size (mm)                          20               25                32                 40
+                                                                            Type                                                                       Pneumatic
+                                                                            Action                                                           Double acting, Single rod
+                                                                            Fluid                                                                          Air
+                                                                            Proof pressure                                                               1.5 MPa
+                                                                            Maximum operating pressure                                                   1.0 MPa
+                                                                            Minimum operating pressure                                                  0.05 MPa
+                                                                                                                                 Without auto switch: −10°C to 70°C
+                                                                            Ambient and fluid temperature                                                                   (No freezing)
+                                                                                                                                    With auto switch: −10°C to 60°C
+                                                                            Lubrication                                                       Not required (Non-lube)
+Symbol                                                                                                                                               +1.4
+                                                                            Stroke length tolerance                                                    0 mm
+Double acting, Single rod               Air cushion                         Piston speed                                    Rubber bumper: 50 to 750 mm/s, Air cushion: 50 to 1000 mm/s
+                                                                            Cushion                                                         Rubber bumper, Air cushion
+                                                                                      Rubber             Male thread            0.27 J          0.4 J              0.65 J            1.2 J
+                                                                            Allowable bumper             Female thread          0.11 J          0.18 J             0.29 J           0.52 J
+                                                                            kinetic   Air cushion                               0.54 J          0.78 J             1.27 J           2.35 J
+                                                                            energy                       Male thread
+                                                                                      (Effective cushion                        (11.0)          (11.0)             (11.0)           (11.8)
+   Refer to pages 327 to 331 for cylinders with                                            length (mm))    Female thread        0.11 J          0.18 J             0.29 J           0.52 J
+   auto switches                                                           * Operate the cylinder with in the allowable kinetic energy.
+  • Auto switch proper mounting position
+    (detection at stroke end) and its mounting
+    height
+  • Minimum stroke for auto switch mounting                                Standard Strokes
+  • Operating range
+  • Auto switch mounting brackets/Part no.
+                                                                               Bore size                                                                             Maximum manufacturable
+                                                                                                                    Standard stroke (mm) Note 1)
+* The models to be discontinued are highlighted in red.                         (mm)                                                                                      stroke (mm)
+                                                                                    20                                                                                          1000
+            Made to Order: Individual Specifications                                25                                                                                          1500
+                                                                                                          25, 50, 75, 100, 125, 150, 200, 250, 300
+            (For details, refer to page 332.)                                       32
+                                                                                                                                                                                2000
+                                                                                    40
+ Symbol                        Specifications
+                                                                           Note 1) Intermediate strokes not listed above are produced upon receipt of order.
+ -X446     PTFE grease                                                             Manufacture of intermediate strokes in 1 mm increments is possible. (Spacers are not used.)
+                                                                           Note 2) Applicable strokes should be confirmed according to the usage. For details, refer to “Air
+Made to Order                                                                      Cylinders Model Selection” on pages 8 to 19. In addition, the products that exceed the
+Click here for details                                                             standard stroke might not be able to fulfill the specifications due to the deflection etc.
+ Symbol                        Specifications
+ -XAl      Change of rod end shape
+ -XB6      Heat resistant cylinder (–10 to 150°C)                          Rod Boot Material
+ -XB7      Cold resistant cylinder (–40 to 70°C)*1
+ -XB9      Low speed cylinder (10 to 50 mm/s)*1                                Symbol                            Rod boot material                        Maximum ambient temperature
+ -XB12     External stainless steel cylinder*2                                      J                             Nylon tarpaulin                                   70°C
+ -XC3      Special port location                                                    K                        Heat resistant tarpaulin                              110°C*1
+ -XC4      With heavy duty scraper                                         *1 Maximum ambient temperature for the rod boot itself.
+ -XC5      Heat resistant cylinder (–10 to 110°C)
+ -XC6      Made of stainless steel
+ -XC8      Adjustable stroke cylinder/Adjustable extension type
+                                                                           Option: Ordering Example of Cylinder Assembly
+ -XC9      Adjustable stroke cylinder/Adjustable retraction type
+ -XC10     Dual stroke cylinder/Double rod type*1
+ -XC11     Dual stroke cylinder/Single rod type                                                      Cylinder model: CDM2C20-50Z-NV-M9BW
+ -XC12     Tandem cylinder*1
+                                                                                                                       Single clevis
+ -XC13     Auto switch rail mounting                                                                                                        Mounting C: Single clevis
+ -XC20     Head cover axial port                                                                                                            Pivot bracket N: Yes
+ -XC22     Fluororubber seal                                                                                                                Rod end bracket V: Single knuckle joint
+                                                                              Single knuckle joint                                          Auto switch D-M9BW: 2 pcs.
+ -XC25     No fixed throttle of connection port*1
+ -XC27     Double clevis and double knuckle pins made of stainless steel                                                                   * Pivot bracket, single knuckle joint and auto
+                                                                                                                                             switch are shipped together with the product,
+ -XC29     Double knuckle joint with spring pin
+                                                                                                                                             but not assembled.
+ -XC35     With coil scraper*1
+ -XC52     Mounting nut with set screw
+ -XC85     Grease for food processing equipment                                                                            Pivot bracket
+*1 Rubber bumper only.                                                                                                                     * Pivot bracket is available only for C, T, U, E,
+*2 The shape is the same as the current product.                                                                                             V, UZ mounting types.
+                                                                                               Auto switch
+                                                                                                                                           * No bracket is provided for the female rod end.
+
+                                                                                                                                                                                            237 A
+

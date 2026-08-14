@@ -1,0 +1,122 @@
+                                                                                       Air Cylinder: Standard Type
+                                                                                       Double Acting, Single Rod
+
+                                                                                       CM2        Series
+                                                                                       ø20, ø25, ø32, ø40
+                                                                                                                                                                                                                                                 RoHS
+
+
+  Part of the CM2-Z series is to be discontinued as of the end of November 2025.
+  The affected models are highlighted in red on pages 234 and 237.
+  Please select the CM2-Z1 series instead. EClick here for details.
+                                                                                                                                                How to Order
+                                        Cylinder stroke (mm)                                                                                                     Cushion                                             Pivot bracket
+ (Refer to “Standard Strokes” on page 237.)
+                                                                                                                  Bore size                                          Nil        Rubber bumper
+                                                                                                                                                                                                                         Nil                    None
+                                                                                                                                                                     A            Air cushion                                       Pivot bracket is shipped together
+                                                                                                                 20     20 mm                                                                                            N         with the product, but not assembled.
+                                                                   Type                                                                                          * Air-hydro cylinder: Rubber bumper only
+                                                                                                                 25     25 mm                                                                                        * Only for C, T, U, E, V, UZ mounting types.
+            Nil                                Pneumatic                                                                                                                   Rod end thread                            * Pivot bracket is shipped together with
+                                                                                                                 32     32 mm                                                                                          the product, but not assembled.
+            H                                   Air-hydro                                                                                                                    Nil       Male rod end
+                                                                                                                 40     40 mm
+                                                                                                                                                                             F        Female rod end
+                                                                                                                                                                                                                     * Not applicable to XB12.
+                                                                                                                                                                                                                               Made to Order
+                                                                                                                                                                                                                                   Refer to page 237 for details.
+
+                                                                      CM2                                     B 40                             150 A                                  Z                                            (Refer to “Air-hydro type” on
+                                                                                                                                                                                                                                   page 240.)
+
+
+  With auto switch                                           CDM2                                             B 40                             150 A                                  Z                            M9BW
+                                                                                                                                     Port thread type                                                                                           Number of
+        With auto switch                                                                                                                                                                  Rod end bracket
+                                  (Built-in magnet)                                                                                      Nil             Rc                                                                                     auto switches
+                                                                                                           Mounting                                                                       Nil              None
+                                                                                                                                         TN             NPT                                                                                       Nil        2 pcs.
+                                                                                                                                                                                          V         Single knuckle joint
+   B Basic (Double-side bossed)                                               T     Head trunnion                                        TF              G
+                                                                                                                                                                                          W         Double knuckle joint                          S          1 pc.
+   L        Axial foot                                                        E   Integrated clevis                                  * Air-hydro type: Rc only
+                                                                                                                                                               Rod boot
+                                                                                                                                                                                      * No bracket is provided for the female rod end.            n        n pcs.
+   F       Rod flange                                                         V Integrated clevis (90°)                                                                               * A knuckle joint pin is not provided with
+   G      Head flange                                                         BZ   Boss-cut/Basic                                       Nil                None                         the single knuckle joint.                           Auto switch
+                                                                                                                                        J            Nylon tarpaulin                  * Rod end bracket is shipped
+   C      Single clevis                                                       FZ Boss-cut/Rod flange                                                                                    together with the product,                Nil Without auto switch
+                                                                                                                                        K         Heat resistant tarpaulin              but not assembled.                     * For applicable auto switches,
+   D     Double clevis                                                        UZ Boss-cut/Rod trunnion                                                                                * Not applicable to XB12.                  refer to the table below.
+                                                                                                                                     * For female rod end, no rod boot is provided.
+   U     Rod trunnion
+                                                                                                                                                                           * Refer to “Ordering Example of Cylinder Assembly” on page 237.
+ Applicable Auto Switches/Refer to pages 1271 to 1365 for further information on auto switches.
+                                                                                                                                       Load voltage                        Auto switch model           Lead wire length (m)
+
+                                                                                       Indicator light
+                                                                          Electrical                          Wiring                                                                                                        Pre-wired
+  Type Special function                                                                                                                                                                                0.5 1 3 5 None connector Applicable load
+                                                                            entry                            (Output)                DC                   AC        Perpendicular         In-line
+                                                                                                                                                                                                      (Nil) (M) (L) (Z) (N)
+                                                                                                          3-wire (NPN)                                                   M9NV           M9N             V     V     V    v     —        v
+                                                                                                                                       5 V, 12 V                                                                                               IC circuit
+                                                                          Grommet                         3-wire (PNP)                                                   M9PV           M9P             V     V     V    v     —        v
+                                            ——
+
+
+
+
+   Solid state auto switch
+                                                                                                                                                                         M9BV           M9B             V     V     V    v     —        v
+                                                                                                              2-wire                      12 V                                                                                                     —
+                                                                          Connector                                                                                         —           H7C             V     —     V    V     V        —
+                                                                                                          3-wire (NPN)                                                M9NWV            M9NW             V     V     V    v     —        v
+                             Diagnostic indication                                                                                     5 V, 12 V                                                                                               IC circuit Relay,
+                              (2-color indicator)                                      Yes                3-wire (PNP)        24 V                        —           M9PWV            M9PW             V     V     V    v     —        v
+                                                                                                                                                                                                                                                           PLC
+                                                                                                             2-wire                       12 V                        M9BWV            M9BW             V     V     V    v     —        v         —
+                                                                          Grommet                         3-wire (NPN)                                                M9NAV*1          M9NA*1           v     v     V    v     —        v
+                                Water resistant                                                                                        5 V, 12 V                                                                                               IC circuit
+                                (2-color indicator)
+                                                                                                          3-wire (PNP)                                                M9PAV*1          M9PA*1           v     v     V    v     —        v
+                                                                                                             2-wire                      12 V                         M9BAV*1          M9BA*1           v     v     V    v     —        v         —
+                             With diagnostic output (2-color indicator)                                   4-wire (NPN)                 5 V, 12 V                            —           H7NF            V     —     V    v     —        v      IC circuit
+                                                                                                              3-wire
+                                                                                                                               —           5V             —              A96V             A96           V     V     V    V     —        v      IC circuit       —
+                                                                                       Yes                 (NPN equivalent)
+                                                                                                                                                       100 V             A93V              A93          V     V    V     V     —      v*2         —
+                                                                          Grommet
+                                                                                                                                                    100 V or less        A90V              A90                                 —      v*2      IC circuit
+
+
+
+
+   Reed auto switch
+                                                                                       No Yes No Yes No
+                                                                                                                                                                                                        V     V    V     V
+                                                                                                                                                    100 V, 200 V            —              B54          V     —    V     V     —      —                      Relay,
+                                            ——                                                                                                      200 V or less           —              B64          V     —    V     —     —      —            —          PLC
+                                                                                                                                          12 V           —                  —             C73C          V     —    V     V     V      —
+                                                                          Connector                           2-wire          24 V
+                                                                                                                                                    24 V or less            —             C80C          V     —    V     V     V      —        IC circuit
+                                                                          Terminal                                                                       —                  —             A33A          —     —    —     —     V      —                        PLC
+                                                                           conduit                                                                                          —             A34A          —     —    —     —     V      —
+                                                                                       Yes                                                          100 V, 200 V                                                                                   —         Relay,
+                                                                       DIN terminal                                                                                         —             A44A          —     —    —     —     V      —
+                                                                                                                                                                                                                                                              PLC
+                             Diagnostic indication (2-color indicator) Grommet                                                             —              —                 —             B59W          V     —    V     —     —      —
+ *1 Water resistant type auto switches can be mounted on the above models, but in such case SMC cannot guarantee water resistance.
+    A water-resistant type cylinder is recommended for use in an environment which requires water resistance.
+ *2 The load voltage used is 24 VDC.
+ * Lead wire length symbols: 0.5 m ·······Nil                                                             (Example) M9NW                * Auto switches marked with “v” are produced upon receipt of order.
+                               1 m ······· M                                                              (Example) M9NWM               * Do not indicate suffix “N” for no lead wire on the D-A3A/A44A models.
+                               3 m ······· L                                                              (Example) M9NWL
+                               5 m ······· Z                                                              (Example) M9NWZ
+                             None ······· N                                                               (Example) H7CN
+ * Since there are other applicable auto switches than listed above, refer to page 331 for details.
+ * For details about auto switches with pre-wired connector, refer to pages 1340 and 1341.
+ * The D-A9/M9 auto switches are shipped together, (but not assembled). (However, only the auto switch mounting brackets are assembled before shipment.)
+D 236
+

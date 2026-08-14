@@ -1,0 +1,90 @@
+# Khai GIAO DIỆN KẾT NỐI theo series — trái tim của khả năng suy luận.
+#
+# Xy-lanh ø32 không "cần AS2201F". Nó CÓ 2 cửa ren Rc 1/8 female. Bất cứ thứ gì
+# có đầu R 1/8 male đều lắp được. Engine duyệt đồ thị các giao diện còn hở.
+#
+# Giá trị có thể lấy từ:
+#   - hằng số:              standard: Rc
+#   - attrs của mã đã parse: size_from_attr: port_size
+#   - tra bảng theo attr:    size_by: {attr: bore_mm, map: {...}}
+#   - ô trong mã hàng:       standard_from_slot: {slot: port_thread, map: {...}}
+
+- series_catalog_id: CM2-CDM2-Z-E
+  source: >
+    Cỡ ren: PDF 7-3-2-p0231-0332-CM2_en.pdf trang 14, bảng kích thước cột P
+    (bore 20→1/8, 25→1/8, 32→1/8, 40→1/4 — ĐỌC TRỰC TIẾP, không suy diễn).
+    Kiểu ren: ô port_thread của sơ đồ How to Order trang 6 (Nil=Rc, TN=NPT, TF=G),
+    và chú thích "(Rc, NPT, G)" trên trang 14.
+  interfaces:
+    - role: air_port
+      kind: thread
+      gender: female
+      qty: 2                    # cửa đầu cần + cửa đáy
+      standard_from_slot:
+        slot: port_thread
+        map: {Nil: Rc, TN: NPT, TF: G}
+        default: Rc
+      size_by:
+        attr: bore_mm
+        map: {20: "1/8", 25: "1/8", 32: "1/8", 40: "1/4"}
+
+    - role: switch_rail
+      kind: rail
+      gender: neutral
+      standard: SMC-D           # rãnh gắn cảm biến từ trực tiếp của SMC
+      qty: 2                    # 2 đầu hành trình
+      when: {has_magnet: true}  # chỉ bản CDM2 (có nam châm) mới gắn được
+
+    - role: rod_end
+      kind: thread
+      gender: male
+      qty: 1
+      standard: M
+      size_by:
+        attr: bore_mm
+        # cột MM của bảng kích thước trang 14: ren đầu cần
+        map: {20: "M8x1.25", 25: "M10x1.25", 32: "M10x1.25", 40: "M14x1.5"}
+
+- series_catalog_id: AS-E-E
+  source: >
+    PDF 7-9-3-p0830-0838-AS-F_en.pdf trang 8: ô port_size cho ren nối vào
+    xy-lanh, ô tube_od cho đầu one-touch. Cả hai lấy trực tiếp từ attrs của mã.
+  interfaces:
+    - role: air_in              # vặn vào cửa xy-lanh
+      kind: thread
+      gender: male
+      qty: 1
+      standard_from_attr: port_standard      # 'R' (hoặc M cho M5)
+      size_from_attr: port_size              # '1/8', '1/4'…
+    - role: air_out             # đầu one-touch cắm ống
+      kind: onetouch
+      gender: female
+      qty: 1
+      tube_od_from_attr: tube_od_mm
+
+- series_catalog_id: TU-E
+  source: "PDF 7-9-2-p0682-0683-TU-TIUB_en.pdf trang 2: ô model cho OD/ID"
+  interfaces:
+    - role: end
+      kind: tube
+      gender: neutral
+      qty: 2                    # ống có 2 đầu
+      tube_od_from_attr: tube_od_mm
+
+- series_catalog_id: D-M9-CM2-E
+  source: >
+    Bảng "Applicable Auto Switches" trong PDF CM2 trang 6 — chính bảng này xác
+    nhận các switch lắp được lên rãnh của CM2.
+  interfaces:
+    - role: switch_rail
+      kind: rail
+      gender: neutral
+      standard: SMC-D
+      qty: 1
+
+- series_catalog_id: SY-E
+  source: >
+    Mã van quét từ PDF SY. CHƯA khai giao diện: chữ số thứ 3 (kiểu lắp/cửa) và
+    phần tail chưa giải mã được, nên chưa biết van là base-mounted (cắm manifold)
+    hay body-ported (có cửa ren riêng). Engine sẽ báo gap thay vì đoán.
+  interfaces: []

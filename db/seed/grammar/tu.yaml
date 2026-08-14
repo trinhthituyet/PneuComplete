@@ -1,0 +1,70 @@
+# Ngữ pháp mã hàng nhập tay — ống polyurethane TU
+#
+# Nguồn: PDF 7-9-2-p0682-0683-TU-TIUB_en.pdf trang 2 (sơ đồ How to Order).
+# Mọi ô đều đọc trực tiếp từ sơ đồ, không suy diễn.
+#
+# Sơ đồ gốc:   TU0425  BU  20
+#              ^model  ^màu ^chiều dài cuộn
+
+series_catalog_id: TU-E
+source: "PDF 7-9-2-p0682-0683-TU-TIUB_en.pdf, trang 2"
+entered_by: manual
+note: >
+  Mã model gộp cả OD và ID vào một token 4 số (TU0425 = OD 4 mm, ID 2.5 mm) nên
+  không tách thành 2 ô được — giữ nguyên 1 ô và ghi OD/ID vào attrs.
+
+slots:
+  - pos: 1
+    name: model
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "0425", label: "OD ø4 / ID ø2.5",  attrs: {tube_od_mm: 4.0,  tube_id_mm: 2.5}}
+      - {code: "0604", label: "OD ø6 / ID ø4",    attrs: {tube_od_mm: 6.0,  tube_id_mm: 4.0}}
+      - {code: "0805", label: "OD ø8 / ID ø5",    attrs: {tube_od_mm: 8.0,  tube_id_mm: 5.0}}
+      - {code: "1065", label: "OD ø10 / ID ø6.5", attrs: {tube_od_mm: 10.0, tube_id_mm: 6.5}}
+      - {code: "1208", label: "OD ø12 / ID ø8",   attrs: {tube_od_mm: 12.0, tube_id_mm: 8.0}}
+
+  - pos: 2
+    name: color
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "B",   label: "Black (Opaque)"}
+      - {code: "W",   label: "White (Opaque)"}
+      - {code: "R",   label: "Red (Translucent)"}
+      - {code: "BU",  label: "Blue (Translucent)"}
+      - {code: "Y",   label: "Yellow (Opaque)"}
+      - {code: "G",   label: "Green (Opaque)"}
+      - {code: "C",   label: "Clear (Material color)"}
+      - {code: "YR",  label: "Orange (Opaque)"}
+      - {code: "BU1", label: "Solid blue (Opaque)"}
+      - {code: "BU2", label: "Clear blue (Translucent)"}
+      - {code: "BU3", label: "Medium blue (Opaque)"}
+      - {code: "BR1", label: "Brown (Opaque)"}
+      - {code: "G1",  label: "Solid green (Opaque)"}
+      - {code: "G2",  label: "Clear green (Translucent)"}
+      - {code: "G3",  label: "Neon green (Opaque)"}
+      - {code: "G4",  label: "Dark green (Opaque)"}
+      - {code: "GR1", label: "Gray (Opaque)"}
+      - {code: "GR2", label: "Light gray (Opaque)"}
+      - {code: "P1",  label: "Neon pink (Opaque)"}
+      - {code: "PU1", label: "Solid purple (Opaque)"}
+      - {code: "PU2", label: "Clear purple (Translucent)"}
+      - {code: "R1",  label: "Solid red (Opaque)"}
+      - {code: "R2",  label: "Clear red (Translucent)"}
+      - {code: "S1",  label: "Silver (Opaque)"}
+      - {code: "Y1",  label: "Solid yellow (Opaque)"}
+      - {code: "Y2",  label: "Clear yellow (Translucent)"}
+      - {code: "Y3",  label: "Neon yellow (Opaque)"}
+      - {code: "YR1", label: "Clear orange (Translucent)"}
+      - {code: "YR2", label: "Neon orange (Opaque)"}
+
+  - pos: 3
+    name: roll_length
+    value_type: enum
+    separator: "-"
+    options:
+      - {code: "20",  label: "cuộn 20 m",  attrs: {roll_length_m: 20}}
+      - {code: "100", label: "cuộn 100 m", attrs: {roll_length_m: 100}}
+      - {code: "200", label: "cuộn 200 m", attrs: {roll_length_m: 200}}

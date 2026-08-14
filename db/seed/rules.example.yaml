@@ -1,0 +1,200 @@
+# Luật mẫu — nạp vào bảng `rule`
+# Cấu trúc: when_expr (điều kiện) → then_spec (requirement, CHƯA phải mã hàng)
+# Engine chọn mã hàng ở bước RESOLVE bằng interface match, không phải ở đây.
+# Mọi luật BẮT BUỘC có rationale — nó hiện lên UI cho người dùng đọc.
+
+- code: R-SPD-01
+  name: Speed controller cho xy-lanh tác động 2 chiều
+  scope: per_actuator
+  priority: 10
+  when_expr:
+    all:
+      - { attr: category.layer, eq: actuator }
+      - { attr: acting, eq: double }
+  then_spec:
+    need:
+      category: accessory.speed_controller
+      qty: "{{ actuator.port_count }}"        # thường = 2
+      constraints:
+        control: meter_out                    # mặc định an toàn cho xy-lanh 2 chiều
+        mate_interface:
+          role: air_port
+          from: actuator                      # ren phải khớp cửa xy-lanh
+        tube_od_mm: "{{ project.tube_od_mm }}"
+  rationale: >
+    Xy-lanh tác động 2 chiều cần tiết lưu khí xả ở cả hai cửa để điều chỉnh tốc độ
+    ổn định. Meter-out là mặc định vì tránh giật ở đầu hành trình.
+  source: SMC Best Pneumatics — Speed Controller, nguyên tắc chung
+
+- code: R-SPD-02
+  name: Cảnh báo ống nhỏ khi hành trình dài + tốc độ cao
+  scope: per_actuator
+  priority: 20
+  when_expr:
+    all:
+      - { attr: stroke_mm, gte: 400 }
+      - { expr: "piston_speed_mm_s > 300" }
+      - { attr: project.tube_od_mm, lte: 6 }
+  then_spec:
+    warn:
+      severity: warn
+      code: TUBE_UNDERSIZED
+      message: >
+        Hành trình {{ stroke_mm }}mm ở {{ piston_speed_mm_s }}mm/s với ống ø{{ project.tube_od_mm }}
+        gây tổn thất áp đáng kể. Cân nhắc ø8.
+  rationale: Tổn thất áp trên ống tỉ lệ với chiều dài và bình phương lưu tốc.
+
+- code: R-SW-01
+  name: Cảm biến từ cho xy-lanh có nam châm
+  scope: per_actuator
+  priority: 10
+  when_expr:
+    all:
+      - { attr: has_magnet, eq: true }
+  then_spec:
+    need:
+      category: electrical.auto_switch
+      qty: 2                                  # 2 đầu hành trình
+      constraints:
+        mate_interface: { role: switch_rail, from: actuator }
+        wiring: "{{ project.switch_wiring | default('2-wire') }}"
+        output: "{{ project.switch_output | default('both_ends') }}"
+  rationale: >
+    Hậu tố D trong mã (CDM2...) nghĩa là xy-lanh có nam châm sẵn — phải có cảm biến
+    từ mới xác nhận được vị trí, bắt buộc với máy tự động.
+  source: SMC CM2 series — model designation, ký hiệu D
+
+- code: R-VLV-01
+  name: Van điện từ 5/2 cho xy-lanh 2 chiều trong máy tự động
+  scope: per_actuator
+  priority: 30
+  when_expr:
+    all:
+      - { attr: acting, eq: double }
+      - { attr: project.automation, eq: true }
+  then_spec:
+    need:
+      category: valve.solenoid
+      qty: 1
+      constraints:
+        function: "5/2"
+        solenoid: double                      # giữ vị trí khi mất điện
+        voltage: "{{ project.voltage }}"
+        cv_min: "{{ actuator.required_cv }}"  # tính từ calc.py, KHÔNG đoán
+  rationale: >
+    Máy tự động cần van 5/2 double để xy-lanh giữ nguyên vị trí khi mất điện,
+    tránh rơi tải. Cv van phải ≥ Cv yêu cầu theo lưu lượng và thời gian hành trình.
+
+- code: R-MFD-01
+  name: Gộp van rời thành manifold
+  scope: per_system
+  priority: 60
+  when_expr:
+    all:
+      - { expr: "count(valve.solenoid) >= 3" }
+      - { expr: "distinct(valve.series) == 1" }
+  then_spec:
+    replace:
+      consume: valve.solenoid                 # van vẫn giữ, nhưng thêm đế manifold
+      need:
+        category: valve.manifold_base
+        qty: 1
+        constraints:
+          series_family: "{{ valve.series }}"
+          stations: "{{ count(valve.solenoid) }}"
+          port_size: "{{ valve.port_size }}"
+          wiring: "{{ project.manifold_wiring | default('d_sub') }}"
+  rationale: >
+    Từ 3 van cùng series trở lên, dùng manifold rẻ hơn và gọn hơn van rời: chung
+    một đường cấp, một đầu nối điện, giảm số fitting và ống.
+
+- code: R-FRL-01
+  name: Bộ xử lý khí nguồn theo tổng lưu lượng
+  scope: per_system
+  priority: 70
+  when_expr:
+    all:
+      - { expr: "count(actuator) >= 1" }
+  then_spec:
+    need:
+      category: air_prep.frl_unit
+      qty: 1
+      constraints:
+        # hệ số 1.5: bù đỉnh khi nhiều xy-lanh chạy đồng thời
+        flow_min_lpm: "{{ total_air_consumption_lpm * 1.5 }}"
+        port_size: "{{ main_line_port_size }}"
+        with_regulator: true
+        with_filter: true
+  rationale: >
+    Cỡ FRL chọn theo tổng tiêu thụ khí × 1.5 (hệ số đồng thời), không theo cỡ cửa
+    xy-lanh. Chọn thiếu gây sụt áp khi nhiều xy-lanh chạy cùng lúc.
+
+- code: R-SAFE-01
+  name: Van xả áp dư ở đầu nguồn
+  scope: per_system
+  priority: 75
+  when_expr:
+    all:
+      - { attr: project.automation, eq: true }
+  then_spec:
+    need:
+      category: air_prep.residual_pressure_relief
+      qty: 1
+      constraints:
+        port_size: "{{ main_line_port_size }}"
+  rationale: >
+    Máy tự động cần xả được áp dư trước khi bảo trì, nếu không xy-lanh có thể bật
+    đột ngột khi tháo lắp. Yêu cầu an toàn, không phải tuỳ chọn.
+
+- code: R-PIPE-01
+  name: Ống và fitting theo số điểm kết nối
+  scope: per_system
+  priority: 80
+  when_expr:
+    all:
+      - { expr: "count(open_interface(kind='onetouch')) > 0" }
+  then_spec:
+    need:
+      category: piping.tubing
+      qty: "{{ estimated_tube_length_m }}"     # từ layout, mặc định 3m/xy-lanh
+      unit: m
+      constraints:
+        od_mm: "{{ project.tube_od_mm }}"
+    also_need:
+      category: piping.fitting
+      qty: "{{ count(open_interface(kind='thread')) }}"
+      constraints:
+        mate_interface: { role: any, from: open_interfaces }
+  rationale: >
+    Mọi giao diện còn hở sau khi giải xong phải được nối. Chiều dài ống là ước lượng
+    — cần người dùng chỉnh theo layout thực tế.
+
+# ── Luật kiểm tra chéo (chỉ sinh cảnh báo, không sinh mã hàng) ──────────
+
+- code: V-THREAD-01
+  name: Phát hiện lẫn chuẩn ren
+  scope: per_system
+  priority: 200
+  when_expr:
+    all:
+      - { expr: "distinct(bom.thread_standard) > 1" }
+  then_spec:
+    warn:
+      severity: error
+      code: MIXED_THREAD_STANDARD
+      message: "BOM có nhiều chuẩn ren ({{ distinct_list }}) — kiểm tra lại, dễ rò khí."
+  rationale: Ren Rc/G/NPT không lắp lẫn được an toàn dù đường kính danh nghĩa giống nhau.
+
+- code: V-VOLT-01
+  name: Phát hiện lẫn điện áp cuộn coil
+  scope: per_system
+  priority: 200
+  when_expr:
+    all:
+      - { expr: "distinct(valve.voltage) > 1" }
+  then_spec:
+    warn:
+      severity: error
+      code: MIXED_VOLTAGE
+      message: "Các van không cùng điện áp ({{ distinct_list }})."
+  rationale: Cấp sai điện áp cho coil làm cháy van.

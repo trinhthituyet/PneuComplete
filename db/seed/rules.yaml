@@ -1,0 +1,183 @@
+# Luật kỹ thuật dạng chạy được — nạp vào bảng `rule`.
+#
+# Khác với rules.example.yaml (bản phác thảo có templating {{ }}), file này dùng
+# tập biểu thức tối giản mà engine/rules.py đánh giá được thật:
+#   when.all[]        : {attr: <tên>, eq|ne|gte|lte|in: <giá trị>}
+#   then.need         : yêu cầu 1 dòng BOM
+#     from_series     : catalog_id của series dùng để sinh mã
+#     qty             : số nguyên, hoặc {from_ctx: <khoá>} lấy từ ngữ cảnh
+#     want            : ràng buộc truyền cho engine/generate.py
+#         giá trị {from_ctx: k} / {from_project: k} được thay bằng giá trị thật
+#     mate            : {role: <role của item nguồn>} — kết quả phải ghép được
+#   then.warn         : chỉ sinh cảnh báo, không sinh dòng BOM
+#
+# MỌI luật BẮT BUỘC có rationale: nó hiện lên UI cho người dùng đọc và tự phán xét.
+
+- code: R-SPD-01
+  name: Speed controller cho xy-lanh tác động 2 chiều
+  scope: per_actuator
+  priority: 10
+  when:
+    all:
+      - {attr: acting, eq: double}
+  then:
+    need:
+      layer: accessory
+      from_series: AS-E-E
+      qty: {from_ctx: port_count}
+      want:
+        control: meter_out
+        shape: {from_project: speed_controller_shape}
+        port_size: {from_ctx: port_size}
+        tube_od_mm: {from_project: tube_od_mm}
+        sealant: {from_project: sealant}
+      mate: {role: air_port}
+  rationale: >
+    Xy-lanh tác động 2 chiều cần tiết lưu khí xả ở cả hai cửa để tốc độ ổn định.
+    Meter-out là mặc định vì tránh giật ở đầu hành trình. Cỡ ren của speed
+    controller phải bằng cỡ cửa của xy-lanh — engine tra từ bore, không giả định.
+  source: Nguyên tắc chung SMC Best Pneumatics; cỡ cửa từ PDF CM2 trang 14 cột P
+
+- code: R-SW-01
+  name: Cảm biến từ cho xy-lanh có nam châm
+  scope: per_actuator
+  priority: 20
+  when:
+    all:
+      - {attr: has_magnet, eq: true}
+  then:
+    need:
+      layer: electrical
+      from_series: D-M9-CM2-E
+      qty: 2
+      want:
+        wiring: {from_project: switch_wiring}
+        indicator: {from_project: switch_indicator}
+        lead_wire_m: {from_project: switch_lead_wire_m}
+        entry: grommet
+        water_resistant: false
+      mate: {role: switch_rail}
+  rationale: >
+    Hậu tố D trong mã (CDM2…) nghĩa là xy-lanh có nam châm sẵn — phải có cảm biến
+    từ mới xác nhận được vị trí, bắt buộc với máy tự động. 2 cái cho 2 đầu hành trình.
+  source: Ô auto_switch trong sơ đồ How to Order PDF CM2 trang 6; danh sách switch
+          lắp được lấy từ bảng Applicable Auto Switches cùng trang
+
+- code: R-TUBE-01
+  name: Ống khí theo đầu one-touch của speed controller
+  scope: per_system
+  priority: 60
+  when:
+    all:
+      - {attr: open_onetouch_count, gte: 1}
+  then:
+    need:
+      layer: piping
+      from_series: TU-E
+      qty: {from_ctx: tube_rolls_needed}
+      unit: cuộn
+      want:
+        tube_od_mm: {from_project: tube_od_mm}
+        color: {from_project: tube_color}
+        roll_length_m: {from_project: tube_roll_length_m}
+  rationale: >
+    Mọi đầu one-touch còn hở phải được nối bằng ống đúng đường kính. Số cuộn tính từ
+    số đầu one-touch × chiều dài ước lượng mỗi đoạn (mặc định 3 m), chia cho chiều dài
+    cuộn, làm tròn lên. Đây là ƯỚC LƯỢNG — chiều dài thật phụ thuộc layout máy, cần
+    người dùng chỉnh lại.
+
+- code: R-VLV-01
+  name: Van điện từ 5/2 cho xy-lanh 2 chiều trong máy tự động
+  scope: per_actuator
+  priority: 30
+  when:
+    all:
+      - {attr: acting, eq: double}
+      - {attr: automation, eq: true}
+  then:
+    need:
+      layer: valve
+      from_parts: SY-E          # chọn từ mã thật đã quét, KHÔNG sinh từ ngữ pháp
+      qty: 1
+      want:
+        actuation: 2-position double solenoid
+        voltage: {from_project: voltage}
+      rank_by: occurrences_in_catalog
+  rationale: >
+    Máy tự động cần van 5/2 double để xy-lanh giữ nguyên vị trí khi mất điện, tránh
+    rơi tải. Chưa giải mã được toàn bộ mã van SY (chữ số thứ 3 và phần tail) nên
+    engine CHỌN từ danh sách mã thật quét trong catalog thay vì tự sinh mã.
+  source: 47 mã van quét từ PDF 7-1-2-p0387-0722-SY_en.pdf, kèm số lần xuất hiện
+
+- code: R-FRL-01
+  name: Bộ xử lý khí nguồn (FRL)
+  scope: per_system
+  priority: 70
+  when:
+    all:
+      - {attr: actuator_count, gte: 1}
+  then:
+    need:
+      layer: air_prep
+      from_series: AC-A-E
+      qty: 1
+      want:
+        flow_min_lpm: {from_ctx: required_flow_lpm}
+  rationale: >
+    Cỡ FRL chọn theo tổng tiêu thụ khí × hệ số đồng thời, không theo cỡ cửa xy-lanh.
+    Chọn thiếu gây sụt áp khi nhiều xy-lanh chạy cùng lúc.
+
+- code: V-FLOW-01
+  name: Cảnh báo ống nhỏ so với tốc độ piston
+  scope: per_actuator
+  priority: 200
+  when:
+    all:
+      - {attr: piston_speed_mm_s, gte: 300}
+      - {attr: tube_od_mm, lte: 6}
+  then:
+    warn:
+      severity: warn
+      code: TUBE_UNDERSIZED
+      message: Tốc độ piston cao với ống nhỏ — cân nhắc tăng cỡ ống
+  rationale: >
+    Tổn thất áp trên ống tỉ lệ với chiều dài và bình phương lưu tốc. Ống ø6 ở tốc độ
+    trên 300 mm/s với hành trình dài gây sụt áp đáng kể.
+
+- code: V-THREAD-01
+  name: Phát hiện cặp ren không lắp được với nhau trong BOM
+  scope: per_system
+  priority: 210
+  when:
+    all:
+      - {attr: incompatible_thread_pairs, gte: 1}
+  then:
+    warn:
+      severity: error
+      code: MIXED_THREAD_STANDARD
+      message: BOM có nhiều chuẩn ren — kiểm tra lại, ren R/Rc/G/NPT không lắp lẫn an toàn
+  rationale: >
+    Ren Rc/G/NPT khác góc ren và bước nên không lắp lẫn được an toàn dù đường kính
+    danh nghĩa giống nhau. Đây là nguyên nhân rò khí phổ biến. Lưu ý: R male vào Rc
+    female là ĐÚNG và cố ý (chuẩn ISO 7/JIS) — luật chỉ báo khi có cặp thật sự
+    không tương thích, không báo chỉ vì BOM có nhiều tên chuẩn ren.
+
+- code: R-MFD-01
+  name: Gộp van rời thành manifold
+  scope: per_system
+  priority: 65
+  when:
+    all:
+      - {attr: valve_count, gte: 3}
+  then:
+    gap:
+      what: đế manifold cho các van SY (họ SS5Y)
+      reason: >
+        chưa giải mã được mã manifold SS5Y — catalog SY dài 370 trang với 104 trang
+        How to Order cho nhiều biến thể manifold, và chữ số thứ 3 của mã van (kiểu
+        lắp base-mounted / body-ported) cũng chưa xác định được
+  rationale: >
+    Từ 3 van cùng series trở lên, dùng manifold rẻ và gọn hơn van rời: chung một
+    đường cấp, một đầu nối điện, giảm số fitting và ống. Nhưng chọn sai đế manifold
+    thì toàn bộ cụm van không lắp được, nên engine không đoán.
+  source: PDF 7-1-2-p0387-0722-SY_en.pdf (chưa giải mã xong)

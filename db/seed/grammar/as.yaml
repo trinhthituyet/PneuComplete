@@ -1,0 +1,89 @@
+# Ngữ pháp mã hàng nhập tay — speed controller AS (elbow/universal, one-touch)
+#
+# Nguồn: PDF 7-9-3-p0830-0838-AS-F_en.pdf
+#   trang 8 — sơ đồ How to Order đầy đủ nhất:  AS 2 2 0 1F 01  06 S
+#   trang 7 — ví dụ mã thật xác nhận định dạng: AS2201F-01-04S-X12
+#   trang 6 của PDF AS-FS (7-9-3-p0811-0829) — ô Type có thêm 3 = Universal
+#
+# CẢNH BÁO đã gặp: trong họ AS-FS, chữ 'S' ĐỨNG NGAY SAU '1F' là ký hiệu của
+# series (AS3□□1FS□-□02), KHÔNG phải sealant. Sealant là chữ 'S' ở CUỐI mã.
+# Hai chữ S khác nghĩa, khác vị trí. Ngữ pháp dưới đây là của họ AS-F (không có
+# S sau 1F), tức đúng họ của mã AS2201F-01-06S.
+
+series_catalog_id: AS-E-E
+source: "PDF 7-9-3-p0830-0838-AS-F_en.pdf, trang 7-8"
+entered_by: manual
+note: >
+  Ô 'fitting' là literal '1F' (With One-touch fitting) — cố định trong họ này,
+  giữ làm 1 ô để mã parse được đúng thứ tự, không phải để người dùng chọn.
+
+slots:
+  - pos: 1
+    name: body_size
+    value_type: enum
+    separator: ""
+    options:
+      # port_sizes lấy từ chính nhãn trong catalog ("1/8, 1/4 standard") — để
+      # engine chọn được body size theo cỡ cửa của xy-lanh
+      - {code: "1", label: "M3, M5 standard",  attrs: {body_size: 1, port_sizes: ["M3","M5"]}}
+      - {code: "2", label: "1/8, 1/4 standard", attrs: {body_size: 2, port_sizes: ["1/8","1/4"]}}
+      - {code: "3", label: "3/8",              attrs: {body_size: 3, port_sizes: ["3/8"]}}
+      - {code: "4", label: "1/2",              attrs: {body_size: 4, port_sizes: ["1/2"]}}
+
+  - pos: 2
+    name: shape
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "2", label: "Elbow",     attrs: {shape: elbow}}
+      - {code: "3", label: "Universal", attrs: {shape: universal}}
+
+  - pos: 3
+    name: control
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "0", label: "Meter-out", attrs: {control: meter_out}}
+      - {code: "1", label: "Meter-in",  attrs: {control: meter_in}}
+
+  - pos: 4
+    name: fitting
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "1F", label: "With One-touch fitting", attrs: {fitting: one_touch}}
+
+  - pos: 5
+    name: port_size
+    value_type: enum
+    separator: "-"
+    options:
+      - {code: "M5", label: "M5 x 0.8", attrs: {port_standard: "M", port_size: "M5"}}
+      - {code: "01", label: "R1/8",     attrs: {port_standard: "R", port_size: "1/8"}}
+      - {code: "02", label: "R1/4",     attrs: {port_standard: "R", port_size: "1/4"}}
+      - {code: "03", label: "R3/8",     attrs: {port_standard: "R", port_size: "3/8"}}
+      - {code: "04", label: "R1/2",     attrs: {port_standard: "R", port_size: "1/2"}}
+
+  - pos: 6
+    name: tube_od
+    value_type: enum
+    separator: "-"
+    options:
+      - {code: "04", label: "ø4",  attrs: {tube_od_mm: 4.0}}
+      - {code: "06", label: "ø6",  attrs: {tube_od_mm: 6.0}}
+      - {code: "08", label: "ø8",  attrs: {tube_od_mm: 8.0}}
+      - {code: "10", label: "ø10", attrs: {tube_od_mm: 10.0}}
+      - {code: "12", label: "ø12", attrs: {tube_od_mm: 12.0}}
+
+  - pos: 7
+    name: sealant
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "Nil", label: "Without sealant", attrs: {sealant: false}}
+      # nhãn trong catalog ghi rõ phạm vi → đưa vào requires để engine không
+      # phải chọn bừa giữa S và SN
+      - {code: "S",   label: "With sealant (AS221F to AS321F)", attrs: {sealant: true},
+         requires: {body_size: [1, 2, 3]}}
+      - {code: "SN",  label: "With sealant (AS421F only)",      attrs: {sealant: true},
+         requires: {body_size: [4]}}

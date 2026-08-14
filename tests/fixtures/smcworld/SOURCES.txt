@@ -1,0 +1,17 @@
+Nguồn các fixture (tải 2026-08-13, UA PneuCompleteBot/0.1, ~1 req/s)
+
+robots.txt              https://www.smcworld.com/robots.txt
+wc_index.html           https://www.smcworld.com/webcatalog/en-jp/
+pg_air-cylinders_.html  https://www.smcworld.com/webcatalog/en-jp/air-cylinders/
+pg_indexSearch_C.html   https://www.smcworld.com/webcatalog/en-jp/indexSearch/C
+cm2.html                https://www.smcworld.com/webcatalog/en-jp/air-cylinders/air-cylinders-round-type/CM2-CDM2-Z-E
+srch.html               https://www.smcworld.com/webcatalog/en-jp/search3S/?kw=CDM2L32-500Z&lang=en-US
+
+PDF gốc (8.2MB, KHÔNG commit - xem .gitignore):
+  https://www.smcworld.com/catalog/en/actuator/CM2-CDM2-Z-E/7-3-2-p0231-0332-CM2_en/data/7-3-2-p0231-0332-CM2_en.pdf
+  -> 302 -> https://ca01.smcworld.com/catalog/en/actuator/...
+  102 trang, PDF 1.6, text trich duoc bang pdftotext
+
+cm2_p6.bbox.xml    = pdftotext -bbox-layout -f 6 -l 6   (trang How to Order)
+cm2_p6.layout.txt  = pdftotext -layout      -f 6 -l 6
+cm2_p7.layout.txt  = pdftotext -layout      -f 7 -l 7   (bang Specifications)

@@ -1,0 +1,83 @@
+# Ngữ pháp mã hàng nhập tay — cảm biến từ (auto switch) họ D-M9
+#
+# NGUỒN: bảng "Applicable Auto Switches" trong PDF 7-3-2-p0231-0332-CM2_en.pdf
+#        trang 6 (trích 38 mã bằng bbox), và chú thích chiều dài dây cùng trang:
+#           0.5 m ······· Nil        1 m ······· M  (ví dụ M9NWM)
+#           3 m ······· L (M9NWL)    5 m ······· Z  (ví dụ M9NWZ)
+#
+# LƯU Ý VỀ PHẠM VI: đây là danh sách switch áp dụng cho CM2, không phải toàn bộ
+# họ D-M9. Trong DB không có series D-M9 chuẩn (chỉ có các biến thể -5 short type,
+# -551 UL/CSA, -917 ATEX) vì catalog switch đầy đủ không nằm trong 398 PDF crawl
+# được. Vì vậy tạo series tổng hợp riêng, đánh dấu rõ nguồn gốc.
+#
+# attrs suy từ quy ước đặt tên của SMC, đối chiếu với các dòng của bảng trên
+# cùng trang ('3-wire (NPN)', '3-wire (PNP)', '2-wire', 'Diagnostic indication
+# (2-color indicator)', 'Water resistant (2-color indicator)', 'Perpendicular'):
+#     N = 3-wire NPN     P = 3-wire PNP     B = 2-wire
+#     W = 2-color indicator (diagnostic)    A = water resistant (2-color)
+#     V ở giữa mã = electrical entry vuông góc (perpendicular)
+
+series_catalog_id: D-M9-CM2-E
+create_series:
+  code: "D-M9"
+  name: "Solid State Auto Switch (danh sách áp dụng cho CM2)"
+  category_slug: "switch-sensor"
+source: "PDF 7-3-2-p0231-0332-CM2_en.pdf, trang 6, bảng Applicable Auto Switches"
+entered_by: manual
+
+slots:
+  - pos: 1
+    name: model
+    value_type: enum
+    separator: "-"          # mã thật viết là D-M9BW: 'D' là tiền tố, rồi '-'
+    options:
+      # ── solid state, 3-wire NPN ──────────────────────────────────────────
+      - {code: "M9N",   label: "3-wire NPN, grommet",                    attrs: {wiring: 3-wire, output: NPN, indicator: 1-color, entry: grommet, water_resistant: false}}
+      - {code: "M9NV",  label: "3-wire NPN, perpendicular entry",         attrs: {wiring: 3-wire, output: NPN, indicator: 1-color, entry: perpendicular}}
+      - {code: "M9NW",  label: "3-wire NPN, 2-color indicator",           attrs: {wiring: 3-wire, output: NPN, indicator: 2-color, entry: grommet, water_resistant: false}}
+      - {code: "M9NWV", label: "3-wire NPN, 2-color, perpendicular",      attrs: {wiring: 3-wire, output: NPN, indicator: 2-color, entry: perpendicular}}
+      - {code: "M9NA",  label: "3-wire NPN, water resistant (2-color)",   attrs: {wiring: 3-wire, output: NPN, indicator: 2-color, water_resistant: true}}
+      - {code: "M9NAV", label: "3-wire NPN, water resistant, perpendicular", attrs: {wiring: 3-wire, output: NPN, indicator: 2-color, water_resistant: true, entry: perpendicular}}
+      # ── solid state, 3-wire PNP ──────────────────────────────────────────
+      - {code: "M9P",   label: "3-wire PNP, grommet",                    attrs: {wiring: 3-wire, output: PNP, indicator: 1-color, entry: grommet, water_resistant: false}}
+      - {code: "M9PV",  label: "3-wire PNP, perpendicular entry",         attrs: {wiring: 3-wire, output: PNP, indicator: 1-color, entry: perpendicular}}
+      - {code: "M9PW",  label: "3-wire PNP, 2-color indicator",           attrs: {wiring: 3-wire, output: PNP, indicator: 2-color, entry: grommet, water_resistant: false}}
+      - {code: "M9PWV", label: "3-wire PNP, 2-color, perpendicular",      attrs: {wiring: 3-wire, output: PNP, indicator: 2-color, entry: perpendicular}}
+      - {code: "M9PA",  label: "3-wire PNP, water resistant (2-color)",   attrs: {wiring: 3-wire, output: PNP, indicator: 2-color, water_resistant: true}}
+      - {code: "M9PAV", label: "3-wire PNP, water resistant, perpendicular", attrs: {wiring: 3-wire, output: PNP, indicator: 2-color, water_resistant: true, entry: perpendicular}}
+      # ── solid state, 2-wire ──────────────────────────────────────────────
+      - {code: "M9B",   label: "2-wire, grommet",                        attrs: {wiring: 2-wire, indicator: 1-color, entry: grommet, water_resistant: false}}
+      - {code: "M9BV",  label: "2-wire, perpendicular entry",             attrs: {wiring: 2-wire, indicator: 1-color, entry: perpendicular}}
+      - {code: "M9BW",  label: "2-wire, 2-color indicator",               attrs: {wiring: 2-wire, indicator: 2-color, entry: grommet, water_resistant: false}}
+      - {code: "M9BWV", label: "2-wire, 2-color, perpendicular",          attrs: {wiring: 2-wire, indicator: 2-color, entry: perpendicular}}
+      - {code: "M9BA",  label: "2-wire, water resistant (2-color)",       attrs: {wiring: 2-wire, indicator: 2-color, water_resistant: true}}
+      - {code: "M9BAV", label: "2-wire, water resistant, perpendicular",  attrs: {wiring: 2-wire, indicator: 2-color, water_resistant: true, entry: perpendicular}}
+      # ── các loại khác có trong bảng, chưa phân tích chi tiết attrs ────────
+      - {code: "H7NF",  label: "solid state (có trong bảng CM2)", attrs: {}}
+      - {code: "H7C",   label: "solid state, connector (có trong bảng CM2)", attrs: {entry: connector}}
+      - {code: "H7CN",  label: "solid state, connector (có trong bảng CM2)", attrs: {entry: connector}}
+      - {code: "A96",   label: "reed (có trong bảng CM2)", attrs: {switch_type: reed}}
+      - {code: "A96V",  label: "reed, perpendicular",       attrs: {switch_type: reed, entry: perpendicular}}
+      - {code: "A93",   label: "reed (có trong bảng CM2)", attrs: {switch_type: reed}}
+      - {code: "A93V",  label: "reed, perpendicular",       attrs: {switch_type: reed, entry: perpendicular}}
+      - {code: "A90",   label: "reed (có trong bảng CM2)", attrs: {switch_type: reed}}
+      - {code: "A90V",  label: "reed, perpendicular",       attrs: {switch_type: reed, entry: perpendicular}}
+      - {code: "B54",   label: "reed (có trong bảng CM2)", attrs: {switch_type: reed}}
+      - {code: "B64",   label: "reed (có trong bảng CM2)", attrs: {switch_type: reed}}
+      - {code: "B59W",  label: "reed, 2-color",             attrs: {switch_type: reed, indicator: 2-color}}
+      - {code: "C73C",  label: "reed, connector",           attrs: {switch_type: reed, entry: connector}}
+      - {code: "C80C",  label: "reed, connector",           attrs: {switch_type: reed, entry: connector}}
+      - {code: "A33A",  label: "reed (có trong bảng CM2)", attrs: {switch_type: reed}}
+      - {code: "A34A",  label: "reed (có trong bảng CM2)", attrs: {switch_type: reed}}
+      - {code: "A44A",  label: "reed (có trong bảng CM2)", attrs: {switch_type: reed}}
+
+  - pos: 2
+    name: lead_wire
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "Nil", label: "0.5 m", attrs: {lead_wire_m: 0.5}}
+      - {code: "M",   label: "1 m",   attrs: {lead_wire_m: 1.0}}
+      - {code: "L",   label: "3 m",   attrs: {lead_wire_m: 3.0}}
+      - {code: "Z",   label: "5 m",   attrs: {lead_wire_m: 5.0}}
+      - {code: "N",   label: "không có dây (loại connector)", attrs: {lead_wire_m: 0}}
