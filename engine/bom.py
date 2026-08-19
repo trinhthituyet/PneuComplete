@@ -12,6 +12,7 @@ Quy trình (docs/DESIGN.md §3):
 """
 import json
 import math
+import os
 from collections import defaultdict
 from pathlib import Path
 
@@ -20,6 +21,39 @@ from engine import calc, conf, generate, materialize
 from engine import parser as P
 
 RULES_YAML = db.ROOT / "db" / "seed" / "rules.yaml"
+
+# Số phương án BOM giữ lại trong DB.
+#
+# VÌ SAO CẦN: mỗi lần dựng BOM ghi một dòng `project` mới và trước đây KHÔNG bao
+# giờ xoá. Trên máy phát triển đã lên 35.607 project / 268.531 dòng
+# project_output — tổng ~380 nghìn dòng, chiếm gần hết dung lượng DB. Máy người
+# dùng cũng phình y như vậy, chỉ chậm hơn.
+#
+# 200 bản gần nhất: thoải mái để mở lại hay xuất CSV các phương án vừa làm
+# (/api/csv?project=N), mà vẫn có chặn trên. Ước lượng ~7,5 dòng output mỗi
+# phương án → khoảng 1.500 dòng, không đáng kể.
+#
+# PNEU_PROJECT_KEEP=0 để tắt hẳn việc dọn (dùng khi cần soi lại lịch sử).
+PROJECT_KEEP = int(os.environ.get("PNEU_PROJECT_KEEP") or 200)
+
+
+def prune_projects(con, keep=None):
+    """Xoá phương án cũ, chỉ giữ `keep` bản mới nhất. Trả số phương án đã xoá.
+
+    project_input / project_output / project_warning đều có `on delete cascade`
+    nên xoá theo, KHÔNG cần xoá tay từng bảng — nhưng chỉ đúng khi
+    `pragma foreign_keys = on`. db.connect() đã bật; nếu ai mở DB bằng
+    sqlite3.connect() trần thì cascade không chạy và sẽ để lại dòng mồ côi.
+    """
+    keep = PROJECT_KEEP if keep is None else keep
+    if keep <= 0:
+        return 0
+    cur = con.execute(
+        """delete from project
+           where id not in (select id from project order by id desc limit ?)""",
+        (keep,))
+    return cur.rowcount
+
 
 DEFAULT_PROJECT = {
     "pressure_mpa": 0.5,
@@ -338,6 +372,7 @@ def build(con, inputs, project=None, project_name="demo"):
     cur = con.execute("insert into project (name, config) values (?,?)",
                       (project_name, json.dumps(project, ensure_ascii=False)))
     pid = cur.lastrowid
+    prune_projects(con)
 
     lines, warns, gaps, calcs = [], [], [], []
     per_act = load_rules(con, "per_actuator")

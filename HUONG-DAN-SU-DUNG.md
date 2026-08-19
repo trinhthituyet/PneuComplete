@@ -193,3 +193,12 @@ mạng theo định kỳ.
 
 > Dữ liệu để **ngoài** phần mềm là có chủ đích: khi bạn nhận bản cập nhật mới,
 > chỉ phần mềm được thay, còn phương án BOM của bạn giữ nguyên.
+
+### Phần mềm chỉ giữ 200 phương án gần nhất
+
+Mỗi lần bấm **Dựng BOM** là một phương án được lưu. Phần mềm giữ **200 lần gần
+nhất**, cũ hơn thì tự xoá — nếu không, tệp dữ liệu phình lên mãi.
+
+200 lần là rất nhiều cho việc dùng hàng ngày. Nhưng **phương án nào cần giữ lâu
+thì hãy bấm "Xuất CSV" và lưu tệp đó lại** — tệp CSV là của bạn, không bị xoá.
+

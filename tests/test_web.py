@@ -12,6 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import tmpdb                                # noqa: E402,F401  PHẢI trước crawler.db
 from crawler import db      # noqa: E402
 from web import server as W  # noqa: E402
 

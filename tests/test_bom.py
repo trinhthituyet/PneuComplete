@@ -4,6 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import tmpdb                                # noqa: E402,F401  PHẢI trước crawler.db
 from crawler import db                      # noqa: E402
 from engine import bom, materialize         # noqa: E402
 
@@ -322,6 +323,66 @@ def test_tinh_toan():
     assert c["rod_mm"] == 12.0                                  # PDF trang 14
     assert c["piston_speed_mm_s"] == 667                        # 500mm / 0.75s
     assert r["system"]["required_flow_lpm"] > r["system"]["total_flow_lpm"]
+
+
+def test_prune_projects():
+    """Dọn phương án cũ: DB không phình vô hạn, và xoá theo cả bảng con.
+
+    Lỗi gốc: mỗi lần dựng BOM ghi một dòng `project` mà không bao giờ xoá —
+    máy phát triển lên 35.607 project / 268.531 dòng project_output.
+    """
+    con = db.connect()
+    bom.seed_rules(con)
+    for i in range(5):
+        bom.build(con, [("CDM2L32-500Z", 1)], {"tube_total_m": 20},
+                  project_name=f"prune-{i}")
+    n0 = con.execute("select count(*) from project").fetchone()[0]
+    assert n0 >= 5, n0
+
+    ids_before = [r[0] for r in con.execute("select id from project order by id desc limit 3")]
+    removed = bom.prune_projects(con, keep=3)
+    con.commit()
+
+    n1 = con.execute("select count(*) from project").fetchone()[0]
+    assert n1 == 3, f"giữ 3 mà còn {n1}"
+    assert removed == n0 - 3, f"báo xoá {removed}, thực xoá {n0 - 3}"
+
+    # giữ đúng 3 bản MỚI NHẤT, không phải 3 bản bất kỳ
+    ids_after = [r[0] for r in con.execute("select id from project order by id desc")]
+    assert ids_after == ids_before, f"{ids_after} != {ids_before}"
+
+    # on delete cascade phải dọn bảng con — nếu pragma foreign_keys tắt thì
+    # project_output còn dòng mồ côi mà không có lỗi nào báo ra.
+    for t in ("project_output", "project_input", "project_warning"):
+        orphan = con.execute(
+            f"select count(*) from {t} where project_id not in (select id from project)"
+        ).fetchone()[0]
+        assert orphan == 0, f"{t} còn {orphan} dòng mồ côi"
+
+    # keep=0 = tắt dọn, KHÔNG phải xoá hết
+    assert bom.prune_projects(con, keep=0) == 0
+    assert con.execute("select count(*) from project").fetchone()[0] == 3
+    con.close()
+
+
+def test_build_tu_dong_don():
+    """build() tự dọn — không cần ai gọi tay prune_projects()."""
+    con = db.connect()
+    bom.seed_rules(con)
+    con.execute("delete from project")
+    con.commit()
+    keep = 4
+    old = bom.PROJECT_KEEP
+    bom.PROJECT_KEEP = keep
+    try:
+        for i in range(keep + 6):
+            bom.build(con, [("CDM2L32-500Z", 1)], {"tube_total_m": 20},
+                      project_name=f"auto-{i}")
+        n = con.execute("select count(*) from project").fetchone()[0]
+        assert n == keep, f"hạn mức {keep} mà DB có {n} phương án"
+    finally:
+        bom.PROJECT_KEEP = old
+        con.close()
 
 
 if __name__ == "__main__":
