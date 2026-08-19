@@ -180,14 +180,34 @@ def make_clean_db(src: pathlib.Path, dst: pathlib.Path):
             removed += n
         except sqlite3.OperationalError:
             pass          # bảng không tồn tại trong bản này
-    # part trỏ tới source_doc đã xoá → gỡ tham chiếu treo
-    try:
-        con.execute("update part set source_id=null")
-    except sqlite3.OperationalError:
-        pass
+
+    # Gỡ MỌI tham chiếu treo tới bảng vừa xoá — quét khoá ngoại chứ không vá tay
+    # từng cột. Trước đây chỉ null `part.source_id` mà bỏ sót `series.source_id`,
+    # để lại 1.296 dòng treo.
+    #
+    # Vì sao phải gỡ, dù SELECT vẫn chạy bình thường: nếu sau này source_doc được
+    # nạp lại, id 1..N sẽ được dùng lại và những dòng treo này bỗng trỏ sang TÀI
+    # LIỆU KHÁC — sai nguồn tra cứu mà không có lỗi nào báo ra.
+    keep = [r[0] for r in con.execute(
+        "select name from sqlite_master where type='table' and name not like 'sqlite_%'")
+        if r[0] not in STRIP_TABLES]
+    for t in keep:
+        for fk in con.execute(f"pragma foreign_key_list({t})").fetchall():
+            target, col = fk[2], fk[3]
+            if target in STRIP_TABLES and col:
+                con.execute(f"update {t} set {col}=null where {col} is not null")
+
     con.commit()
     con.execute("vacuum")
+
+    # Không phát hành DB còn lỗi khoá ngoại: người sau chạy pragma
+    # foreign_key_check sẽ thấy DB hỏng và không biết vì sao.
+    bad = con.execute("pragma foreign_key_check").fetchall()
     con.close()
+    if bad:
+        raise RuntimeError(
+            f"DB sạch còn {len(bad)} lỗi khoá ngoại — kiểm lại STRIP_TABLES. "
+            f"Ví dụ: {bad[0]}")
     return src.stat().st_size / 1e6, dst.stat().st_size / 1e6, removed
 
 

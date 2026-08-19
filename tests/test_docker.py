@@ -189,18 +189,66 @@ def test_clean_db_option():
           (r.stdout + r.stderr)[-200:])
     check("sinh ra dist/pneu.db", out.exists())
     if out.exists():
-        con = sqlite3.connect(out)
-        n_bom = n_series = -1
-        try:
-            n_bom = con.execute("select count(*) from bom_line").fetchone()[0]
-            n_series = con.execute(
-                "select count(distinct series_id) from code_slot").fetchone()[0]
-        finally:
-            con.close()
-        check("bản sạch KHÔNG còn dòng BOM khách hàng", n_bom == 0,
-              f"còn {n_bom} dòng")
-        check("bản sạch vẫn còn ngữ pháp sản phẩm", n_series >= 15,
-              f"chỉ có {n_series} họ")
+        check_db_healthy(out, "bản sạch dist/pneu.db")
+
+
+def check_db_healthy(path, label):
+    """Kiểm một bản DB phát hành: sạch dữ liệu khách, đủ ngữ pháp, không treo FK."""
+    con = sqlite3.connect(path)
+    try:
+        n_bom = con.execute("select count(*) from bom_line").fetchone()[0]
+        n_mach = con.execute("select count(*) from machine").fetchone()[0]
+        n_series = con.execute(
+            "select count(distinct series_id) from code_slot").fetchone()[0]
+        integ = con.execute("pragma integrity_check").fetchone()[0]
+        fk = con.execute("pragma foreign_key_check").fetchall()
+    finally:
+        con.close()
+    check(f"{label}: KHÔNG còn BOM khách hàng", n_bom == 0 and n_mach == 0,
+          f"bom_line={n_bom} machine={n_mach}")
+    check(f"{label}: vẫn còn ngữ pháp sản phẩm", n_series >= 15,
+          f"chỉ có {n_series} họ")
+    check(f"{label}: integrity_check ok", integ == "ok", integ)
+    # Từng bỏ sót: make_clean_db null `part.source_id` mà quên `series.source_id`,
+    # để lại 1.296 dòng treo. Chưa vỡ ngay, nhưng nếu source_doc được nạp lại thì
+    # id 1..N dùng lại → series trỏ sang TÀI LIỆU KHÁC, sai nguồn mà không báo gì.
+    check(f"{label}: không còn khoá ngoại treo", not fk,
+          f"{len(fk)} lỗi, ví dụ {fk[0] if fk else ''}")
+
+
+def test_seed_db_committed():
+    """db/seed/pneu-seed.db là thứ clone mới dựa vào — phải dùng được ngay."""
+    seed = ROOT / "db" / "seed" / "pneu-seed.db"
+    check("có db/seed/pneu-seed.db (clone mới lấy dữ liệu từ đây)", seed.exists())
+    if not seed.exists():
+        return
+    mb = seed.stat().st_size / 1e6
+    check("bản seed nhỏ, hợp lý để commit vào git", 0.3 < mb < 5, f"{mb:.1f} MB")
+    check_db_healthy(seed, "bản seed")
+
+    # Mỗi tệp ngữ pháp phải có mặt trong seed, nếu không thì clone mới parse
+    # được ít họ hơn máy phát triển mà không ai biết.
+    import glob
+    try:
+        import yaml
+    except ModuleNotFoundError:
+        return
+    con = sqlite3.connect(seed)
+    missing = []
+    files = sorted(glob.glob(str(ROOT / "db/seed/grammar/*.yaml")))
+    for f in files:
+        with open(f, encoding="utf-8") as fh:
+            cid = (yaml.safe_load(fh) or {}).get("series_catalog_id")
+        if not cid:
+            continue
+        n = con.execute(
+            """select count(*) from code_slot cs join series s on s.id=cs.series_id
+               where s.catalog_id=?""", (cid,)).fetchone()[0]
+        if n == 0:
+            missing.append(f"{os.path.basename(f)}({cid})")
+    con.close()
+    check(f"cả {len(files)} tệp ngữ pháp đều có trong bản seed",
+          not missing, ", ".join(missing))
 
 
 def test_healthcheck():
@@ -306,7 +354,8 @@ if __name__ == "__main__":
     for fn in (test_entrypoint_seeds_once, test_entrypoint_runs_given_command,
                test_pneu_db_env, test_server_bind_env, test_dockerfile,
                test_dockerfile_copies_exist, test_compose, test_dockerignore,
-               test_healthcheck, test_clean_db_option, test_launchers):
+               test_healthcheck, test_clean_db_option, test_seed_db_committed,
+               test_launchers):
         print(f"\n{fn.__name__}")
         fn()
     print("\n" + "=" * 56)
