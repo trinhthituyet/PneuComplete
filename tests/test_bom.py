@@ -21,26 +21,52 @@ def _line(res, pn):
 
 
 def test_bom_5_xylanh():
-    """5× CDM2L32-500Z → BOM 4 tầng, số lượng đúng."""
-    r = _build([("CDM2L32-500Z", 5)])
+    """5× CDM2L32-500Z → BOM 4 tầng, số lượng đúng.
+
+    tube_total_m phải khai tường minh: engine không tự ước lượng chiều dài ống
+    (mục A3-5 — người dùng bác bỏ giá trị mặc định 3 m/mối nối).
+    """
+    r = _build([("CDM2L32-500Z", 5)], {"tube_total_m": 60})
     assert _line(r, "CDM2L32-500Z")["qty"] == 5
-    # 2 speed controller mỗi xy-lanh × 5
-    sc = _line(r, "AS2201F-01-06S")
+    # 2 speed controller mỗi xy-lanh × 5. Mã kết thúc 'SA' = Push-lock type —
+    # đúng loại BOM máy thật dùng (AS2201F-01-06SA), xác nhận 2026-08-18.
+    sc = _line(r, "AS2201F-01-06SA")
     assert sc and sc["qty"] == 10, f"speed controller: {sc}"
     # 2 cảm biến mỗi xy-lanh × 5
     sw = _line(r, "D-M9BW")
     assert sw and sw["qty"] == 10, f"switch: {sw}"
-    # 1 van mỗi xy-lanh
-    vl = next((l for l in r["lines"] if l["layer"] == "valve"), None)
-    assert vl and vl["qty"] == 5, f"van: {vl}"
-    # ống: suy từ 10 đầu one-touch × 3 m / cuộn 20 m = 2 cuộn
+    # 1 van mỗi xy-lanh (chưa khai cỡ van → không có dòng van, xem test riêng)
+    # ống: 60 m khai vào / cuộn 20 m = 3 cuộn
     tu = _line(r, "TU0604BU-20")
-    assert tu and tu["qty"] == 2, f"ống: {tu}"
+    assert tu and tu["qty"] == 3, f"ống: {tu}"
+
+
+def test_khong_khai_chieu_dai_ong_thi_bao_gap():
+    """Chưa khai tube_total_m → phải báo gap, KHÔNG tự ước lượng (A3-5)."""
+    r = _build([("CDM2L32-500Z", 5)])
+    assert not _line(r, "TU0604BU-20"), "không được tự sinh dòng ống khi chưa biết chiều dài"
+    g = next((g for g in r["gaps"] if g.get("rule_code") == "R-TUBE-01"), None)
+    assert g and "tube_total_m" in g["reason"], f"gaps: {r['gaps']}"
+
+
+def test_duong_kinh_can_lay_tu_series_khong_hardcode():
+    """rod_dia_mm phải đến từ attrs của mã (pdf_dim_table đọc bảng kích thước).
+
+    Bản đầu hardcode trong calc.py và ghi sai bore 40 = 16 (bảng ghi 14) — mục A3-1.
+    """
+    from engine import parser as P
+    con = db.connect()
+    for pn, want in (("CDM2L32-500Z", 12.0), ("CDM2B40-150AZ", 14.0)):
+        a = P.parse(con, pn)["attrs"]
+        assert a.get("rod_dia_mm") == want, f"{pn}: rod={a.get('rod_dia_mm')} ≠ {want}"
+        assert a.get("_source", "").startswith("bảng kích thước"), \
+            f"{pn}: thiếu truy nguồn cho rod_dia_mm"
+    con.close()
 
 
 def test_moi_dong_co_giai_thich():
     """Mọi dòng không phải input đều phải có rule_code + rationale."""
-    r = _build([("CDM2L32-500Z", 5)])
+    r = _build([("CDM2L32-500Z", 5)], {"tube_total_m": 60})
     for l in r["lines"]:
         if l["layer"] == "actuator":
             continue
@@ -82,18 +108,204 @@ def test_bore_40_ra_ren_1_4():
     """
     r = _build([("CDM2B40-150AZ", 2)])
     sc = next((l for l in r["lines"] if l["layer"] == "accessory"), None)
-    assert sc and sc["part_number"] == "AS2201F-02-06S", \
+    assert sc and sc["part_number"] == "AS2201F-02-06SA", \
         f"bore 40 phải ra speed controller ren 1/4: {sc}"
 
 
-def test_gap_duoc_bao_khong_doan_bua():
-    """FRL và manifold chưa có dữ liệu → phải vào gap, không được đoán mã."""
-    r = _build([("CDM2L32-500Z", 5)])
-    rules = {g.get("rule_code") for g in r["gaps"]}
-    assert "R-FRL-01" in rules, "FRL phải báo gap (AC-A-E chưa có ngữ pháp)"
-    assert "R-MFD-01" in rules, "manifold phải báo gap (mã SS5Y chưa giải mã)"
-    for g in r["gaps"]:
+FRL_CFG = {"tube_total_m": 60, "main_line_port_size": "3/8", "frl_size": "40",
+           "valve_series_size": "SY5000"}
+
+
+def test_speed_controller_dung_ho_push_lock():
+    """Engine phải đề xuất họ Push-lock (hậu tố A) — loại BOM thật mua.
+
+    Tôi từng tư vấn AS2201F-01-06S (thiếu A) vì đọc PDF AS-E-E (núm thường).
+    BOM máy 23-432 và 24-236 đều dùng AS2201F-01-06SA / AS1201F-M5-06A.
+    """
+    from engine import parser as P
+    r = _build([("CDM2L32-500Z", 5)], {"tube_total_m": 60})
+    sc = next(l for l in r["lines"] if l["layer"] == "accessory")
+    assert sc["part_number"].endswith("SA"), f"phải là push-lock: {sc['part_number']}"
+    con = db.connect()
+    a = P.parse(con, sc["part_number"])["attrs"]
+    assert a.get("knob") == "push_lock"
+    con.close()
+
+
+def test_floating_joint_theo_ren_dau_can():
+    """JA chọn theo ren đầu cần, tin cậy thấp vì 'không phải tất cả trường hợp'."""
+    r = _build([("CDM2L32-500Z", 5)], {"tube_total_m": 60})
+    ja = _line(r, "JA30-10-125")            # CM2 ø32 → ren M10x1.25
+    assert ja and ja["qty"] == 5, f"floating joint: {ja}"
+    assert ja["confidence"] <= 0.6, "phải là đề xuất tin cậy thấp, không khẳng định"
+
+
+def test_mgp_ra_dung_ma_nhu_bom_that():
+    """MGP là xy-lanh dùng nhiều nhất trong BOM thật (22 cái).
+
+    Máy 24-236 sheet (B): MGPM16-125Z-M9BL ×4 đi cùng AS1201F-M5-06A ×8.
+    Engine phải ra ĐÚNG cặp đó — ø16 dùng ren MÉT M5, không phải Rc.
+    """
+    r = _build([("MGPM25-200Z-M9BL", 4), ("MGPM16-125Z-M9BL", 4)],
+               {"tube_total_m": 40, "main_line_port_size": "3/8", "frl_size": "30"})
+    assert _line(r, "AS2201F-01-06SA")["qty"] == 8, "ø25 (Rc1/8) → speed ctrl 1/8"
+    m5 = _line(r, "AS1201F-M5-06A")
+    assert m5 and m5["qty"] == 8, f"ø16 (M5) → speed ctrl M5: {m5}"
+    assert "ren mét" in (m5.get("note") or ""), m5.get("note")
+
+
+def test_sealant_la_so_thich_khong_phai_rang_buoc():
+    """Cỡ M5 không có loại sealant → engine nhượng bộ + ghi chú, KHÔNG báo gap."""
+    r = _build([("MGPM16-125Z-M9BL", 4)],
+               {"tube_total_m": 20, "main_line_port_size": "1/4", "frl_size": "20"})
+    m5 = _line(r, "AS1201F-M5-06A")
+    assert m5, "phải sinh được mã dù không có sealant"
+    assert "sealant" in (m5.get("note") or ""), f"phải ghi chú nhượng bộ: {m5.get('note')}"
+
+
+def test_joint_bo_qua_xylanh_co_dan_huong():
+    """MGP có dẫn hướng sẵn → không đề xuất floating joint (suy diễn, chờ xác nhận)."""
+    r = _build([("MGPM25-200Z-M9BL", 4)], {"tube_total_m": 20})
+    assert not any(l["part_number"].startswith("JA") for l in r["lines"])
+    # còn CM2 không dẫn hướng thì vẫn đề xuất
+    r2 = _build([("CDM2L32-500Z", 2)], {"tube_total_m": 20})
+    assert _line(r2, "JA30-10-125"), "CM2 vẫn phải có joint"
+
+
+def test_frl_can_khai_co_cua():
+    """Chưa khai main_line_port_size → gap, không tự chọn cỡ FRL."""
+    r = _build([("CDM2L32-500Z", 5)], {"tube_total_m": 60})
+    assert not any(l["layer"] == "air_prep" for l in r["lines"])
+    g = next(g for g in r["gaps"] if g.get("rule_code") == "R-FRL-01")
+    assert "main_line_port_size" in g["reason"]
+
+
+def test_frl_co_cua_mo_ho_thi_liet_ke_ung_vien():
+    """Cửa 3/8 có ở AC25/30/40 → engine phải liệt kê, không chọn bừa."""
+    r = _build([("CDM2L32-500Z", 5)], {"tube_total_m": 60, "main_line_port_size": "3/8"})
+    g = next(g for g in r["gaps"] if g.get("rule_code") == "R-FRL-01")
+    assert "size" in g["reason"], g["reason"]
+
+
+def test_frl_chot_co_thi_ra_ma():
+    """Khai đủ → ra mã AC, và PHẢI kèm cảnh báo chưa kiểm được lưu lượng."""
+    r = _build([("CDM2L32-500Z", 5)], FRL_CFG)
+    frl = next((l for l in r["lines"] if l["layer"] == "air_prep"), None)
+    assert frl and frl["part_number"] == "AC40B-03DG-A", f"FRL: {frl}"
+    codes = [w.get("code") for w in r["warnings"]]
+    assert "FRL_FLOW_UNVERIFIED" in codes, \
+        "phải cảnh báo: catalog chỉ cho lưu lượng dạng đồ thị, engine không kiểm được"
+
+
+def test_frl_khong_lubricator_mac_dinh():
+    """CM2 dùng mỡ sẵn → mặc định chọn loại B (Filter+Regulator), không có dầu."""
+    from engine import parser as P
+    con = db.connect()
+    a = P.parse(con, "AC40B-03DG-A")["attrs"]
+    assert a["has_lubricator"] is False and a["has_mist_separator"] is False
+    assert a["port_size"] == "3/8" and a["port_standard"] == "Rc"
+    con.close()
+
+
+def test_van_sinh_dung_ma_nhu_bom_that():
+    """Van sinh từ ngữ pháp phải ra ĐÚNG mã BOM máy 23-432 dùng.
+
+    SY5220-5MZE-C6 = SY5000 · 2-pos double · body ported · 24VDC · M plug ·
+    light+surge Z · manual override E · one-touch ø6.
+    """
+    r = _build([("CDM2L32-500Z", 5)],
+               {"tube_total_m": 60, "valve_series_size": "SY5000",
+                "valve_function": "double"})
+    v = next(l for l in r["lines"] if l["layer"] == "valve")
+    assert v["part_number"] == "SY5220-5MZE-C6", f"van: {v['part_number']}"
+    assert v["qty"] == 5
+
+
+def test_van_can_khai_loai():
+    """LOẠI van phụ thuộc chức năng cơ cấu → engine đòi khai, không đoán.
+
+    Bản trước mặc định "mọi xy-lanh → 5/2 double"; golden test cho thấy một máy
+    dùng đồng thời single, double và 3-position nên sai 6/11 dòng van.
+    """
+    r = _build([("CDM2L32-500Z", 5)], {"tube_total_m": 60})
+    g = next(g for g in r["gaps"] if g.get("rule_code") == "R-VLV-01")
+    assert "valve_function" in g["reason"], g["reason"]
+    assert not any(l["layer"] == "valve" for l in r["lines"])
+
+
+def test_van_base_mounted_khong_co_cua_rieng():
+    """base_mounted → mã không có -C6 vì cửa nằm trên manifold."""
+    from engine import parser as P
+    con = db.connect()
+    a = P.parse(con, "SY7140-5LZE-02")["attrs"]
+    assert a["mounting"] == "base_mounted" and a["series_size"] == "SY7000"
+    b = P.parse(con, "SY5120-5MZE-C6")["attrs"]
+    assert b["mounting"] == "body_ported" and b["tube_od_mm"] == 6.0
+    con.close()
+
+
+# use_manifold là cờ RIÊNG, không suy từ valve_mounting: golden test cho thấy
+# manifold dùng được với cả van body-ported (máy 23-432: SS5Y5-20-12 + SY5120-5MZE-C6).
+MFD_CFG = {"tube_total_m": 60, "valve_series_size": "SY5000",
+           "valve_function": "double", "use_manifold": True,
+           "manifold_type": "20, 23, 20SA, 23SA"}
+
+
+def test_gasket_va_endplate_dung_ma_bom():
+    """Van cắm manifold → gasket mỗi van + 2 end plate, đúng mã BOM 23-432."""
+    r = _build([("CDM2L32-500Z", 5)], MFD_CFG)
+    g = _line(r, "SY5000-GS-1")
+    assert g and g["qty"] == 5, f"gasket 1 cái/van: {g}"
+    assert "trang 45" in (g.get("note") or ""), g.get("note")
+    ep = _line(r, "SY5000-26-20A")
+    assert ep and ep["qty"] == 2, f"2 end plate: {ep}"
+
+
+def test_endplate_can_khai_kieu_manifold():
+    """Type 20 → SY5000-26-20A, Type 20P → SY5000-26-21A. Chưa khai → gap."""
+    r = _build([("CDM2L32-500Z", 5)],
+               {**MFD_CFG, "manifold_type": None})
+    g = next(g for g in r["gaps"] if g.get("rule_code") == "R-MFD-ENDPLATE-01")
+    assert "manifold_type" in g["reason"]
+    r2 = _build([("CDM2L32-500Z", 5)], {**MFD_CFG, "manifold_type": "20P, 23P"})
+    assert _line(r2, "SY5000-26-21A"), "Type 20P phải ra end plate khác"
+
+
+def test_khong_ga_manifold_thi_khong_can_gasket():
+    """Không gá manifold → không gasket, không end plate.
+
+    Điều kiện là `use_manifold`, KHÔNG phải kiểu cửa van: golden test cho thấy
+    máy 23-432 dùng van body-ported mà vẫn có manifold + gasket + end plate.
+    """
+    r = _build([("CDM2L32-500Z", 5)],
+               {**MFD_CFG, "use_manifold": False})
+    assert not _line(r, "SY5000-GS-1")
+    assert not _line(r, "SY5000-26-20A")
+
+
+def test_de_manifold_sinh_dung_ma():
+    """Đế manifold SS5Y — gap CUỐI CÙNG của engine, giờ sinh được mã.
+
+    5 van → SS5Y5-20-05. Số station là mã 2 chữ số ĐỆM 0 theo catalog trang 44
+    ('02 = 2 stations'), không đệm thì ra 'SS5Y5-20-5' — mã không tồn tại.
+    """
+    r = _build([("CDM2L32-500Z", 5)], {**MFD_CFG})
+    mfd = _line(r, "SS5Y5-20-05")
+    assert mfd and mfd["qty"] == 1, f"đế manifold: {[l['part_number'] for l in r['lines']]}"
+    assert "R-MFD-01" not in {g.get("rule_code") for g in r["gaps"]}
+    # không gá manifold → không đế, không gasket, không end plate
+    solo = _build([("CDM2L32-500Z", 5)], {**MFD_CFG, "use_manifold": False})
+    assert not _line(solo, "SS5Y5-20-05")
+    assert not _line(solo, "SY5000-GS-1")
+    for g in r["gaps"] + solo["gaps"]:
         assert g.get("reason") and g.get("rationale"), f"gap thiếu lý do: {g}"
+
+
+def test_so_station_theo_so_van():
+    """Đế phải đủ station cho số van: 3 van → 03, 12 van → 12."""
+    for n, want in ((3, "SS5Y5-20-03"), (12, "SS5Y5-20-12")):
+        r = _build([("CDM2L32-500Z", n)], {**MFD_CFG})
+        assert _line(r, want), f"{n} van → {want}, có {[l['part_number'] for l in r['lines']]}"
 
 
 def test_ma_khong_parse_duoc_thi_bao():

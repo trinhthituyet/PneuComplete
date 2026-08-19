@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PneuComplete — dựng BOM khí nén</title>
+<style>
+:root {
+  --bg:#0f1115; --panel:#171a21; --panel2:#1d212a; --line:#2a2f3a;
+  --tx:#e6e8ec; --dim:#8b93a3; --acc:#4a9eff; --ok:#3ddc84;
+  --warn:#ffb443; --err:#ff5f56; --gap:#b48cff;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg:#f6f7f9; --panel:#fff; --panel2:#f0f2f5; --line:#dfe3e8;
+          --tx:#1b1f27; --dim:#5d6673; --acc:#0b66d0; }
+}
+* { box-sizing:border-box; }
+body { margin:0; font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+       background:var(--bg); color:var(--tx); }
+header { padding:14px 20px; border-bottom:1px solid var(--line);
+         display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
+h1 { font-size:16px; margin:0; font-weight:600; }
+.sub { color:var(--dim); font-size:12px; }
+main { display:grid; grid-template-columns:minmax(380px,42%) 1fr; gap:0;
+       height:calc(100vh - 53px); }
+@media (max-width:900px){ main { grid-template-columns:1fr; height:auto; } }
+.col { overflow-y:auto; padding:16px 20px; }
+.col.left { border-right:1px solid var(--line); }
+section { margin-bottom:22px; }
+h2 { font-size:12px; text-transform:uppercase; letter-spacing:.08em;
+     color:var(--dim); margin:0 0 10px; font-weight:600; }
+table { width:100%; border-collapse:collapse; }
+th,td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line);
+        vertical-align:top; }
+th { color:var(--dim); font-weight:500; font-size:12px; }
+input,select,button { font:inherit; color:var(--tx); background:var(--panel2);
+       border:1px solid var(--line); border-radius:6px; padding:6px 8px; }
+input:focus,select:focus { outline:2px solid var(--acc); outline-offset:-1px; }
+input.code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; width:100%; }
+input.qty { width:64px; }
+button { cursor:pointer; background:var(--acc); color:#fff; border:none;
+         padding:8px 14px; font-weight:600; }
+button.ghost { background:transparent; border:1px solid var(--line); color:var(--tx);
+               font-weight:400; padding:5px 10px; }
+button:disabled { opacity:.5; cursor:default; }
+.row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px 12px; }
+label.f { display:block; }
+label.f > span { display:block; font-size:12px; color:var(--dim); margin-bottom:3px; }
+label.f input, label.f select { width:100%; }
+.hint { font-size:11px; color:var(--dim); margin-top:3px; }
+.mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+.pill { display:inline-block; font-size:11px; padding:1px 7px; border-radius:99px;
+        border:1px solid var(--line); color:var(--dim); }
+.ok  { color:var(--ok); } .warn{ color:var(--warn); }
+.err { color:var(--err); } .gapc{ color:var(--gap); }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:8px;
+        padding:12px 14px; margin-bottom:10px; }
+.layer { margin-bottom:16px; }
+.layer h3 { font-size:13px; margin:0 0 6px; display:flex; gap:8px; align-items:baseline; }
+.line { padding:8px 0; border-bottom:1px solid var(--line); }
+.line:last-child { border-bottom:none; }
+.line .pn { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:600; }
+.line .why { font-size:12px; color:var(--dim); margin-top:3px; }
+.line .note { font-size:12px; color:var(--dim); margin-top:2px; font-style:italic; }
+details summary { cursor:pointer; color:var(--dim); font-size:12px; }
+.empty { color:var(--dim); padding:30px 0; text-align:center; }
+.calcbox { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px;
+           white-space:pre-wrap; color:var(--dim); }
+.badge { font-size:11px; color:var(--dim); }
+.chk { display:flex; align-items:center; gap:6px; font-size:13px; }
+.chk input { width:auto; }
+</style>
+</head>
+<body>
+<header>
+  <h1>PneuComplete</h1>
+  <span class="sub">nhập actuator → BOM khí nén, có giải thích và chỗ cần bạn quyết</span>
+  <span class="sub" id="serieshint"></span>
+</header>
+
+<main>
+  <div class="col left">
+    <section>
+      <h2>Actuator</h2>
+      <table id="items"><thead><tr>
+        <th style="width:52%">Mã hàng</th><th>SL</th><th>Loại van</th><th></th>
+      </tr></thead><tbody></tbody></table>
+      <div class="row" style="margin-top:8px">
+        <button class="ghost" id="addrow">+ thêm dòng</button>
+        <span class="hint" id="parsehint"></span>
+      </div>
+    </section>
+
+    <section>
+      <h2>Cần bạn khai — engine không suy được</h2>
+      <div id="needs" class="grid2"></div>
+    </section>
+
+    <section>
+      <h2>Điều kiện làm việc</h2>
+      <div class="grid2" id="cond"></div>
+    </section>
+
+    <section>
+      <div class="row">
+        <button id="run">Dựng BOM</button>
+        <button class="ghost" id="csv" disabled>Xuất CSV</button>
+        <span class="hint" id="status"></span>
+      </div>
+    </section>
+  </div>
+
+  <div class="col right" id="out">
+    <div class="empty">Nhập mã actuator rồi bấm <b>Dựng BOM</b>.<br>
+      <span class="sub">Ví dụ: CDM2L32-500Z · MGPM25-200Z-M9BL · CDQSB20-25D-M9BZ</span></div>
+  </div>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const el = (t, c, x) => { const e = document.createElement(t);
+  if (c) e.className = c; if (x !== undefined) e.textContent = x; return e; };
+let DEF = {}, NEEDS = [], VFUNC = [], lastProject = null;
+
+const LAYER_VN = {actuator:'ACTUATOR', valve:'VAN', air_prep:'XỬ LÝ KHÍ',
+  piping:'ĐƯỜNG ỐNG', accessory:'PHỤ KIỆN', electrical:'ĐIỆN / CẢM BIẾN'};
+const LAYER_ORDER = ['actuator','valve','air_prep','piping','accessory','electrical','other'];
+
+const COND = [
+  ['pressure_mpa','Áp suất (MPa)'], ['cycle_s','Chu kỳ (s)'],
+  ['tube_od_mm','Ống ø (mm)'], ['tube_color','Màu ống'],
+  ['tube_roll_length_m','Cuộn (m)'], ['voltage','Điện áp coil'],
+  ['valve_mounting','Kiểu cửa van'], ['safety_factor','Hệ số đồng thời'],
+];
+
+async function boot() {
+  const d = await (await fetch('/api/defaults')).json();
+  DEF = d.defaults; NEEDS = d.needs_input; VFUNC = d.valve_functions;
+  const s = await (await fetch('/api/series')).json();
+  $('#serieshint').textContent = `· ${s.length} series có ngữ pháp`;
+
+  const nb = $('#needs');
+  NEEDS.forEach(n => {
+    const w = el('label','f'); w.appendChild(el('span', null, n.label));
+    let inp;
+    if (n.key === 'valve_function') {
+      inp = el('select'); inp.appendChild(new Option('— để trống → engine báo gap','' ));
+      VFUNC.forEach(v => inp.appendChild(new Option(v, v)));
+    } else if (n.key === 'manifold_type') {
+      inp = el('select'); inp.appendChild(new Option('— để trống →  gap',''));
+      ['20, 23, 20SA, 23SA','20P, 23P'].forEach(v => inp.appendChild(new Option('Type '+v, v)));
+    } else { inp = el('input'); inp.placeholder = 'để trống → gap'; }
+    inp.dataset.k = n.key;
+    w.appendChild(inp);
+    const h = el('div','hint', n.why); w.appendChild(h);
+    nb.appendChild(w);
+  });
+
+  const cb = $('#cond');
+  COND.forEach(([k,lab]) => {
+    const w = el('label','f'); w.appendChild(el('span',null,lab));
+    let inp;
+    if (k === 'valve_mounting') {
+      inp = el('select');
+      ['body_ported','base_mounted'].forEach(v => inp.appendChild(new Option(v,v)));
+    } else { inp = el('input'); }
+    inp.dataset.c = k;
+    inp.value = DEF[k] ?? '';
+    w.appendChild(inp); cb.appendChild(w);
+  });
+  const mw = el('label','f'); mw.appendChild(el('span',null,'Gá van lên manifold'));
+  const mi = el('input'); mi.type='checkbox'; mi.dataset.c='use_manifold';
+  const lab = el('div','chk'); lab.appendChild(mi);
+  lab.appendChild(el('span','hint','ảnh hưởng gasket, end plate, đế manifold'));
+  mw.appendChild(lab); cb.appendChild(mw);
+
+  addRow(); addRow();
+}
+
+function addRow(code='') {
+  const tb = $('#items tbody');
+  const tr = el('tr');
+  const c1 = el('td'); const i = el('input','code mono'); i.value = code;
+  i.placeholder = 'CDM2L32-500Z'; i.addEventListener('blur', () => checkCode(i));
+  c1.appendChild(i); tr.appendChild(c1);
+  const c2 = el('td'); const q = el('input','qty'); q.type='number'; q.min=1; q.value=1;
+  c2.appendChild(q); tr.appendChild(c2);
+  const c3 = el('td'); const v = el('select');
+  v.appendChild(new Option('(theo mặc định)',''));
+  VFUNC.forEach(f => v.appendChild(new Option(f,f)));
+  c3.appendChild(v); tr.appendChild(c3);
+  const c4 = el('td'); const x = el('button','ghost','×');
+  x.onclick = () => tr.remove(); c4.appendChild(x); tr.appendChild(c4);
+  tb.appendChild(tr);
+}
+
+async function checkCode(inp) {
+  const code = inp.value.trim();
+  if (!code) { inp.style.borderColor=''; $('#parsehint').textContent=''; return; }
+  const r = await (await fetch('/api/parse?code='+encodeURIComponent(code))).json();
+  if (r.ok) {
+    inp.style.borderColor = 'var(--ok)';
+    const a = r.attrs || {};
+    const bits = Object.entries(a).filter(([k])=>!k.startsWith('_'))
+      .slice(0,5).map(([k,v])=>`${k}=${v}`).join(' · ');
+    $('#parsehint').innerHTML = `<span class="ok">✓ ${r.series||''}</span> ${bits}`;
+  } else {
+    inp.style.borderColor = 'var(--err)';
+    const why = r.error || (r.unparsed ? `chưa hiểu phần "${r.unparsed}"` : '')
+      || (r.missing ? `thiếu ô ${r.missing.join(', ')}` : '');
+    $('#parsehint').innerHTML = `<span class="err">✗ ${why}</span>`;
+  }
+}
+
+function collect() {
+  const inputs = [...document.querySelectorAll('#items tbody tr')].map(tr => {
+    const [i,q,v] = [tr.querySelector('input.code'), tr.querySelector('input.qty'),
+                     tr.querySelector('select')];
+    return {code:i.value.trim(), qty:+q.value||1,
+            overrides: v.value ? {valve_function:v.value} : {}};
+  }).filter(x => x.code);
+  const config = {};
+  document.querySelectorAll('[data-k]').forEach(e => { if (e.value) config[e.dataset.k]=e.value; });
+  document.querySelectorAll('[data-c]').forEach(e => {
+    config[e.dataset.c] = e.type==='checkbox' ? e.checked : e.value; });
+  return {inputs, config};
+}
+
+async function run() {
+  const body = collect();
+  if (!body.inputs.length) { $('#status').textContent='chưa nhập actuator nào'; return; }
+  $('#status').textContent='đang dựng…'; $('#run').disabled=true;
+  try {
+    const r = await (await fetch('/api/bom',{method:'POST',
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})).json();
+    if (r.error) { $('#status').innerHTML=`<span class="err">${r.error}</span>`; return; }
+    lastProject = r.project_id; $('#csv').disabled=false;
+    render(r);
+    $('#status').innerHTML = `<span class="ok">xong</span> · project #${r.project_id}`;
+  } catch(e) { $('#status').innerHTML=`<span class="err">${e}</span>`; }
+  finally { $('#run').disabled=false; }
+}
+
+function render(r) {
+  const o = $('#out'); o.innerHTML='';
+
+  if (r.calc && r.calc.length) {
+    const c = el('section'); c.appendChild(el('h2',null,'Tính toán'));
+    const box = el('div','card'); const pre = el('div','calcbox');
+    let t = '';
+    r.calc.forEach(x => { if (!x.bore_mm) return;
+      t += `${x.item} ×${x.count}  ø${x.bore_mm}` +
+        (x.rod_mm ? `, cần ø${x.rod_mm}` : ', chưa biết đường kính cần') +
+        `, hành trình ${x.stroke_mm} mm\n` +
+        `   lực đẩy ${x.thrust_push_N} N` +
+        (x.thrust_pull_N ? ` · lực kéo ${x.thrust_pull_N} N` : ' · lực kéo: chưa tính được') +
+        `\n   khí ${x.total_flow_lpm} L/min ANR → cần cấp ${x.required_flow_lpm}` +
+        `\n   tốc độ piston ${x.piston_speed_mm_s} mm/s\n`; });
+    t += `\nΣ toàn hệ ${r.system.total_flow_lpm} L/min ANR → cần cấp ${r.system.required_flow_lpm} L/min`;
+    pre.textContent = t; box.appendChild(pre);
+    const a = (r.calc[0]||{}).assumptions || [];
+    if (a.length) { const d=el('details'); d.appendChild(el('summary',null,'giả định'));
+      const ul=el('ul'); a.forEach(x=>ul.appendChild(el('li','hint',x))); d.appendChild(ul);
+      box.appendChild(d); }
+    c.appendChild(box); o.appendChild(c);
+  }
+
+  const s = el('section'); s.appendChild(el('h2',null,`BOM — ${r.lines.length} dòng`));
+  const by = {}; r.lines.forEach(l => (by[l.layer] ||= []).push(l));
+  LAYER_ORDER.forEach(L => {
+    if (!by[L]) return;
+    const d = el('div','layer card');
+    const h = el('h3'); h.appendChild(el('span',null,LAYER_VN[L]||L.toUpperCase()));
+    h.appendChild(el('span','badge',`${by[L].length} dòng`)); d.appendChild(h);
+    by[L].forEach(l => {
+      const ln = el('div','line');
+      const top = el('div','row');
+      top.appendChild(el('span','pn', l.part_number));
+      top.appendChild(el('span',null,`×${l.qty} ${l.unit||'cái'}`));
+      if (l.confidence != null && l.confidence < 0.9)
+        top.appendChild(el('span','pill', `tin cậy ${Math.round(l.confidence*100)}%`));
+      ln.appendChild(top);
+      if (l.rule_code) {
+        const w = el('div','why'); w.textContent = `${l.rule_code}: ${l.rationale}`;
+        ln.appendChild(w);
+      }
+      if (l.note) ln.appendChild(el('div','note', l.note));
+      if (l.alternatives && l.alternatives.length)
+        ln.appendChild(el('div','note','thay thế: '+l.alternatives.join(', ')));
+      d.appendChild(ln);
+    });
+    s.appendChild(d);
+  });
+  o.appendChild(s);
+
+  if (r.warnings.length) {
+    const w = el('section'); w.appendChild(el('h2',null,'Cảnh báo'));
+    r.warnings.forEach(x => {
+      const c = el('div','card');
+      const cls = x.severity==='error' ? 'err' : 'warn';
+      const t = el('div'); t.innerHTML = `<span class="${cls}">${x.severity==='error'?'✗':'⚠'} [${x.code}]</span> ${x.message}`;
+      c.appendChild(t);
+      c.appendChild(el('div','why', `${x.rule_code}: ${x.rationale}`));
+      w.appendChild(c);
+    });
+    o.appendChild(w);
+  }
+
+  const g = el('section');
+  g.appendChild(el('h2',null,`Cần bạn quyết định — ${r.gaps.length} mục engine KHÔNG đoán`));
+  if (!r.gaps.length) g.appendChild(el('div','hint','không còn mục nào'));
+  r.gaps.forEach(x => {
+    const c = el('div','card');
+    const t = el('div'); t.innerHTML = `<span class="gapc">?</span> <b>${x.rule_code||x.item||''}</b> — ${x.reason}`;
+    c.appendChild(t);
+    if (x.rationale) c.appendChild(el('div','why','vì sao cần: '+x.rationale));
+    g.appendChild(c);
+  });
+  o.appendChild(g);
+}
+
+$('#addrow').onclick = () => addRow();
+$('#run').onclick = run;
+$('#csv').onclick = () => { if (lastProject) location.href='/api/csv?project='+lastProject; };
+boot();
+</script>
+</body>
+</html>

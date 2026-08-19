@@ -8,6 +8,7 @@
 
 series_catalog_id: TU-E
 source: "PDF 7-9-2-p0682-0683-TU-TIUB_en.pdf, trang 2"
+part_prefix: "TU"
 entered_by: manual
 note: >
   Mã model gộp cả OD và ID vào một token 4 số (TU0425 = OD 4 mm, ID 2.5 mm) nên

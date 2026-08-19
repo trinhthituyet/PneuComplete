@@ -1,0 +1,132 @@
+# Ngữ pháp mã hàng nhập tay — One-touch Fitting KQ2
+#
+# NGUỒN: DOCUMENT/FITTING/es50-37-kq2.pdf (227 trang, 40 sơ đồ How to Order)
+#   trang 7 — sơ đồ cho cả HAI dạng, đọc bằng bbox:
+#       Threaded Type   KQ2 H 06 01 A S 1     (x: 205 255 277 317 347 371 390)
+#       Tube-Tube Type  KQ2 H 06 00 A 1       (x: 205 255 277 317 345 362)
+#   trang 121-133 — bảng Dimensions liệt kê mã hoàn chỉnh, dùng để đối chiếu
+#
+# VÌ SAO QUAN TRỌNG NHẤT: KQ2 chiếm 23 dòng / 214 cái trong 2 BOM máy thật =
+# 53% tổng khối lượng vật tư SMC. Trước đây bị chặn vì trang series KQ2 trên
+# webcatalog không link PDF nào (coverage PDF chỉ 31%); file này do bạn cấp.
+#
+# CẤU TRÚC: ô port_size quyết định dạng —
+#   '00' = tube-to-tube (union, tee, cross): không có ren, không có ô sealant
+#   M3/M5/M6/01/02/03 = có ren: thêm ô thread_material và seal_method
+# Ren G viết LIỀN trước cỡ (BOM có KQ2L08-G02N = ren G1/4), giống AS2201F-G01.
+
+series_catalog_id: KQ2-E
+part_prefix: "KQ2"
+source: "DOCUMENT/FITTING/es50-37-kq2.pdf trang 7 (sơ đồ), trang 121-133 (Dimensions)"
+entered_by: manual
+note: >
+  Ô cuối cùng ('1' trong KQ2 H 06 01 A S 1) chưa xác định được nghĩa — sơ đồ trang 7
+  không có bảng nào giải thích, và mã thật trong BOM đều KHÔNG có nó
+  (KQ2L06-01NS, KQ2U06-00A). Nên để is_required: 0 và không sinh ra.
+
+slots:
+  - pos: 1
+    name: shape
+    value_type: enum
+    separator: ""
+    options:
+      # ── dạng có ren (Threaded Type), bảng Model cột trái trang 7 ──────────
+      - {code: "H",  label: "Male connector",              attrs: {shape: male_connector, ends: 2}}
+      - {code: "S",  label: "Hexagon socket head male connector", attrs: {shape: male_connector_hex, ends: 2}}
+      - {code: "F",  label: "Female connector",            attrs: {shape: female_connector, ends: 2}}
+      - {code: "L",  label: "Male elbow",                  attrs: {shape: male_elbow, ends: 2}}
+      - {code: "K",  label: "45° male elbow",              attrs: {shape: male_elbow_45, ends: 2}}
+      - {code: "V",  label: "Universal male elbow",        attrs: {shape: universal_male_elbow, ends: 2}}
+      - {code: "VS", label: "Hexagon socket head universal male elbow", attrs: {shape: universal_male_elbow_hex, ends: 2}}
+      - {code: "VF", label: "Universal female elbow",      attrs: {shape: universal_female_elbow, ends: 2}}
+      - {code: "LF", label: "Female elbow",                attrs: {shape: female_elbow, ends: 2}}
+      - {code: "VD", label: "Double universal male elbow", attrs: {shape: double_universal_male_elbow, ends: 3}}
+      - {code: "VT", label: "Triple universal male elbow", attrs: {shape: triple_universal_male_elbow, ends: 4}}
+      - {code: "W",  label: "Extended male elbow / Extended plug-in elbow", attrs: {shape: extended_elbow, ends: 2}}
+      - {code: "T",  label: "Male branch tee / Union tee", attrs: {shape: tee, ends: 3}}
+      - {code: "Y",  label: "Male run tee",                attrs: {shape: run_tee, ends: 3}}
+      - {code: "D",  label: "Male delta union",            attrs: {shape: delta_union, ends: 3}}
+      - {code: "E",  label: "Bulkhead connector / Bulkhead union", attrs: {shape: bulkhead, ends: 2}}
+      - {code: "LE", label: "Bulkhead male elbow",         attrs: {shape: bulkhead_elbow, ends: 2}}
+      - {code: "N",  label: "Adapter",                     attrs: {shape: adapter, ends: 2}}
+      # ── dạng tube-to-tube, bảng Dimensions trang 121-133 ─────────────────
+      - {code: "U",  label: 'Union "Y" / Plug-in "Y"',     attrs: {shape: union_y, ends: 3}}
+      - {code: "TW", label: "Cross",                       attrs: {shape: cross, ends: 4}}
+      - {code: "TX", label: "Different diameter cross",    attrs: {shape: cross_diff, ends: 4}}
+
+  - pos: 2
+    name: tube_od
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "02", label: "ø2",   attrs: {tube_od_mm: 2.0}}
+      - {code: "23", label: "ø3.2", attrs: {tube_od_mm: 3.2}}
+      - {code: "04", label: "ø4",   attrs: {tube_od_mm: 4.0}}
+      - {code: "06", label: "ø6",   attrs: {tube_od_mm: 6.0}}
+      - {code: "08", label: "ø8",   attrs: {tube_od_mm: 8.0}}
+      - {code: "10", label: "ø10",  attrs: {tube_od_mm: 10.0}}
+      - {code: "12", label: "ø12",  attrs: {tube_od_mm: 12.0}}
+      - {code: "16", label: "ø16",  attrs: {tube_od_mm: 16.0}}
+
+  - pos: 3
+    name: port_size
+    value_type: enum
+    separator: "-"
+    options:
+      # tube-to-tube: '00' = nối ống-ống cùng cỡ, KHÔNG có ren
+      - {code: "00",  label: "Same dia. tubing (nối ống-ống)",
+         attrs: {port_standard: none, threaded: false}}
+      - {code: "99",  label: 'Plug-in "Y" (cắm vào đầu fitting)',
+         attrs: {port_standard: none, threaded: false}}
+      - {code: "M3",  label: "M3 x 0.5",      attrs: {port_standard: "M",  port_size: "M3", threaded: true}}
+      - {code: "M5",  label: "M5 x 0.8",      attrs: {port_standard: "M",  port_size: "M5", threaded: true}}
+      - {code: "M6",  label: "M6 x 1.0",      attrs: {port_standard: "M",  port_size: "M6", threaded: true}}
+      - {code: "01",  label: "R1/8, Rc1/8",   attrs: {port_standard: "R",  port_size: "1/8", threaded: true}}
+      - {code: "02",  label: "R1/4, Rc1/4",   attrs: {port_standard: "R",  port_size: "1/4", threaded: true}}
+      - {code: "03",  label: "R3/8, Rc3/8",   attrs: {port_standard: "R",  port_size: "3/8", threaded: true}}
+      # ren G viết liền trước cỡ — BOM có KQ2L08-G02N
+      - {code: "G01", label: "G1/8",          attrs: {port_standard: "G",  port_size: "1/8", threaded: true}}
+      - {code: "G02", label: "G1/4",          attrs: {port_standard: "G",  port_size: "1/4", threaded: true}}
+      - {code: "G03", label: "G3/8",          attrs: {port_standard: "G",  port_size: "3/8", threaded: true}}
+      # ── union khác đường kính: ô này là cỡ ống thứ hai (trang 126) ────────
+      - {code: "23x", label: "ống thứ hai ø3.2", attrs: {port_standard: none, threaded: false, tube_od2_mm: 3.2}}
+      - {code: "04x", label: "ống thứ hai ø4",   attrs: {port_standard: none, threaded: false, tube_od2_mm: 4.0}}
+      - {code: "06x", label: "ống thứ hai ø6",   attrs: {port_standard: none, threaded: false, tube_od2_mm: 6.0}}
+      - {code: "08x", label: "ống thứ hai ø8",   attrs: {port_standard: none, threaded: false, tube_od2_mm: 8.0}}
+      - {code: "10x", label: "ống thứ hai ø10",  attrs: {port_standard: none, threaded: false, tube_od2_mm: 10.0}}
+      - {code: "12x", label: "ống thứ hai ø12",  attrs: {port_standard: none, threaded: false, tube_od2_mm: 12.0}}
+      - {code: "16x", label: "ống thứ hai ø16",  attrs: {port_standard: none, threaded: false, tube_od2_mm: 16.0}}
+
+  # Union khác đường kính: ô port_size mang CỠ ỐNG THỨ HAI, không phải ren.
+  # Bảng Dimensions trang 126 liệt kê rõ: KQ2U06-08A = ø6 → ø8, KQ2U06-10A = ø6 → ø10.
+  # Đây là dữ liệu thật, không phải mã sai.
+  - pos: 4
+    name: thread_material
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "A", label: "Brass",                            attrs: {material: brass}}
+      - {code: "N", label: "Brass + Electroless nickel plating", attrs: {material: brass_en_plated}}
+      - {code: "G", label: "Stainless steel 303 (chỉ ren male và M3)",
+         attrs: {material: ss303}}
+
+  - pos: 5
+    name: seal_method
+    value_type: enum
+    separator: ""
+    is_required: 0
+    options:
+      - {code: "Nil", label: "None",                attrs: {sealant: false}}
+      # chỉ có nghĩa với loại có ren; loại 00/99 không dùng
+      - {code: "S",   label: "With thread sealant", attrs: {sealant: true}}
+
+  - pos: 6
+    name: undecoded_digit
+    value_type: enum
+    separator: ""
+    is_required: 0
+    options:
+      # Ô cuối trong spine 'KQ2 H 06 01 A S 1' — sơ đồ trang 7 KHÔNG có bảng nào
+      # giải thích. Đa số mã BOM không có nó (KQ2L06-01NS) nhưng KQ2L06-M5A1 thì có.
+      # Encode là literal tuỳ chọn: parse được cả hai dạng, và KHÔNG tự sinh ra.
+      - {code: "1", label: "(chưa giải mã được nghĩa)"}

@@ -1,0 +1,67 @@
+# Ngữ pháp mã hàng nhập tay — ĐẾ MANIFOLD SS5Y (body ported, bar stock, wiring rời)
+#
+# NGUỒN: DOCUMENT/MAINFOLD/7-1-2-p0723-0963-SY3000_en.pdf trang 44
+#   "Body Ported Manifold / Bar Stock Type / Individual Wiring · Type 20"
+#   spine:  SS5Y  5  20  05
+#           series─┘  │   └ số station
+#                     └ Type manifold (20)
+#
+# Đối chiếu BOM máy 23-432: SS5Y5-20-12 = SY5000 · Type 20 · 12 station.
+# Catalog có SS5Y5-20-05 cùng dạng → xác nhận định dạng đúng.
+#
+# ĐÂY LÀ GAP CUỐI CÙNG trong output engine (R-MFD-01). Trước đó tôi bỏ dở 2 lần
+# vì catalog SY dài 370 trang với 104 trang How to Order — nhưng riêng đế loại
+# này thì sơ đồ chỉ có 4 ô.
+#
+# PHẠM VI: chỉ Type 20 (body ported, bar stock, individual wiring) — đúng loại BOM
+# dùng. Các biến thể khác (Type 10/11/50/51, plug-in, D-sub, serial transmission)
+# CHƯA encode; mã của chúng sẽ không parse được và engine sẽ báo, không đoán.
+# Máy 24-236 dùng SS5Y5-10SVA-13B-C6A-NA (Type 10, có SV unit) — ngoài phạm vi này.
+
+series_catalog_id: SS5Y-20-E
+create_series:
+  code: "SS5Y-20"
+  name: "Đế manifold SS5Y Type 20 (body ported, bar stock, individual wiring)"
+  category_slug: "directional-control-valves"
+part_prefix: "SS5Y"
+source: "DOCUMENT/MAINFOLD/7-1-2-p0723-0963-SY3000_en.pdf trang 44"
+entered_by: manual
+
+slots:
+  - pos: 1
+    name: series_size
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "3", label: "SY3000", attrs: {series_size: "SY3000"}}
+      - {code: "5", label: "SY5000", attrs: {series_size: "SY5000"}}
+      - {code: "7", label: "SY7000", attrs: {series_size: "SY7000"}}
+
+  - pos: 2
+    name: manifold_type
+    value_type: enum
+    separator: "-"
+    options:
+      - {code: "20",  label: "Type 20 — body ported, bar stock, individual wiring",
+         attrs: {mfd_type: "20"}}
+      - {code: "20P", label: "Type 20P", attrs: {mfd_type: "20P"}}
+      - {code: "20SA", label: "Type 20SA", attrs: {mfd_type: "20SA"}}
+
+  - pos: 3
+    name: stations
+    value_type: integer
+    separator: "-"
+    # catalog trang 44: '02 = 2 stations' … '20 = 20 stations' — mã 2 chữ số đệm 0
+    pad: 2
+
+  - pos: 4
+    name: thread_type
+    value_type: enum
+    separator: "-"
+    is_required: 0
+    options:
+      # bảng trang 44: Nil=Rc · 00F=G · 00N=NPT · 00T=NPTF
+      - {code: "Nil", label: "Rc",   attrs: {port_standard: "Rc"}}
+      - {code: "00F", label: "G",    attrs: {port_standard: "G"}}
+      - {code: "00N", label: "NPT",  attrs: {port_standard: "NPT"}}
+      - {code: "00T", label: "NPTF", attrs: {port_standard: "NPTF"}}

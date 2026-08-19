@@ -1,0 +1,145 @@
+# Ngữ pháp mã hàng nhập tay — van điện từ 5 cửa SY (thế hệ SY3000/5000/7000/9000)
+#
+# NGUỒN: DOCUMENT/MAINFOLD/7-1-2-p0723-0963-SY3000_en.pdf
+#   trang 10 — "Body Ported/Single Unit",  spine bbox:  SY 5 1 20  …  5  L  …  01
+#   trang 26 — "Base Mounted/Single Unit", spine bbox:  SY 5 2 40  …  5  L
+#
+# ⚠ HAI THẾ HỆ SY, HAI CATALOG KHÁC NHAU — phát hiện khi đối chiếu BOM thật:
+#   • Máy 23-432 (2024) dùng THẾ HỆ NÀY: SY5120-5MZE-C6, SY5220-5MZE-C6,
+#     SY5420-5MZE-C6, SY7140-5LZE-02. Chỉ có trong file p0723-0963.
+#   • Máy 24-236 (2025) dùng THẾ HỆ MỚI: SY5100-5UE1-NA, SY5200-5UE1-NA.
+#     Chỉ có trong file p0387-0722 (mã dạng SY5200-5U1, cặp số '00').
+#   Cặp 2 chữ số phân biệt kiểu cửa, KHÔNG phải 2 ô riêng:
+#     20 = Body Ported (van có cửa ren/one-touch riêng)
+#     40 = Base Mounted (van cắm lên manifold, không có cửa riêng)
+#     00 = Base Mounted của thế hệ mới (file p0387-0722)
+#
+# Thứ tự ô đọc từ spine: series · actuation · kiểu cửa · '-' · điện áp ·
+#   electrical entry · light/surge · manual override · '-' · cỡ cửa
+# Kiểm bằng mã thật: SY5120-5MZE-C6 = SY5000 · single · body ported · 24VDC ·
+#   M plug connector · Z light+surge · E manual override · one-touch ø6
+
+series_catalog_id: SY-5-E
+part_prefix: "SY"
+source: "DOCUMENT/MAINFOLD/7-1-2-p0723-0963-SY3000_en.pdf trang 10 (body ported) + 26 (base mounted)"
+entered_by: manual
+note: >
+  Ô manual_override đọc được 'E' từ mã thật nhưng bảng định nghĩa của nó nằm ở
+  cột bị -layout làm sập; các giá trị khác (D, Y, DO, YO, W) lấy từ chú thích
+  "DC specifications of type D, Y, DO and YO" trên cùng trang. CẦN XÁC NHẬN nhãn.
+
+slots:
+  - pos: 1
+    name: series_size
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "3", label: "SY3000", attrs: {series_size: "SY3000"}}
+      - {code: "5", label: "SY5000", attrs: {series_size: "SY5000"}}
+      - {code: "7", label: "SY7000", attrs: {series_size: "SY7000"}}
+      - {code: "9", label: "SY9000", attrs: {series_size: "SY9000"}}
+
+  - pos: 2
+    name: actuation
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "1", label: "2 position single",         attrs: {positions: 2, solenoid: single}}
+      - {code: "2", label: "2 position double",         attrs: {positions: 2, solenoid: double}}
+      - {code: "3", label: "3 position closed center",  attrs: {positions: 3, center: closed}}
+      - {code: "4", label: "3 position exhaust center", attrs: {positions: 3, center: exhaust}}
+      - {code: "5", label: "3 position pressure center",attrs: {positions: 3, center: pressure}}
+
+  - pos: 3
+    name: piping
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "20", label: "Body ported (van có cửa riêng)",
+         attrs: {mounting: body_ported, has_own_port: true}}
+      - {code: "40", label: "Base mounted (cắm lên manifold)",
+         attrs: {mounting: base_mounted, has_own_port: false}}
+
+  - pos: 4
+    name: voltage
+    value_type: enum
+    separator: "-"
+    options:
+      - {code: "5", label: "24 VDC",            attrs: {voltage: "24VDC"}}
+      - {code: "6", label: "12 VDC",            attrs: {voltage: "12VDC"}}
+      - {code: "V", label: "6 VDC",             attrs: {voltage: "6VDC"}}
+      - {code: "S", label: "5 VDC",             attrs: {voltage: "5VDC"}}
+      - {code: "R", label: "3 VDC",             attrs: {voltage: "3VDC"}}
+      - {code: "1", label: "100 VAC",           attrs: {voltage: "100VAC"}}
+      - {code: "2", label: "200 VAC",           attrs: {voltage: "200VAC"}}
+      - {code: "3", label: "110 VAC [115 VAC]", attrs: {voltage: "110VAC"}}
+      - {code: "4", label: "220 VAC [230 VAC]", attrs: {voltage: "220VAC"}}
+
+  - pos: 5
+    name: electrical_entry
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "L",  label: "L plug connector",       attrs: {entry: l_plug}}
+      - {code: "LO", label: "L plug connector, không dây", attrs: {entry: l_plug_no_lead}}
+      - {code: "M",  label: "M plug connector",       attrs: {entry: m_plug}}
+      - {code: "MO", label: "M plug connector, không dây", attrs: {entry: m_plug_no_lead}}
+      - {code: "G",  label: "Grommet (dây ~300 mm)",  attrs: {entry: grommet, lead_mm: 300}}
+      - {code: "H",  label: "Grommet (dây ~600 mm)",  attrs: {entry: grommet, lead_mm: 600}}
+      - {code: "D",  label: "DIN terminal",           attrs: {entry: din}}
+      - {code: "DO", label: "DIN terminal, không đèn", attrs: {entry: din_no_light}}
+      - {code: "Y",  label: "DIN terminal (chuẩn khác)", attrs: {entry: din_alt}}
+      - {code: "YO", label: "DIN terminal (chuẩn khác), không đèn", attrs: {entry: din_alt_no_light}}
+      - {code: "W",  label: "W type (chỉ DC)",        attrs: {entry: w_type}}
+
+  - pos: 6
+    name: light_surge
+    value_type: enum
+    separator: ""
+    is_required: 0
+    options:
+      - {code: "Nil", label: "Without light/surge voltage suppressor", attrs: {light: false, surge: false}}
+      # Chú thích trang 10 ("L and M plug connectors" / "DIN terminal"): cặp S/Z
+      # dùng cho L, M plug và grommet; cặp R/U dùng cho DIN terminal. Không khai
+      # `requires` thì engine không phân biệt được Z với U (cùng light+surge).
+      - {code: "S",   label: "With surge voltage suppressor (L/M plug)",
+         attrs: {light: false, surge: true},
+         requires: {electrical_entry: [L, LO, M, MO, G, H, W]}}
+      - {code: "Z",   label: "With light/surge voltage suppressor (L/M plug)",
+         attrs: {light: true,  surge: true},
+         requires: {electrical_entry: [L, LO, M, MO, G, H, W]}}
+      - {code: "R",   label: "With surge voltage suppressor (DIN terminal)",
+         attrs: {light: false, surge: true},
+         requires: {electrical_entry: [D, DO, Y, YO]}}
+      - {code: "U",   label: "With light/surge voltage suppressor (DIN terminal)",
+         attrs: {light: true, surge: true},
+         requires: {electrical_entry: [D, DO, Y, YO]}}
+
+  - pos: 7
+    name: manual_override
+    value_type: enum
+    separator: ""
+    is_required: 0
+    options:
+      - {code: "Nil", label: "Non-locking push type (mặc định)", attrs: {override: non_locking}}
+      - {code: "E",   label: "Push-turn locking lever type",     attrs: {override: locking_lever}}
+      - {code: "B",   label: "Push-turn locking slotted type",   attrs: {override: locking_slotted}}
+
+  - pos: 8
+    name: port_size
+    value_type: enum
+    separator: "-"
+    is_required: 0
+    options:
+      # chỉ có ở loại body ported (piping = 20); base mounted lấy cửa từ manifold
+      - {code: "C4", label: "One-touch fitting ø4",  attrs: {tube_od_mm: 4.0},  requires: {piping: ["20"]}}
+      - {code: "C6", label: "One-touch fitting ø6",  attrs: {tube_od_mm: 6.0},  requires: {piping: ["20"]}}
+      - {code: "C8", label: "One-touch fitting ø8",  attrs: {tube_od_mm: 8.0},  requires: {piping: ["20"]}}
+      - {code: "N3", label: 'One-touch fitting ø5/32"', attrs: {tube_od_in: "5/32"}, requires: {piping: ["20"]}}
+      - {code: "N7", label: 'One-touch fitting ø1/4"',  attrs: {tube_od_in: "1/4"},  requires: {piping: ["20"]}}
+      - {code: "N9", label: 'One-touch fitting ø5/16"', attrs: {tube_od_in: "5/16"}, requires: {piping: ["20"]}}
+      - {code: "01", label: "Rc 1/8", attrs: {port_standard: "Rc", port_size: "1/8"}}
+      - {code: "02", label: "Rc 1/4", attrs: {port_standard: "Rc", port_size: "1/4"}}
+      - {code: "03", label: "Rc 3/8", attrs: {port_standard: "Rc", port_size: "3/8"}}
+      - {code: "N",  label: "NPT",  attrs: {port_standard: "NPT"}}
+      - {code: "T",  label: "NPTF", attrs: {port_standard: "NPTF"}}

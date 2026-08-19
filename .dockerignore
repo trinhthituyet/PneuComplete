@@ -1,0 +1,35 @@
+# Những gì KHÔNG gửi vào Docker build context.
+#
+# Không chỉ để ảnh nhẹ: cache/ gần 950 MB, DOCUMENT/ ~400 MB catalog PDF có bản
+# quyền SMC (không được phát hành lại), BOM/ là tệp Excel của khách hàng. Đưa
+# chúng vào ảnh là vừa nặng vừa sai.
+
+cache/
+DOCUMENT/
+BOM/
+pdfs/
+data/
+
+# dist/ là nơi tools/package.py đặt bản pneu.db ĐÃ LÀM SẠCH. Loại cả thư mục
+# nhưng chừa lại tệp đó, để build được ảnh sạch cho người ngoài:
+#   docker build --build-arg DB_FILE=dist/pneu.db .
+dist/*
+!dist/pneu.db
+
+__pycache__/
+*.pyc
+*.pyo
+*.bak
+*.log
+*.tmp
+.git/
+.gitignore
+.DS_Store
+
+# WAL/journal của SQLite: chép vào ảnh thì lệch với bản DB, SQLite có thể từ chối
+# mở. Bản mẫu trong ảnh chỉ cần đúng tệp .db.
+*.db-wal
+*.db-shm
+
+answer*.xlsx
+REVIEW-A3*.md

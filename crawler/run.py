@@ -225,8 +225,11 @@ def cmd_backfill():
     con.close()
 
 
+# Bộ series cho pha 3. Cập nhật sau khi đo BOM máy thật (2026-08-18):
+# thêm AS1-E (Push-lock — hậu tố A mà BOM thật dùng), MGP/CQS (xy-lanh thật dùng).
 SLICE = ["CM2-CDM2-Z-E", "CJ2-CDJ2-Z-E", "SY-E", "AS-E-E", "AS-FS-E",
-         "TU-E", "AC-A-E", "D-M9-5-E"]
+         "TU-E", "AC-A-E", "D-M9-5-E",
+         "AS1-E", "MGP-Z-E", "CQS-Z-E", "CQSB-Z-E", "MY1B-Z-E", "J-E"]
 
 
 def cmd_pdf(only_slice=True, limit=None):

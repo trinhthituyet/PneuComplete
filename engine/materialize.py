@@ -11,10 +11,8 @@ Thêm hãng khác chỉ cần thêm template, không sửa code.
 import json
 from pathlib import Path
 
-import yaml
-
 from crawler import db
-from engine import parser
+from engine import conf, parser
 
 TEMPLATES = db.ROOT / "db" / "seed" / "interfaces.yaml"
 
@@ -45,27 +43,60 @@ def seed_thread_compat(con):
 
 
 def load_templates():
-    raw = yaml.safe_load(TEMPLATES.read_text(encoding="utf-8"))
+    raw = conf.load(TEMPLATES)
     return {t["series_catalog_id"]: t for t in raw}
 
 
+def _lookup(spec_by, attrs):
+    """Tra bảng `{attr, map}` — chịu được cả khoá số và khoá chuỗi.
+
+    Cần thiết vì cùng một bảng tồn tại ở hai định dạng: YAML cho phép khoá SỐ
+    NGUYÊN (`map: {20: "1/8", 32: "1/8"}`) còn JSON chỉ có khoá CHUỖI ("20","32").
+    Giá trị đem tra thường là float (bore_mm = 32.0), nên str(32.0) = "32.0" KHÔNG
+    khớp khoá "32". Lỗi thật đã gặp khi chuyển cấu hình sang JSON: mọi cỡ cửa khí
+    biến thành None và engine báo "thiếu dữ liệu port_size".
+    """
+    val = attrs.get(spec_by["attr"])
+    if val is None:
+        return None
+    m = spec_by["map"]
+    keys = [val, str(val)]
+    if isinstance(val, float) and val.is_integer():
+        keys += [int(val), str(int(val))]
+    elif isinstance(val, int):
+        keys += [float(val), str(float(val))]
+    for k in keys:
+        try:
+            if k in m:
+                return m[k]
+        except TypeError:
+            continue
+    return None
+
+
 def _resolve(spec, key, parsed):
-    """Lấy giá trị 1 field của interface từ hằng số / attrs / bảng tra / ô mã."""
+    """Lấy giá trị 1 field của interface từ hằng số / attrs / bảng tra / ô mã.
+
+    Thứ tự ưu tiên: hằng số → bảng tra (*_by) → attrs → ô mã (*_from_slot).
+    Bảng tra đứng trước ô mã để xử lý ngoại lệ theo cỡ: MGP ø12/ø16 chỉ có ren
+    mét M5 x 0.8 (ghi chú catalog trang 10), còn ø20+ theo ô port_thread. Bảng
+    chỉ khai 12/16, các bore khác trả None và rơi xuống ô mã.
+    """
     attrs, slots = parsed["attrs"], parsed["slots"]
     if key in spec:
         return spec[key]
+    if f"{key}_by" in spec:
+        got = _lookup(spec[f"{key}_by"], attrs)
+        if got is not None:
+            return got
     if f"{key}_from_attr" in spec:
-        return attrs.get(spec[f"{key}_from_attr"])
+        got = attrs.get(spec[f"{key}_from_attr"])
+        if got is not None:
+            return got
     if f"{key}_from_slot" in spec:
         s = spec[f"{key}_from_slot"]
         code = slots.get(s["slot"])
         return s.get("map", {}).get(code, s.get("default"))
-    if f"{key}_by" in spec:
-        b = spec[f"{key}_by"]
-        val = attrs.get(b["attr"])
-        # khoá map trong YAML là số → tra cả dạng số và dạng chuỗi
-        m = b["map"]
-        return m.get(val, m.get(str(val), m.get(int(val) if isinstance(val, float) else val)))
     return None
 
 

@@ -1,0 +1,82 @@
+# Ngữ pháp mã hàng nhập tay — Compact Guide Cylinder MGP
+#
+# NGUỒN: DOCUMENT/CYL/7-4-2-p0527-0601-MGP_en.pdf
+#   trang 10 — sơ đồ How to Order, spine đọc bằng bbox:
+#       MGP  M   25   30   Z   M9BW
+#       x=93 128  144  188  207  226
+#   trang 11 — bảng Theoretical Output: bore ↔ rod size (12→6, 16→8, 20→10 …)
+#
+# VÌ SAO CẦN: MGPM là xy-lanh dùng NHIỀU NHẤT trong 2 BOM máy thật — 22 cái,
+# 6 dòng, cả 2 máy đều có. Trước đó engine chỉ biết CM2 (0 dòng trong BOM thật).
+# Mã thật trong BOM: MGPM12-30Z-M9BZ · MGPM16-125Z-M9BL · MGPM25-25Z-M9BZ
+#                    MGPM25-200Z-M9BL · MGPM25-250Z-M9BL
+#
+# LƯU Ý cỡ cửa: ø12 và ø16 CHỈ có M5 x 0.8 (ghi chú trang 10). Từ ø20 trở lên
+# mới có Rc/NPT/G. Đây là ràng buộc thật, khai bằng `requires`.
+
+series_catalog_id: MGP-Z-E
+part_prefix: "MGP"
+source: "DOCUMENT/CYL/7-4-2-p0527-0601-MGP_en.pdf, trang 10 (sơ đồ), trang 11 (rod size)"
+entered_by: manual
+
+slots:
+  - pos: 1
+    name: bearing_type
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "M", label: "Slide bearing",               attrs: {bearing: slide}}
+      - {code: "L", label: "Ball bushing",                attrs: {bearing: ball_bushing}}
+      - {code: "A", label: "High precision ball bushing", attrs: {bearing: ball_bushing_hp}}
+
+  - pos: 2
+    name: bore
+    value_type: enum
+    separator: ""
+    options:
+      # rod_dia_mm đọc từ bảng Theoretical Output trang 11 (cột 'Rod size')
+      - {code: "12",  label: "12 mm",  attrs: {bore_mm: 12.0,  rod_dia_mm: 6.0}}
+      - {code: "16",  label: "16 mm",  attrs: {bore_mm: 16.0,  rod_dia_mm: 8.0}}
+      - {code: "20",  label: "20 mm",  attrs: {bore_mm: 20.0,  rod_dia_mm: 10.0}}
+      - {code: "25",  label: "25 mm",  attrs: {bore_mm: 25.0,  rod_dia_mm: 12.0}}
+      - {code: "32",  label: "32 mm",  attrs: {bore_mm: 32.0,  rod_dia_mm: 16.0}}
+      - {code: "40",  label: "40 mm",  attrs: {bore_mm: 40.0,  rod_dia_mm: 20.0}}
+      - {code: "50",  label: "50 mm",  attrs: {bore_mm: 50.0,  rod_dia_mm: 25.0}}
+      - {code: "63",  label: "63 mm",  attrs: {bore_mm: 63.0,  rod_dia_mm: 30.0}}
+      - {code: "80",  label: "80 mm",  attrs: {bore_mm: 80.0,  rod_dia_mm: 35.0}}
+      - {code: "100", label: "100 mm", attrs: {bore_mm: 100.0, rod_dia_mm: 40.0}}
+
+  - pos: 3
+    name: stroke
+    value_type: integer
+    separator: "-"
+
+  - pos: 4
+    name: series_suffix
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "Z", label: "series Z (giá trị cố định)"}
+
+  - pos: 5
+    name: port_thread
+    value_type: enum
+    # Mã thật viết '-TN-' có gạch nối (MGPM25-200Z-TN-M9BL) dù sơ đồ vẽ liền.
+    # Ô có separator '-' vẫn khớp được mã không có nó vì parser chỉ tiêu thụ
+    # separator khi thấy nó.
+    separator: "-"
+    is_required: 0
+    options:
+      # ø12/ø16 chỉ có M5 → 'Nil' của chúng nghĩa là M5, không phải Rc.
+      # Cỡ cửa thật engine lấy từ interfaces.yaml (tra theo bore), ô này chỉ ghi CHUẨN ren.
+      - {code: "Nil", label: "Rc (ø20 trở lên) / M5 x 0.8 (ø12, ø16)",
+         attrs: {port_thread_std: "Rc"}}
+      - {code: "TN",  label: "NPT", attrs: {port_thread_std: "NPT"},
+         requires: {bore: [20, 25, 32, 40, 50, 63, 80, 100]}}
+      - {code: "TF",  label: "G",   attrs: {port_thread_std: "G"},
+         requires: {bore: [20, 25, 32, 40, 50, 63, 80, 100]}}
+
+  - pos: 6
+    name: auto_switch
+    value_type: free
+    separator: "-"

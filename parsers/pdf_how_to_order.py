@@ -299,6 +299,24 @@ def load(con, run_id, data, series_id, source_id=None, source_page=None):
     """
     from crawler import db as _db
 
+    # Ngữ pháp NHẬP TAY đã được người đọc catalog xác nhận — parser máy KHÔNG
+    # được ghi đè. Lỗi thật đã gặp: chạy lại `crawler.run grammar` đè ô 'bore'
+    # (32 option màu ống hiểu sai thành bore) lên ngữ pháp TU nhập tay, làm
+    # engine/parser.py vỡ: "could not convert string to float: 'BU'".
+    src = con.execute("select grammar_source from series where id=?",
+                      (series_id,)).fetchone()
+    if src and src["grammar_source"] == "manual":
+        return {"slots": 0, "options": 0, "reviews": 0,
+                "skipped": "ngữ pháp nhập tay — không ghi đè"}
+
+    # part_prefix: mã series lấy từ SPINE của chính sơ đồ ('CDM2' trong
+    # 'CDM2 B 40 150 A Z M9BW'). Không ghi thì engine/parser.py phải suy từ
+    # series.code — sinh ra tiền tố sai với code dạng nhóm ('CM2/CDM2-Z').
+    if data.get("series_token"):
+        con.execute("""update series set part_prefix=coalesce(part_prefix,?),
+                       grammar_source=coalesce(grammar_source,'auto') where id=?""",
+                    (data["series_token"].upper(), series_id))
+
     n_slot = n_opt = n_review = 0
     for s in data["slots"]:
         gate = s["confidence"] >= 0.8 or s["value_type"] != "enum"

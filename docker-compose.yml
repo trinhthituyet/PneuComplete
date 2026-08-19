@@ -1,0 +1,48 @@
+# PneuComplete — chạy bằng Docker
+#
+#   docker compose up -d      bật (lần đầu tự build)
+#   docker compose down       tắt
+#   docker compose logs -f    xem log
+#
+# Người dùng cuối không gõ lệnh: nháy đúp PneuComplete-Docker.command (macOS)
+# hoặc PneuComplete-Docker.bat (Windows).
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        # Mặc định lấy pneu.db ở thư mục gốc — đúng cho gói phát hành (bản đó đã
+        # được làm sạch, ~0,8 MB).
+        # Trên máy PHÁT TRIỂN, pneu.db gốc nặng hàng trăm MB và có BOM khách hàng.
+        # Ở đó nên chạy trước:  python3 tools/package.py --clean-db
+        # rồi bật bằng:         PNEU_DB_FILE=dist/pneu.db docker compose up -d --build
+        DB_FILE: ${PNEU_DB_FILE:-pneu.db}
+    image: pneucomplete:0.1
+    container_name: pneucomplete
+
+    # 127.0.0.1 ở PHÍA TRÁI là cố ý: chỉ máy này mở được, máy khác trong mạng LAN
+    # không vào được. Phần mềm không có đăng nhập, mà BOM là dữ liệu nội bộ.
+    # Muốn cho cả xưởng dùng chung thì đổi thành "8765:8765" — và hiểu rằng lúc
+    # đó ai trong mạng cũng xem/sửa được phương án.
+    ports:
+      - "127.0.0.1:8765:8765"
+
+    # Dữ liệu nằm ngoài ảnh Docker. Cập nhật phiên bản (build lại) KHÔNG mất
+    # phương án BOM đã dựng. Thư mục ./data xuất hiện cạnh docker-compose.yml —
+    # sao lưu thư mục đó là sao lưu toàn bộ.
+    volumes:
+      - ./data:/data
+
+    environment:
+      PNEU_HOST: 0.0.0.0        # bắt buộc trong container, xem web/server.py
+      PNEU_PORT: 8765
+      PNEU_DB: /data/pneu.db
+      TZ: Asia/Ho_Chi_Minh
+
+    restart: unless-stopped
+
+    # Không cần mạng ra ngoài để dùng UI (mọi dữ liệu đã nằm trong pneu.db).
+    # Bỏ dòng dưới nếu muốn chạy crawler cập nhật catalog từ smcworld.com.
+    # network_mode chỉ tắt được toàn bộ, mà ports cần network → giữ mạng nhưng
+    # phần mềm tự nó không gọi ra ngoài; xem docs/DESIGN.md §4.

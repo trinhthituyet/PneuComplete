@@ -1,0 +1,133 @@
+# Ngữ pháp mã hàng nhập tay — Air Combination AC THẾ HỆ -D
+#
+# NGUỒN: DOCUMENT/FRL/es40-69-AC-D.pdf (152 trang, "Modular F.R.L. Units")
+#   trang 20 — AC□□-D   : Air Filter + Regulator + Lubricator
+#   trang 28 — AC□□A-D  : Filter Regulator + Lubricator
+#   trang 34 — AC□□B-D  : Air Filter + Regulator          ← BOM dùng (AC30B-03E2-V-D)
+#   trang 42 — AC□□C-D  : Air Filter + Mist Separator + Regulator
+#   trang 50 — AC□□D-D  : Filter Regulator + Mist Separator
+#   spine trang 34:  AC 30 B  …  03 DE  …
+#
+# ⚠ THẾ HỆ THỨ HAI của họ AC. Thế hệ '-A' ở db/seed/grammar/ac.yaml.
+# Golden test phát hiện: BOM máy 24-236 dùng AC30B-03E2-V-D (thế hệ -D) nhưng
+# engine đề xuất AC30B-03DG-A (thế hệ -A) → tính là THIẾU + THỪA.
+#
+# Hai ký hiệu riêng của thế hệ này, giải mã từ chính PDF:
+#   E1…E0  digital pressure switch, khác nhau ở kiểu output và hướng ra dây.
+#          E2 = "Output: NPN open collector 1 output / Electrical entry: Wiring top entry"
+#   V      kèm van xả áp dư VHS — "Mounting position: AF + AR + VHS" (trang 34).
+#          V1 là biến thể khác, chưa xác định rõ.
+
+series_catalog_id: AC-D-E
+create_series:
+  code: "AC-D"
+  name: "Air Combination (Modular F.R.L., thế hệ -D)"
+  category_slug: "air-preparation-equipment"
+part_prefix: "AC"
+source: "DOCUMENT/FRL/es40-69-AC-D.pdf trang 20/28/34/42/50"
+entered_by: manual
+
+slots:
+  - pos: 1
+    name: size
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "20", label: "cỡ 20", attrs: {ac_size: 20, port_sizes: ["1/8", "1/4"]}}
+      - {code: "25", label: "cỡ 25", attrs: {ac_size: 25, port_sizes: ["1/4", "3/8"]}}
+      - {code: "30", label: "cỡ 30", attrs: {ac_size: 30, port_sizes: ["1/4", "3/8"]}}
+      - {code: "40", label: "cỡ 40", attrs: {ac_size: 40, port_sizes: ["1/4", "3/8", "1/2", "3/4"]}}
+      - {code: "50", label: "cỡ 50", attrs: {ac_size: 50, port_sizes: ["3/4", "1"]}}
+      - {code: "60", label: "cỡ 60", attrs: {ac_size: 60, port_sizes: ["3/4", "1"]}}
+
+  - pos: 2
+    name: combination
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "Nil", label: "Air Filter + Regulator + Lubricator",
+         attrs: {has_filter: true, has_regulator: true, has_lubricator: true,
+                 has_mist_separator: false, combined_fr: false}}
+      - {code: "A",   label: "Filter Regulator + Lubricator",
+         attrs: {has_filter: true, has_regulator: true, has_lubricator: true,
+                 has_mist_separator: false, combined_fr: true}}
+      - {code: "B",   label: "Air Filter + Regulator",
+         attrs: {has_filter: true, has_regulator: true, has_lubricator: false,
+                 has_mist_separator: false, combined_fr: false}}
+      - {code: "C",   label: "Air Filter + Mist Separator + Regulator",
+         attrs: {has_filter: true, has_regulator: true, has_lubricator: false,
+                 has_mist_separator: true, combined_fr: false}}
+      - {code: "D",   label: "Filter Regulator + Mist Separator",
+         attrs: {has_filter: true, has_regulator: true, has_lubricator: false,
+                 has_mist_separator: true, combined_fr: true}}
+
+  - pos: 3
+    name: thread_type
+    value_type: enum
+    separator: ""
+    is_required: 0
+    options:
+      - {code: "Nil", label: "Rc",  attrs: {port_standard: "Rc"}}
+      - {code: "N",   label: "NPT", attrs: {port_standard: "NPT"}}
+      - {code: "F",   label: "G",   attrs: {port_standard: "G"}}
+
+  - pos: 4
+    name: port_size
+    value_type: enum
+    separator: "-"
+    options:
+      - {code: "01", label: "1/8", attrs: {port_size: "1/8"}}
+      - {code: "02", label: "1/4", attrs: {port_size: "1/4"}}
+      - {code: "03", label: "3/8", attrs: {port_size: "3/8"}}
+      - {code: "04", label: "1/2", attrs: {port_size: "1/2"}}
+      - {code: "06", label: "3/4", attrs: {port_size: "3/4"}}
+      - {code: "10", label: "1",   attrs: {port_size: "1"}}
+
+  - pos: 5
+    name: auto_drain
+    value_type: enum
+    separator: ""
+    is_required: 0
+    options:
+      - {code: "Nil", label: "Without auto drain",            attrs: {auto_drain: none}}
+      - {code: "C",   label: "N.C. — cửa xả đóng khi có áp",  attrs: {auto_drain: "N.C."}}
+      - {code: "D",   label: "N.O. — cửa xả mở khi mất áp",   attrs: {auto_drain: "N.O."}}
+
+  - pos: 6
+    name: pressure_gauge
+    value_type: enum
+    separator: ""
+    is_required: 0
+    options:
+      # E1…E0 là digital pressure switch (không phải đồng hồ cơ), khác nhau ở
+      # kiểu output và hướng ra dây — đọc trực tiếp từ bảng option trang 34/42.
+      - {code: "Nil", label: "Without pressure gauge",  attrs: {gauge: none}}
+      - {code: "E1",  label: "Digital switch: NPN open collector 1 output / side entry",
+         attrs: {gauge: digital_switch, output: NPN}}
+      - {code: "E2",  label: "Digital switch: NPN open collector 1 output / wiring top entry",
+         attrs: {gauge: digital_switch, output: NPN, entry: top}}
+      - {code: "E3",  label: "Digital switch: PNP open collector 1 output / side entry",
+         attrs: {gauge: digital_switch, output: PNP}}
+      - {code: "E4",  label: "Digital switch: PNP open collector 1 output / wiring top entry",
+         attrs: {gauge: digital_switch, output: PNP, entry: top}}
+      - {code: "E",   label: "Square embedded type pressure gauge", attrs: {gauge: square_embedded}}
+      - {code: "G",   label: "Round type pressure gauge",           attrs: {gauge: round}}
+      - {code: "M",   label: "Round type pressure gauge (color zone)", attrs: {gauge: color_zone}}
+
+  - pos: 7
+    name: relief_valve
+    value_type: enum
+    separator: "-"
+    is_required: 0
+    options:
+      # "V  Mounting position: AF + AR + VHS" (trang 34) — kèm van xả áp dư VHS.
+      # V1 là biến thể khác, CHƯA xác định rõ nên chỉ ghi nhận, không mô tả.
+      - {code: "V",  label: "Kèm van xả áp dư VHS", attrs: {relief_valve: "VHS"}}
+      - {code: "V1", label: "Biến thể V1 (chưa xác định rõ)", attrs: {relief_valve: "V1"}}
+
+  - pos: 8
+    name: series_suffix
+    value_type: enum
+    separator: "-"
+    options:
+      - {code: "D", label: "series D (giá trị cố định)"}

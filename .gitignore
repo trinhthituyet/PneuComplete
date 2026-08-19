@@ -1,5 +1,54 @@
+# LƯU Ý CÚ PHÁP: .gitignore KHÔNG hỗ trợ chú thích cuối dòng.
+# Viết  BOM/   # dữ liệu khách hàng
+# thì git hiểu cả chuỗi "BOM/   # dữ liệu khách hàng" là TÊN TỆP, và BOM/ vẫn bị
+# commit. Chú thích phải nằm trên dòng RIÊNG, bắt đầu bằng #.
+
+# ─────────────────────────────────────────────────────────────────────
+# KHÔNG ĐƯỢC COMMIT — dữ liệu khách hàng và tài liệu có bản quyền
+# ─────────────────────────────────────────────────────────────────────
+
+# tệp Excel 購入品リスト của khách hàng
+BOM/
+# câu trả lời kỹ thuật của khách hàng
+answer1.xlsx
+# bản duyệt A3 có ghi chú nội bộ
+REVIEW-A3_new1.md
+# ~431 MB catalog PDF của SMC — có bản quyền, không phát hành lại
+DOCUMENT/
+
+# pneu.db chứa BOM khách hàng (bảng machine, bom_line) VÀ nặng ~360 MB.
+# Commit một lần là nằm trong lịch sử git mãi mãi, xoá sau không nhỏ lại được.
+# Clone mới lấy dữ liệu từ db/seed/pneu-seed.db (bản sạch 0,8 MB, CÓ commit):
+#     cp db/seed/pneu-seed.db pneu.db
+pneu.db
+# WAL/shm của SQLite, sinh ra lúc chạy
+pneu.db-wal
+pneu.db-shm
+
+# ─────────────────────────────────────────────────────────────────────
+# Sinh ra lúc chạy hoặc lúc đóng gói — tái tạo được, không cần lưu
+# ─────────────────────────────────────────────────────────────────────
+
+# ~974 MB HTML/PDF thô đã crawl; chỉ cần khi crawl lại
 cache/
+# sản phẩm của tools/package.py
+dist/
+# volume Docker: phương án BOM người dùng dựng ra
+data/
+
+# pdfs/ là các SYMLINK TUYỆT ĐỐI trỏ vào cache/ trên máy này. Trước đây có
+# commit (dạng symlink) nên trên máy người khác là link chết — đã gỡ.
+pdfs/
+
+# Tệp .json cấu hình do tools/package.py --json-only sinh từ .yaml cùng tên.
+# Bản .yaml là DUY NHẤT có thẩm quyền; commit cả .json là mời hai bản lệch nhau.
+db/seed/*.json
+db/seed/grammar/*.json
+
 __pycache__/
 *.pyc
 .venv/
 .env
+# crawl.log, web.log
+*.log
+.DS_Store

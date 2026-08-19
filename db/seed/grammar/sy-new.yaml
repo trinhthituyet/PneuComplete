@@ -1,0 +1,133 @@
+# Ngữ pháp mã hàng nhập tay — van 5 cửa SY THẾ HỆ MỚI (base mounted)
+#
+# NGUỒN: DOCUMENT/MAINFOLD/7-1-2-p0387-0722-SY_en.pdf trang 48
+#   "How to Order Valves (With mounting screw)" — spine bbox:
+#       SY  3   1   0   0        5        1
+#       x=  91 116 132 147 161  249      297
+#   markers: q(115) w(131) e(160) r(176) t(192) y(208) u(224) i(248) o(264) !0(280) !1(317)
+#
+# ⚠ ĐÂY LÀ THẾ HỆ THỨ HAI. Thế hệ cũ ở db/seed/grammar/sy.yaml (file p0723-0963,
+# cặp số 20/40). Phân biệt bằng cặp số thứ 3-4: thế hệ này dùng '0' + seal type.
+# BOM máy 24-236 (2025) dùng thế hệ này: SY5100-5UE1-NA ×6, SY5200-5UE1-NA ×3.
+#
+# HAI KÝ HIỆU CHƯA GIẢI MÃ HẾT — ghi lại trung thực thay vì đoán:
+#   • Chữ số '1' sau ô light/surge (SY3100-5U(1), SY5100-5UE(1)): xuất hiện ở
+#     100% mã thật trong catalog và BOM, nhưng bảng markers trang 48 không có ô
+#     nào ứng với nó (!1 là Type of mounting screw: Nil/B/K/H, không có '1').
+#     → encode thành literal cố định, KHÔNG khẳng định nghĩa.
+#   • '-NA' / '-A': giải mã được từ chú thích trang 192 của catalog kia —
+#     "–COM specifications (Type 45-NA)" ⇒ NA = negative common, A = positive common.
+
+series_catalog_id: SY-E
+part_prefix: "SY"
+source: "DOCUMENT/MAINFOLD/7-1-2-p0387-0722-SY_en.pdf trang 48"
+entered_by: manual
+
+slots:
+  - pos: 1
+    name: series_size
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "3", label: "SY3000", attrs: {series_size: "SY3000"}}
+      - {code: "5", label: "SY5000", attrs: {series_size: "SY5000"}}
+      - {code: "7", label: "SY7000", attrs: {series_size: "SY7000"}}
+
+  - pos: 2
+    name: actuation
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "1", label: "2 position single",          attrs: {positions: 2, solenoid: single}}
+      - {code: "2", label: "2 position double",          attrs: {positions: 2, solenoid: double}}
+      - {code: "3", label: "3 position closed center",   attrs: {positions: 3, center: closed}}
+      - {code: "4", label: "3 position exhaust center",  attrs: {positions: 3, center: exhaust}}
+      - {code: "5", label: "3 position pressure center", attrs: {positions: 3, center: pressure}}
+      - {code: "A", label: "4 position dual 3-port N.C./N.C.", attrs: {positions: 4}}
+      - {code: "B", label: "4 position dual 3-port N.O./N.O.", attrs: {positions: 4}}
+      - {code: "C", label: "4 position dual 3-port N.C./N.O.", attrs: {positions: 4}}
+
+  - pos: 3
+    name: piping
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "0", label: "Base mounted (cắm lên manifold)",
+         attrs: {mounting: base_mounted, has_own_port: false}}
+      - {code: "3", label: "Body ported (van có cửa riêng)",
+         attrs: {mounting: body_ported, has_own_port: true}}
+
+  - pos: 4
+    name: seal_type
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "0", label: "Rubber seal", attrs: {seal: rubber}}
+      - {code: "1", label: "Metal seal",  attrs: {seal: metal}}
+
+  - pos: 5
+    name: voltage
+    value_type: enum
+    separator: "-"
+    options:
+      - {code: "5", label: "24 VDC", attrs: {voltage: "24VDC"}}
+      - {code: "6", label: "12 VDC", attrs: {voltage: "12VDC"}}
+
+  - pos: 6
+    name: light_surge
+    value_type: enum
+    separator: ""
+    is_required: 0
+    options:
+      # bảng trang 48: ô này gộp cả đèn, chống xung, VÀ kiểu common
+      - {code: "Nil", label: "không đèn, không chống xung", attrs: {light: false, surge: false}}
+      - {code: "R",   label: "chống xung, non-polar",       attrs: {light: false, surge: true, common: non_polar}}
+      - {code: "U",   label: "đèn + chống xung, non-polar", attrs: {light: true,  surge: true, common: non_polar}}
+      - {code: "S",   label: "chống xung, positive common", attrs: {light: false, surge: true, common: positive}}
+      - {code: "Z",   label: "đèn + chống xung, positive common", attrs: {light: true, surge: true, common: positive}}
+      - {code: "NS",  label: "chống xung, negative common", attrs: {light: false, surge: true, common: negative}}
+      - {code: "NZ",  label: "đèn + chống xung, negative common", attrs: {light: true, surge: true, common: negative}}
+
+  - pos: 7
+    name: manual_override
+    value_type: enum
+    separator: ""
+    is_required: 0
+    options:
+      - {code: "Nil", label: "Non-locking push type",          attrs: {override: non_locking}}
+      - {code: "D",   label: "Push-turn locking slotted type",  attrs: {override: locking_slotted}}
+      - {code: "E",   label: "Push-turn locking lever type",    attrs: {override: locking_lever}}
+      - {code: "F",   label: "Slide locking type",              attrs: {override: slide_locking}}
+
+  - pos: 8
+    name: undecoded_digit
+    value_type: enum
+    separator: ""
+    options:
+      # CHƯA GIẢI MÃ. Có ở 100% mã thật (SY3100-5U1, SY5100-5UE1, SY3230-5Z1)
+      # nhưng không ô nào trong bảng markers trang 48 ứng với nó.
+      - {code: "1", label: "(chưa giải mã được nghĩa — cố định ở mọi mã thật)"}
+
+  - pos: 9
+    name: common_spec
+    value_type: enum
+    separator: "-"
+    is_required: 0
+    options:
+      - {code: "A",  label: "+COM specifications",  attrs: {com: positive}}
+      - {code: "NA", label: "–COM specifications",  attrs: {com: negative}}
+
+  - pos: 10
+    name: port_size
+    value_type: enum
+    separator: "-"
+    is_required: 0
+    options:
+      # chỉ loại body ported (piping = 3) có cửa riêng; base mounted lấy từ manifold
+      - {code: "C4", label: "One-touch fitting ø4",  attrs: {tube_od_mm: 4.0},  requires: {piping: ["3"]}}
+      - {code: "C6", label: "One-touch fitting ø6",  attrs: {tube_od_mm: 6.0},  requires: {piping: ["3"]}}
+      - {code: "C8", label: "One-touch fitting ø8",  attrs: {tube_od_mm: 8.0},  requires: {piping: ["3"]}}
+      - {code: "L4", label: "One-touch elbow ø4",    attrs: {tube_od_mm: 4.0},  requires: {piping: ["3"]}}
+      - {code: "L6", label: "One-touch elbow ø6",    attrs: {tube_od_mm: 6.0},  requires: {piping: ["3"]}}
+      - {code: "01", label: "Rc 1/8", attrs: {port_standard: "Rc", port_size: "1/8"}}
+      - {code: "02", label: "Rc 1/4", attrs: {port_standard: "Rc", port_size: "1/4"}}

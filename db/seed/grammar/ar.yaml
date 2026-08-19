@@ -1,0 +1,95 @@
+# Ngữ pháp mã hàng nhập tay — Regulator AR (modular, AR20-D … AR60-D)
+#
+# NGUỒN: DOCUMENT/FRL/es40-69-AC-D.pdf trang 100 ("Regulator AR20-D to AR60-D")
+#   spine:  AR 30 … 03 BE … D    (markers q w e r t y)
+#
+# Đối chiếu mã thật trong BOM: AR30-03BE-D (×2), AR30-03B-D (×1)
+#   AR30-03BE-D = AR · cỡ 30 · Rc · cửa 3/8 · B bracket · E square embedded gauge · series D
+#   AR30-03B-D  = như trên nhưng không có đồng hồ
+#
+# GHI CHÚ: AR10 là dòng riêng, sơ đồ khác (DOCUMENT/FRL/ES40-60-AR10-A.pdf trang 1,
+# hậu tố '-A' thay vì '-D'), chưa encode ở đây — BOM có AR10-M5BG-N-A ×2.
+
+series_catalog_id: AR-D-E
+create_series:
+  code: "AR-D"
+  name: "Regulator (modular, AR20-D to AR60-D)"
+  category_slug: "air-preparation-equipment"
+part_prefix: "AR"
+source: "DOCUMENT/FRL/es40-69-AC-D.pdf trang 100"
+entered_by: manual
+
+slots:
+  - pos: 1
+    name: size
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "20", label: "AR20", attrs: {ar_size: 20, port_sizes: ["1/8", "1/4"]}}
+      - {code: "25", label: "AR25", attrs: {ar_size: 25, port_sizes: ["1/4", "3/8"]}}
+      - {code: "30", label: "AR30", attrs: {ar_size: 30, port_sizes: ["1/4", "3/8"]}}
+      - {code: "40", label: "AR40", attrs: {ar_size: 40, port_sizes: ["1/4", "3/8", "1/2"]}}
+      - {code: "50", label: "AR50", attrs: {ar_size: 50, port_sizes: ["3/4", "1"]}}
+      - {code: "60", label: "AR60", attrs: {ar_size: 60, port_sizes: ["3/4", "1"]}}
+
+  - pos: 2
+    name: backflow
+    value_type: enum
+    separator: ""
+    is_required: 0
+    options:
+      - {code: "Nil", label: "Without backflow function", attrs: {backflow: false}}
+      - {code: "K",   label: "With backflow function",    attrs: {backflow: true}}
+
+  - pos: 3
+    name: thread_type
+    # Gạch nối đứng TRƯỚC ô ren, không trước cỡ cửa: AR30-N03BE-D (ren NPT) và
+    # AR30-03BE-D (ren Rc, ô ren bỏ trống). Đặt sai chỗ thì mã NPT không parse được.
+    value_type: enum
+    separator: "-"
+    is_required: 0
+    options:
+      - {code: "Nil", label: "Rc",  attrs: {port_standard: "Rc"}}
+      - {code: "N",   label: "NPT", attrs: {port_standard: "NPT"}}
+      - {code: "F",   label: "G",   attrs: {port_standard: "G"}}
+
+  - pos: 4
+    name: port_size
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "01", label: "1/8", attrs: {port_size: "1/8"}}
+      - {code: "02", label: "1/4", attrs: {port_size: "1/4"}}
+      - {code: "03", label: "3/8", attrs: {port_size: "3/8"}}
+      - {code: "04", label: "1/2", attrs: {port_size: "1/2"}}
+      - {code: "06", label: "3/4", attrs: {port_size: "3/4"}}
+      - {code: "10", label: "1",   attrs: {port_size: "1"}}
+
+  - pos: 5
+    name: mounting
+    value_type: enum
+    separator: ""
+    is_required: 0
+    options:
+      - {code: "Nil", label: "Without mounting option",        attrs: {mounting_opt: none}}
+      - {code: "B",   label: "With bracket",                   attrs: {mounting_opt: bracket}}
+      - {code: "H",   label: "With set nut (for panel mount)",  attrs: {mounting_opt: set_nut}}
+
+  - pos: 6
+    name: pressure_gauge
+    value_type: enum
+    separator: ""
+    is_required: 0
+    options:
+      - {code: "Nil", label: "Without pressure gauge",  attrs: {gauge: none}}
+      - {code: "E",   label: "Square embedded type pressure gauge", attrs: {gauge: square_embedded}}
+      - {code: "G",   label: "Round type pressure gauge (with limit indicator)", attrs: {gauge: round}}
+      - {code: "J",   label: "Right angle square type pressure gauge", attrs: {gauge: right_angle}}
+      - {code: "M",   label: "Round type pressure gauge (with color zone)", attrs: {gauge: color_zone}}
+
+  - pos: 7
+    name: series_suffix
+    value_type: enum
+    separator: "-"
+    options:
+      - {code: "D", label: "series D (giá trị cố định)"}

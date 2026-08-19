@@ -11,15 +11,14 @@ import json
 import sys
 from pathlib import Path
 
-import yaml
-
 from . import db
+from engine import conf as _conf
 
 SEED_DIR = db.ROOT / "db" / "seed" / "grammar"
 
 
 def load_file(con, path: Path):
-    spec = yaml.safe_load(path.read_text(encoding="utf-8"))
+    spec = _conf.load(path)
     cid = spec["series_catalog_id"]
     row = con.execute("select id, code from series where catalog_id=?", (cid,)).fetchone()
     if not row and "create_series" in spec:
@@ -51,12 +50,14 @@ def load_file(con, path: Path):
     n_slot = n_opt = 0
     for s in spec["slots"]:
         con.execute(
-            """insert into code_slot (series_id, pos, name, value_type, separator)
-               values (?,?,?,?,?)
+            """insert into code_slot (series_id, pos, name, value_type, separator,
+                                      is_required, pad) values (?,?,?,?,?,?,?)
                on conflict (series_id, pos) do update set
                  name=excluded.name, value_type=excluded.value_type,
-                 separator=excluded.separator""",
-            (sid, s["pos"], s["name"], s["value_type"], s.get("separator", "")),
+                 separator=excluded.separator, is_required=excluded.is_required,
+                 pad=excluded.pad""",
+            (sid, s["pos"], s["name"], s["value_type"], s.get("separator", ""),
+             int(s.get("is_required", 1)), s.get("pad")),
         )
         slot_id = con.execute(
             "select id from code_slot where series_id=? and pos=?", (sid, s["pos"])
@@ -84,6 +85,10 @@ def load_file(con, path: Path):
                 (slot_id, r["min"], r["max"], r.get("step"), r.get("unit")),
             )
 
+    if spec.get("part_prefix"):
+        con.execute("update series set part_prefix=? where id=?",
+                    (spec["part_prefix"], sid))
+    con.execute("update series set grammar_source='manual' where id=?", (sid,))
     con.execute("update series set notes=coalesce(notes,'')||? where id=?",
                 (f" | ngữ pháp nhập tay từ {path.name}: {spec.get('source','')}", sid))
     con.commit()

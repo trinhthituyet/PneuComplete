@@ -23,20 +23,35 @@
   then:
     need:
       layer: accessory
-      from_series: AS-E-E
-      qty: {from_ctx: port_count}
+      # AS1-E = họ Push-lock (hậu tố A). BOM máy thật của bạn dùng loại này
+      # (AS2201F-01-06SA ×8, AS1201F-M5-06A ×24), không phải loại núm thường.
+      from_series: {from_project: speed_controller_series}
+      # Mặc định = số cửa khí (2 với xy-lanh 2 chiều) nhưng KHAI ĐƯỢC theo từng
+      # xy-lanh: golden test cho thấy BOM 23-432 có 24 cái trong khi 2/xy-lanh ra
+      # 26 — có cơ cấu chỉ tiết lưu một chiều, hoặc tốc độ chiều kia không cần
+      # điều chỉnh. Engine không suy được điều đó từ mã xy-lanh.
+      qty: {from_project: speed_controller_per_actuator}
+      qty_default: {from_ctx: port_count}
       want:
         control: meter_out
         shape: {from_project: speed_controller_shape}
         port_size: {from_ctx: port_size}
         tube_od_mm: {from_project: tube_od_mm}
         sealant: {from_project: sealant}
+        knob: {from_project: speed_controller_knob}
+      # sealant chỉ là SỞ THÍCH: cỡ M5 không có loại sealant (ghi chú catalog AS),
+      # gặp cỡ đó thì bỏ yêu cầu và ghi chú, không báo gap.
+      want_soft: [sealant]
       mate: {role: air_port}
   rationale: >
     Xy-lanh tác động 2 chiều cần tiết lưu khí xả ở cả hai cửa để tốc độ ổn định.
     Meter-out là mặc định vì tránh giật ở đầu hành trình. Cỡ ren của speed
     controller phải bằng cỡ cửa của xy-lanh — engine tra từ bore, không giả định.
-  source: Nguyên tắc chung SMC Best Pneumatics; cỡ cửa từ PDF CM2 trang 14 cột P
+    Cỡ ren và cỡ ống lấy ĐÚNG theo xy-lanh, không chọn lớn hơn — bạn xác nhận:
+    "Hãy chọn theo thông số tối thiểu, thường tôi sẽ chọn size lớn hơn cho Cylinder
+    thôi, các thiết bị khác chọn theo tiêu chuẩn dùng cho cylinder đó."
+  source: Nguyên tắc chung SMC Best Pneumatics; cỡ cửa từ PDF CM2 trang 14 cột P;
+          họ push-lock từ PDF AS1-E trang 7; xác nhận của người dùng 2026-08-18
 
 - code: R-SW-01
   name: Cảm biến từ cho xy-lanh có nam châm
@@ -45,6 +60,11 @@
   when:
     all:
       - {attr: has_magnet, eq: true}
+      # KHÔNG đặt riêng nếu mã xy-lanh đã kèm cảm biến. Golden test bắt lỗi này:
+      # BOM dùng MGPM25-200Z-M9BL / CDQSB20-25D-M9BZ — hậu tố -M9Bx nghĩa là
+      # cảm biến đi kèm theo xy-lanh, nên BOM không có dòng D-M9 riêng. Engine
+      # đề xuất thêm 18 cái là THỪA.
+      - {attr: auto_switch, eq: null}
   then:
     need:
       layer: electrical
@@ -60,6 +80,8 @@
   rationale: >
     Hậu tố D trong mã (CDM2…) nghĩa là xy-lanh có nam châm sẵn — phải có cảm biến
     từ mới xác nhận được vị trí, bắt buộc với máy tự động. 2 cái cho 2 đầu hành trình.
+    Chỉ đặt riêng khi mã xy-lanh CHƯA kèm cảm biến. Nếu mã đã có hậu tố kiểu
+    '-M9BW' thì cảm biến tính trong đơn xy-lanh, đặt thêm là mua trùng.
   source: Ô auto_switch trong sơ đồ How to Order PDF CM2 trang 6; danh sách switch
           lắp được lấy từ bảng Applicable Auto Switches cùng trang
 
@@ -76,15 +98,19 @@
       from_series: TU-E
       qty: {from_ctx: tube_rolls_needed}
       unit: cuộn
+      per_tube_od: true
+      requires_input: tube_total_m
       want:
         tube_od_mm: {from_project: tube_od_mm}
         color: {from_project: tube_color}
         roll_length_m: {from_project: tube_roll_length_m}
   rationale: >
-    Mọi đầu one-touch còn hở phải được nối bằng ống đúng đường kính. Số cuộn tính từ
-    số đầu one-touch × chiều dài ước lượng mỗi đoạn (mặc định 3 m), chia cho chiều dài
-    cuộn, làm tròn lên. Đây là ƯỚC LƯỢNG — chiều dài thật phụ thuộc layout máy, cần
-    người dùng chỉnh lại.
+    Mọi đầu one-touch còn hở phải được nối bằng ống đúng đường kính. Nhưng TỔNG SỐ MÉT
+    ống thì engine KHÔNG suy được — nó phụ thuộc layout từng máy, khoảng cách từ tủ van
+    tới từng xy-lanh. Bản trước tôi lấy mặc định 3 m/mối nối; người dùng bác bỏ ở mục
+    A3-5: "tuỳ từng máy, tôi cần lựa chọn theo nhu cầu từng máy, chỗ này ko tự động ra
+    kết quả được". Nên giờ engine ĐÒI người dùng khai `tube_total_m`, chưa khai thì báo
+    gap kèm số đầu nối cần đi ống để người dùng ước lượng.
 
 - code: R-VLV-01
   name: Van điện từ 5/2 cho xy-lanh 2 chiều trong máy tự động
@@ -97,20 +123,41 @@
   then:
     need:
       layer: valve
-      from_parts: SY-E          # chọn từ mã thật đã quét, KHÔNG sinh từ ngữ pháp
+      from_series: SY-5-E
       qty: 1
+      requires_input: valve_function
       want:
-        actuation: 2-position double solenoid
+        series_size: {from_project: valve_series_size}
+        positions:   {from_project: valve_positions}
+        solenoid:    {from_project: valve_solenoid}
+        center:      {from_project: valve_center}
+        mounting: {from_project: valve_mounting}
         voltage: {from_project: voltage}
-      rank_by: occurrences_in_catalog
+        entry: {from_project: valve_entry}
+        light: true
+        surge: true
+        override: {from_project: valve_override}
+        tube_od_mm: {from_project: tube_od_mm}
+      want_soft: [tube_od_mm, override]
   rationale: >
-    Máy tự động cần van 5/2 double để xy-lanh giữ nguyên vị trí khi mất điện, tránh
-    rơi tải. Chưa giải mã được toàn bộ mã van SY (chữ số thứ 3 và phần tail) nên
-    engine CHỌN từ danh sách mã thật quét trong catalog thay vì tự sinh mã.
-  source: 47 mã van quét từ PDF 7-1-2-p0387-0722-SY_en.pdf, kèm số lần xuất hiện
+    Mỗi xy-lanh cần một van điều khiển. LOẠI van do bạn khai theo chức năng cơ cấu:
+    single (kẹp/đẩy một chiều) · double (đi-về, giữ vị trí khi mất điện) ·
+    3pos_closed/exhaust/pressure (dừng được ở giữa hành trình).
+    Cặp 2 chữ số trong mã quyết định kiểu cửa: 20 = body ported (van có cửa
+    one-touch riêng, đi ống trực tiếp tới xy-lanh), 40 = base mounted (cắm lên
+    manifold, không có cửa riêng). BOM máy 23-432 dùng cả hai: SY5120/5220/5420-5MZE-C6
+    body ported ø6, và SY7140-5LZE-02 base mounted.
+    Cỡ van (SY3000/5000/7000/9000) phụ thuộc lưu lượng cần thiết — catalog cho Cv
+    dạng bảng nhưng engine chưa trích, nên ĐÒI bạn khai `valve_series_size`.
+    LOẠI van cũng phải khai (`valve_function`) và khai được RIÊNG cho từng xy-lanh:
+    golden test trên máy 23-432 cho thấy một máy dùng đồng thời single, double và
+    3-position — phụ thuộc chức năng cơ cấu (kẹp / đi-về / dừng giữa) mà engine
+    không thể suy từ mã xy-lanh. Bản trước mặc định "mọi xy-lanh → 5/2 double" nên
+    sai 6/11 dòng van.
+  source: DOCUMENT/MAINFOLD/7-1-2-p0723-0963-SY3000_en.pdf trang 10 + 26
 
 - code: R-FRL-01
-  name: Bộ xử lý khí nguồn (FRL)
+  name: Bộ xử lý khí nguồn (FRL / Air Combination)
   scope: per_system
   priority: 70
   when:
@@ -119,13 +166,52 @@
   then:
     need:
       layer: air_prep
-      from_series: AC-A-E
+      from_series: {from_project: frl_series}
       qty: 1
+      requires_input: main_line_port_size
       want:
-        flow_min_lpm: {from_ctx: required_flow_lpm}
+        port_size:      {from_project: main_line_port_size}
+        port_standard:  {from_project: thread_standard}
+        size:           {from_project: frl_size}
+        has_lubricator:     {from_project: frl_lubricator}
+        has_mist_separator: {from_project: frl_mist_separator}
+        gauge:          {from_project: frl_gauge}
+        auto_drain:     {from_project: frl_auto_drain}
+        # thế hệ -D có thêm: kiểu ra dây của digital switch, và van xả áp dư
+        entry:          {from_project: frl_gauge_entry}
+        output:         {from_project: frl_gauge_output}
+        relief_valve:   {from_project: frl_relief_valve}
+      want_soft: [entry, relief_valve, auto_drain, gauge, output]
   rationale: >
-    Cỡ FRL chọn theo tổng tiêu thụ khí × hệ số đồng thời, không theo cỡ cửa xy-lanh.
-    Chọn thiếu gây sụt áp khi nhiều xy-lanh chạy cùng lúc.
+    Cỡ FRL phải chọn theo tổng tiêu thụ khí, KHÔNG theo cỡ cửa xy-lanh — chọn thiếu
+    gây sụt áp khi nhiều xy-lanh chạy cùng lúc. Nhưng catalog AC chỉ cho lưu lượng
+    dưới dạng ĐỒ THỊ (Flow Characteristics), không phải bảng số, nên engine không
+    kiểm được bằng máy. Vì vậy engine đòi bạn khai cỡ cửa đường trục chính
+    (`main_line_port_size`); nếu cỡ đó có ở nhiều cỡ AC thì engine liệt kê các cỡ
+    ứng viên để bạn chọn thay vì tự đoán. Số liệu duy nhất đọc được dạng số là
+    "Rated flow [AFM]" của biến thể C/D: AC20C=200, AC25C=450, AC30C=450,
+    AC40C=1100 L/min (trang 23) và AC20D=150, AC30D=330, AC40D=800 (trang 27) —
+    nhưng đó là lưu lượng riêng bộ tách sương, không phải cả bộ.
+  source: PDF 7-8-3-p0651-0739-AC-A_en.pdf trang 8/18 (sơ đồ), 9 (cỡ cửa), 23+27 (rated flow)
+
+- code: V-FRL-FLOW-01
+  name: Không kiểm được lưu lượng FRL bằng dữ liệu catalog
+  scope: per_system
+  priority: 220
+  when:
+    all:
+      - {attr: frl_proposed, eq: true}
+  then:
+    warn:
+      severity: warn
+      code: FRL_FLOW_UNVERIFIED
+      message: Cỡ FRL chọn theo cỡ cửa, CHƯA kiểm được lưu lượng — phải tự đối chiếu
+               đồ thị Flow Characteristics trong catalog
+  rationale: >
+    Catalog AC cho lưu lượng cả bộ dưới dạng đồ thị chứ không phải bảng số, nên engine
+    không thể so Σ lưu lượng yêu cầu với khả năng của bộ FRL. Đây là giới hạn của dữ
+    liệu nguồn, không phải của engine. Hãy mở PDF AC trang 10 (Flow Characteristics)
+    và đối chiếu với Σ lưu lượng mà engine đã tính ở phần TÍNH TOÁN.
 
 - code: V-FLOW-01
   name: Cảnh báo ống nhỏ so với tốc độ piston
@@ -169,15 +255,112 @@
   when:
     all:
       - {attr: valve_count, gte: 3}
+      - {attr: use_manifold, eq: true}
   then:
-    gap:
-      what: đế manifold cho các van SY (họ SS5Y)
-      reason: >
-        chưa giải mã được mã manifold SS5Y — catalog SY dài 370 trang với 104 trang
-        How to Order cho nhiều biến thể manifold, và chữ số thứ 3 của mã van (kiểu
-        lắp base-mounted / body-ported) cũng chưa xác định được
+    need:
+      layer: valve
+      from_series: SS5Y-20-E
+      qty: 1
+      want:
+        series_size: {from_project: valve_series_size}
+        mfd_type:    {from_project: manifold_mfd_type}
+        stations:    {from_ctx: valve_count}
+        port_standard: {from_project: thread_standard}
+      want_soft: [port_standard]
   rationale: >
     Từ 3 van cùng series trở lên, dùng manifold rẻ và gọn hơn van rời: chung một
     đường cấp, một đầu nối điện, giảm số fitting và ống. Nhưng chọn sai đế manifold
     thì toàn bộ cụm van không lắp được, nên engine không đoán.
+    LƯU Ý (golden test phát hiện): manifold dùng được với CẢ van body-ported —
+    máy 23-432 có SS5Y5-20-12 cùng van SY5120-5MZE-C6 (body ported). Bản trước tôi
+    ràng buộc `valve_mounting = base_mounted` nên bỏ sót gasket và end plate.
+    Số station = số van. Catalog ghi rõ số station "cũng tính cả blanking plate", nên
+    nếu bạn để chỗ trống dự phòng thì phải tự tăng số station lên.
+    PHẠM VI: chỉ Type 20 (body ported, bar stock, individual wiring). Các kiểu đi dây
+    khác (D-sub, serial transmission, SV unit như SS5Y5-10SVA của máy 24-236) chưa
+    encode — engine sẽ báo không sinh được thay vì đoán.
   source: PDF 7-1-2-p0387-0722-SY_en.pdf (chưa giải mã xong)
+
+- code: R-JOINT-01
+  name: Floating joint cho đầu cần xy-lanh
+  scope: per_actuator
+  priority: 40
+  when:
+    all:
+      - {attr: acting, eq: double}
+      # ĐÃ BỎ hai điều kiện từng có ở đây:
+      #  · has_guide=false — tôi suy diễn "MGP/CQS có dẫn hướng sẵn nên không cần
+      #    joint", golden test chứng minh SAI (BOM vẫn dùng JA30-10-125).
+      #  · rod_end_thread != null — làm luật IM LẶNG bỏ qua khi series chưa có dữ
+      #    liệu ren đầu cần. Im lặng tệ hơn báo gap.
+      # ĐIỀU KIỆN THẬT: chỉ xy-lanh có ĐẦU CẦN REN NGOÀI mới lắp được floating
+      # joint. Xy-lanh ren trong (mặc định) thì joint không có gì để vặn vào.
+      # Kiểm chứng trên BOM 23-432: CDQSL25-100DCM ×4 + CDQSG25-250DCM ×1 — cả hai
+      # có option M (rod end male) — và BOM có đúng JA30-10-125 ×5.
+      # CM2 thì mặc định ĐÃ là ren ngoài (sơ đồ: 'Nil = Male rod end') nên vẫn áp.
+      # MGP là guide cylinder: đầu ra là tấm dẫn hướng, không phải cần ren, nên
+      # không áp luật này (BOM cũng không có joint cho MGP).
+      - {attr: rod_end_thread_male, ne: null}
+  then:
+    need:
+      layer: actuator
+      from_series: J-E
+      qty: 1
+      want:
+        rod_end_thread: {from_ctx: rod_end_thread_male}
+      confidence_cap: 0.6
+  rationale: >
+    Floating joint bù lệch tâm giữa cần xy-lanh và tải, tránh phá gioăng và cần.
+    Bạn xác nhận: "Đa số trường hợp là xài Floating Join, nhưng không phải tất cả
+    trường hợp" — nên engine ĐỀ XUẤT với độ tin cậy thấp (0.6) chứ không khẳng định,
+    và bạn tự bỏ ở những chỗ tải đã được dẫn hướng cứng. BOM thật dùng JA30-10-125
+    (5 cái) và JB20-5-080-X11 (4 cái).
+  source: BOM máy 23-432 và 24-236; xác nhận của người dùng 2026-08-18
+
+- code: R-MFD-GASKET-01
+  name: Gasket cho van cắm manifold
+  scope: per_system
+  priority: 66
+  when:
+    all:
+      - {attr: valve_count, gte: 1}
+      - {attr: use_manifold, eq: true}
+  then:
+    need:
+      layer: valve
+      from_parts: SY-5-E
+      qty: {from_ctx: valve_count}
+      want:
+        role: gasket
+        series_size: {from_project: valve_series_size}
+  rationale: >
+    Mỗi van cắm lên manifold cần một gasket làm kín giữa van và đế. Đặt van riêng
+    KHÔNG kèm gasket — catalog ghi rõ "When ordering a valve individually, the base
+    gasket is not included". BOM máy 23-432 có SY5000-GS-1 ×12 cho 11 van.
+  source: DOCUMENT/MAINFOLD/7-1-2-p0723-0963-SY3000_en.pdf trang 45, 51
+
+- code: R-MFD-ENDPLATE-01
+  name: End plate cho manifold
+  scope: per_system
+  priority: 67
+  when:
+    all:
+      - {attr: valve_count, gte: 2}
+      - {attr: use_manifold, eq: true}
+  then:
+    need:
+      layer: valve
+      from_parts: SY-5-E
+      qty: 2
+      requires_input: manifold_type
+      want:
+        role: end_plate
+        series_size: {from_project: valve_series_size}
+        manifold_type: {from_project: manifold_type}
+  rationale: >
+    Manifold cần 2 end plate bịt hai đầu (đầu cấp khí và đầu cuối). Mã end plate phụ
+    thuộc KIỂU manifold: Type 20/23 dùng SY5000-26-20A còn Type 20P/23P dùng
+    SY5000-26-21A — chọn sai thì không lắp được. Engine đòi bạn khai `manifold_type`
+    vì kiểu manifold do bạn quyết định (cách đi dây, cách gá), không suy được từ
+    danh sách xy-lanh. BOM máy 23-432 dùng SY5000-26-20A ×4 (Type 20).
+  source: DOCUMENT/MAINFOLD/7-1-2-p0723-0963-SY3000_en.pdf trang 73

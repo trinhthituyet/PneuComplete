@@ -11,12 +11,12 @@ Quy trình (docs/DESIGN.md §3):
   8 GAP         requirement không giải được → status='gap', KHÔNG đoán bừa
 """
 import json
+import math
+from collections import defaultdict
 from pathlib import Path
 
-import yaml
-
 from crawler import db
-from engine import calc, generate, materialize
+from engine import calc, conf, generate, materialize
 from engine import parser as P
 
 RULES_YAML = db.ROOT / "db" / "seed" / "rules.yaml"
@@ -31,16 +31,66 @@ DEFAULT_PROJECT = {
     "tube_roll_length_m": 20,
     "sealant": True,
     "speed_controller_shape": "elbow",
+    # Họ speed controller: AS1-E = push-lock (hậu tố A) — đúng loại BOM thật dùng.
+    # Đổi sang "AS-E-E" nếu muốn loại núm xoay thường.
+    "speed_controller_series": "AS1-E",
+    "speed_controller_knob": "push_lock",
+    # số speed controller mỗi xy-lanh; None → dùng số cửa khí (2)
+    "speed_controller_per_actuator": None,
+    # Van: body_ported = van có cửa one-touch riêng (đi ống thẳng tới xy-lanh);
+    # base_mounted = cắm lên manifold. BOM thật dùng cả hai kiểu.
+    "valve_mounting": "body_ported",
+    # LOẠI van theo chức năng cơ cấu. None → engine báo gap, không đoán.
+    #   single    kẹp/đẩy một chiều, hồi bằng khí phía kia khi mất điện
+    #   double    đi-về, giữ vị trí khi mất điện
+    #   3pos_closed / 3pos_exhaust / 3pos_pressure   dừng được ở giữa
+    "valve_function": None,
+    # Có gá van lên manifold hay đi van rời? Quyết định của bạn — ảnh hưởng
+    # gasket, end plate, đế manifold. Dùng được với cả body-ported.
+    "use_manifold": None,
+    "valve_entry": "m_plug",
+    "valve_override": "locking_lever",
+    # kiểu manifold quyết định mã end plate; engine KHÔNG suy được
+    "manifold_type": None,
+    # kiểu đế manifold cho mã SS5Y (20 / 20P / 20SA)
+    "manifold_mfd_type": "20",
     "switch_wiring": "2-wire",
     "switch_indicator": "2-color",
     "switch_lead_wire_m": 0.5,
     "safety_factor": 1.5,
+    # FRL: cỡ cửa đường trục chính engine KHÔNG suy được (xem R-FRL-01) —
+    # để None để engine báo gap thay vì đoán.
+    "main_line_port_size": None,
+    # thế hệ AC: AC-A-E hoặc AC-D-E — hai catalog khác nhau, mã khác nhau
+    "frl_series": "AC-A-E",
+    "frl_size": None,            # khai nếu muốn chốt cỡ AC (10/20/25/30/40)
+    "thread_standard": "Rc",
+    "frl_lubricator": False,     # xy-lanh CM2 dùng mỡ sẵn, không cần dầu
+    "frl_mist_separator": False, # chỉ cần khi yêu cầu khí sạch cấp cao hơn
+    "frl_gauge": "round",
+    "frl_auto_drain": "N.O.",
+    # chỉ thế hệ -D dùng: E1..E4 khác nhau ở hướng ra dây; V = kèm van VHS
+    "frl_gauge_entry": None,
+    "frl_gauge_output": None,
+    "frl_relief_valve": None,
 }
 
 
 # ── nạp luật ────────────────────────────────────────────────────────────────
 def seed_rules(con):
-    rules = yaml.safe_load(RULES_YAML.read_text(encoding="utf-8"))
+    """Nạp luật từ tệp vào bảng `rule`.
+
+    Bản phát hành đã có luật sẵn trong pneu.db, nên nếu tệp cấu hình không đọc
+    được mà DB đã có luật thì im lặng dùng luật trong DB — người dùng cuối không
+    cần tệp nguồn. Chỉ báo lỗi khi cả hai đều không có.
+    """
+    try:
+        rules = conf.load(RULES_YAML)
+    except conf.ConfigError:
+        have = con.execute("select count(*) n from rule").fetchone()["n"]
+        if have:
+            return have
+        raise
     for r in rules:
         con.execute(
             """insert into rule (code, name, scope, priority, when_expr, then_spec,
@@ -77,6 +127,10 @@ def load_rules(con, scope=None):
 
 # ── đánh giá điều kiện ──────────────────────────────────────────────────────
 def _cmp(val, op, target):
+    # so sánh với null phải làm được: luật cần diễn đạt "ô này CHƯA có giá trị"
+    # (ví dụ mã xy-lanh chưa kèm cảm biến thì mới đặt cảm biến riêng)
+    if target is None and op in ("eq", "ne"):
+        return (val is None) if op == "eq" else (val is not None)
     if val is None:
         return False
     try:
@@ -120,9 +174,17 @@ def _subst(spec, ctx, project):
 # ── resolve ─────────────────────────────────────────────────────────────────
 def _resolve_need(con, need, ctx, project, src_part_id, templates):
     """REQUIREMENT → dòng BOM cụ thể, hoặc gap kèm lý do."""
+    # luật có thể khai thông tin BẮT BUỘC người dùng cấp. Không có thì gap —
+    # tuyệt đối không lấy giá trị mặc định do engine tự nghĩ ra (A3-5).
+    ri = need.get("requires_input")
+    if ri and project.get(ri) in (None, ""):
+        return {"gap": f"cần bạn khai `{ri}` — engine không suy được giá trị này"}
     want = {k: v for k, v in (_subst(need.get("want", {}), ctx, project) or {}).items()
             if v is not None}
-    qty = _subst(need.get("qty", 1), ctx, project) or 1
+    qty = _subst(need.get("qty", 1), ctx, project)
+    if qty in (None, ""):
+        qty = _subst(need.get("qty_default", 1), ctx, project) or 1
+    qty = float(qty)
 
     # (a) chọn từ mã thật đã có trong bảng part (dùng khi chưa giải mã được ngữ pháp)
     if need.get("from_parts"):
@@ -140,23 +202,39 @@ def _resolve_need(con, need, ctx, project, src_part_id, templates):
             return {"gap": f"không mã nào trong {need['from_parts']} thoả {want}"}
         cands.sort(key=lambda x: -x[0])
         best = cands[0]
+        a = best[2]
+        if a.get("occurrences_in_catalog"):
+            note = (f"chọn theo tần suất trong catalog "
+                    f"({a['occurrences_in_catalog']} lần); mã chưa giải mã hết")
+            conf = 0.6
+        else:
+            note = f"tra bảng: {a.get('_source', 'catalog')}"
+            conf = 0.85 if len(cands) == 1 else 0.7
         return {"part_number": best[1]["part_number"], "qty": qty,
-                "attrs": best[2], "confidence": 0.6,
+                "attrs": a, "confidence": conf,
                 "alternatives": [c[1]["part_number"] for c in cands[1:4]],
-                "note": f"chọn theo tần suất trong catalog ({best[0]} lần); "
-                        f"mã chưa giải mã hết nên is_verified=0"}
+                "note": note}
 
-    # (b) sinh mã từ ngữ pháp
+    # (b) sinh mã từ ngữ pháp. from_series có thể là {from_project: ...}
+    from_series = _subst(need["from_series"], ctx, project)
     sid = con.execute("select id from series where catalog_id=?",
-                      (need["from_series"],)).fetchone()
+                      (from_series,)).fetchone()
     if not sid:
-        return {"gap": f"không có series {need['from_series']}"}
-    g = generate.generate(con, sid["id"], want)
+        return {"gap": f"không có series {from_series}"}
+    g = generate.generate(con, sid["id"], want,
+                          soft=tuple(need.get("want_soft") or ()))
     if not g.get("ok"):
         if g.get("error"):
-            return {"gap": f"{need['from_series']}: {g['error']}"}
+            return {"gap": f"{from_series}: {g['error']}"}
         bits = "; ".join(f"{u['slot']} ({u['reason']})" for u in g["undecided"])
-        return {"gap": f"{need['from_series']}: chưa quyết được ô {bits}"}
+        # nếu ràng buộc lấy từ ctx mà ctx không có giá trị → nói rõ THIẾU DỮ LIỆU
+        empty = [k for k, v in (need.get("want") or {}).items()
+                 if isinstance(v, dict) and "from_ctx" in v
+                 and ctx.get(v["from_ctx"]) in (None, "")]
+        if empty:
+            return {"gap": f"{from_series}: thiếu dữ liệu {', '.join(empty)} của series "
+                           f"nguồn — chưa trích được từ catalog, nên không chọn được mã"}
+        return {"gap": f"{from_series}: chưa quyết được ô {bits}"}
 
     m = materialize.materialize(con, g["part_number"], templates)
     if not m["ok"]:
@@ -185,6 +263,13 @@ def _resolve_need(con, need, ctx, project, src_part_id, templates):
                            f"{'; '.join(why[:2])}"}
         conf = 0.95
 
+    if g.get("relaxed"):
+        bits = "; ".join(f"{r['slot']} (bỏ yêu cầu {', '.join(r['dropped'])})"
+                         for r in g["relaxed"])
+        note = ((note + " · ") if note else "") + f"catalog không có lựa chọn: {bits}"
+    cap = need.get("confidence_cap")
+    if cap:
+        conf = min(conf, float(cap))
     return {"part_number": g["part_number"], "qty": qty, "attrs": m["attrs"],
             "confidence": conf, "note": note, "part_id": m["part_id"]}
 
@@ -218,8 +303,34 @@ def _count_bad_threads(con, lines):
 
 
 # ── orchestrator ────────────────────────────────────────────────────────────
+VALVE_FUNCTION = {
+    "single":        {"positions": 2, "solenoid": "single", "center": None},
+    "double":        {"positions": 2, "solenoid": "double", "center": None},
+    "3pos_closed":   {"positions": 3, "solenoid": None, "center": "closed"},
+    "3pos_exhaust":  {"positions": 3, "solenoid": None, "center": "exhaust"},
+    "3pos_pressure": {"positions": 3, "solenoid": None, "center": "pressure"},
+}
+
+
+def _expand_valve_function(cfg):
+    """valve_function → valve_positions / valve_solenoid / valve_center."""
+    f = cfg.get("valve_function")
+    m = VALVE_FUNCTION.get(f)
+    if not m:
+        return cfg
+    return {**cfg, "valve_positions": m["positions"],
+            "valve_solenoid": m["solenoid"], "valve_center": m["center"]}
+
+
 def build(con, inputs, project=None, project_name="demo"):
-    """inputs: [(mã_actuator, số_lượng), …]"""
+    """inputs: [(mã, số_lượng)] hoặc [(mã, số_lượng, {override})].
+
+    Override theo TỪNG actuator cần thiết vì loại van phụ thuộc CHỨC NĂNG của cơ
+    cấu, không phải loại xy-lanh: cơ cấu kẹp dùng van 5/2 single, cơ cấu đi-về có
+    dừng giữa dùng 3-position. Golden test trên máy 23-432 cho thấy một máy dùng
+    đồng thời SY5120 (single) ×5, SY5220 (double) ×2, SY5420 (3-pos exhaust) ×4 —
+    luật chung "mỗi xy-lanh một van 5/2 double" sai với thực tế.
+    """
     project = {**DEFAULT_PROJECT, **(project or {})}
     templates = materialize.load_templates()
     materialize.seed_thread_compat(con)
@@ -231,10 +342,18 @@ def build(con, inputs, project=None, project_name="demo"):
     lines, warns, gaps, calcs = [], [], [], []
     per_act = load_rules(con, "per_actuator")
     onetouch_open = 0
+    # Đếm đầu one-touch THEO TỪNG ĐƯỜNG KÍNH. Máy thật dùng nhiều cỡ ống cùng lúc
+    # (BOM 23-432: TU0604B-200 cho nhánh xy-lanh + TU1065B-100 cho trục chính),
+    # gộp thành một số thì engine chỉ đề xuất được một loại ống.
+    onetouch_by_od = defaultdict(float)
 
-    for code, count in inputs:
-        con.execute("insert into project_input (project_id, raw_code, qty) values (?,?,?)",
-                    (pid, code, count))
+    for item in inputs:
+        code, count = item[0], item[1]
+        over = item[2] if len(item) > 2 else {}
+        con.execute("""insert into project_input (project_id, raw_code, qty, overrides)
+                       values (?,?,?,?)""",
+                    (pid, code, count, json.dumps(over, ensure_ascii=False)))
+        item_project = _expand_valve_function({**project, **over})
         m = materialize.materialize(con, code, templates)
         if not m["ok"]:
             gaps.append({"item": code, "reason": m["error"]})
@@ -244,9 +363,12 @@ def build(con, inputs, project=None, project_name="demo"):
         ports = con.execute(
             "select qty from part_interface where part_id=? and role='air_port'",
             (m["part_id"],)).fetchone()
+        # đường kính cần lấy từ attrs của mã (do pdf_dim_table ghi vào option bore),
+        # KHÔNG từ bảng hardcode — xem ghi chú A3-1 trong engine/calc.py
         c = calc.summary(a.get("bore_mm"), a.get("stroke_mm"),
                          project["pressure_mpa"], project["cycle_s"], count,
-                         project["safety_factor"]) if a.get("bore_mm") else {}
+                         project["safety_factor"],
+                         rod_mm=a.get("rod_dia_mm")) if a.get("bore_mm") else {}
         calcs.append({"item": code, "count": count, **c})
 
         port_iface = con.execute(
@@ -260,6 +382,19 @@ def build(con, inputs, project=None, project_name="demo"):
             "port_size": port_iface["size"] if port_iface else None,
             "tube_od_mm": project["tube_od_mm"],
             "piston_speed_mm_s": c.get("piston_speed_mm_s"),
+            "rod_end_thread": a.get("rod_end_thread"),
+            "rod_end_male_thread": a.get("rod_end_male_thread"),
+            "rod_end": a.get("rod_end"),
+            # Ren đầu cần HIỆU DỤNG — chỉ có giá trị khi đầu cần là REN NGOÀI,
+            # vì floating joint cần ren ngoài để vặn vào. Hai họ khai khác nhau:
+            #   CM2  : sơ đồ ghi 'Nil = Male rod end' → mặc định ĐÃ là ren ngoài,
+            #          cỡ ren nằm ở attrs.rod_end_thread (cột MM bảng kích thước)
+            #   CQS  : phải chọn option M mới có ren ngoài, cỡ ở rod_end_male_thread
+            # MGP là guide cylinder — đầu ra là tấm dẫn hướng, không có cần ren.
+            "rod_end_thread_male": (
+                a.get("rod_end_male_thread") if a.get("rod_end") == "male"
+                else (a.get("rod_end_thread") if a.get("rod_end") is None else None)),
+            "has_guide": bool(a.get("bearing")),
         }
         lines.append({"layer": "actuator", "part_number": m["part_number"],
                       "qty": count, "rule_code": None,
@@ -269,14 +404,14 @@ def build(con, inputs, project=None, project_name="demo"):
             if not matches(r["when"], ctx):
                 continue
             if "warn" in r["then"]:
-                w = _subst(r["then"]["warn"], ctx, project)
+                w = _subst(r["then"]["warn"], ctx, item_project)
                 warns.append({**w, "rule_code": r["code"], "item": code,
                               "rationale": r["rationale"]})
                 continue
             need = r["then"].get("need")
             if not need:
                 continue
-            res = _resolve_need(con, need, ctx, project, m["part_id"], templates)
+            res = _resolve_need(con, need, ctx, item_project, m["part_id"], templates)
             if "gap" in res:
                 gaps.append({"item": code, "rule_code": r["code"],
                              "reason": res["gap"], "rationale": r["rationale"]})
@@ -286,21 +421,38 @@ def build(con, inputs, project=None, project_name="demo"):
                           "rationale": r["rationale"], "confidence": res["confidence"],
                           "note": res.get("note"),
                           "alternatives": res.get("alternatives")})
-            if need["from_series"] == "AS-E-E" if need.get("from_series") else False:
-                onetouch_open += res["qty"] * count
+            # Đếm đầu one-touch còn hở bằng cách xem GIAO DIỆN THẬT của mã vừa
+            # chọn, không so tên series. Bản trước hardcode `== "AS-E-E"` nên khi
+            # đổi sang họ push-lock thì đếm ra 0 và dòng ống biến mất âm thầm.
+            if res.get("part_id"):
+                for r_ot in con.execute(
+                        """select tube_od_mm od, coalesce(sum(qty),0) n
+                           from part_interface where part_id=? and kind='onetouch'
+                           group by tube_od_mm""", (res["part_id"],)):
+                    if r_ot["od"]:
+                        onetouch_by_od[float(r_ot["od"])] += \
+                            r_ot["n"] * res["qty"] * count
+                        onetouch_open += r_ot["n"] * res["qty"] * count
 
     # ── CONSOLIDATE toàn hệ ─────────────────────────────────────────────────
-    import math
-    est_run_m = project.get("tube_run_m_per_port", 3.0)
     roll = project["tube_roll_length_m"]
+    # KHÔNG ước lượng chiều dài ống (A3-5). Chỉ tính khi người dùng đã khai tổng mét.
+    total_m = project.get("tube_total_m")
+    rolls = math.ceil(total_m / roll) if total_m else None
     sys_ctx = {
-        "actuator_count": sum(n for _, n in inputs),
+        "actuator_count": sum(i[1] for i in inputs),
         "valve_count": sum(l["qty"] for l in lines if l["layer"] == "valve"),
+        "valve_mounting": project.get("valve_mounting"),
+        "use_manifold": project.get("use_manifold"),
         "open_onetouch_count": onetouch_open,
-        "tube_rolls_needed": max(1, math.ceil(onetouch_open * est_run_m / roll)),
+        "tube_rolls_needed": rolls,
         "required_flow_lpm": round(sum(c.get("required_flow_lpm", 0) for c in calcs), 1),
         "total_flow_lpm": round(sum(c.get("total_flow_lpm", 0) for c in calcs), 1),
         "incompatible_thread_pairs": _count_bad_threads(con, lines),
+        "max_actuator_port_size": next(
+            (r["size"] for r in con.execute(
+                """select pi.size from part_interface pi join part p on p.id=pi.part_id
+                   where pi.role='air_port' order by pi.size desc limit 1""")), None),
     }
     for r in load_rules(con, "per_system"):
         if not matches(r["when"], sys_ctx):
@@ -318,15 +470,45 @@ def build(con, inputs, project=None, project_name="demo"):
         need = r["then"].get("need")
         if not need:
             continue
-        res = _resolve_need(con, need, sys_ctx, project, None, templates)
-        if "gap" in res:
-            gaps.append({"rule_code": r["code"], "reason": res["gap"],
-                         "rationale": r["rationale"]})
+
+        # Luật khai `per_tube_od` chạy MỘT LẦN cho mỗi đường kính ống trong hệ.
+        variants = [None]
+        if need.get("per_tube_od"):
+            variants = sorted(onetouch_by_od) or [project.get("tube_od_mm")]
+
+        for od in variants:
+            ctx_v = dict(sys_ctx)
+            proj_v = dict(project)
+            if od:
+                proj_v["tube_od_mm"] = od
+                n_ends = onetouch_by_od.get(od, 0)
+                share = (n_ends / onetouch_open) if onetouch_open else 1.0
+                m_v = (project.get("tube_total_m") or 0) * share
+                roll = project["tube_roll_length_m"]
+                ctx_v["tube_rolls_needed"] = max(1, math.ceil(m_v / roll)) if m_v else None
+                ctx_v["tube_od_mm"] = od
+            res = _resolve_need(con, need, ctx_v, proj_v, None, templates)
+            if "gap" in res:
+                gaps.append({"rule_code": r["code"], "reason": res["gap"],
+                             "rationale": r["rationale"]})
+                continue
+            note = res.get("note")
+            if od:
+                note = ((note + " · ") if note else "") + \
+                    f"ø{od}: {int(onetouch_by_od.get(od,0))} đầu one-touch trong hệ"
+            lines.append({"layer": need["layer"], "part_number": res["part_number"],
+                          "qty": res["qty"], "rule_code": r["code"],
+                          "rationale": r["rationale"], "confidence": res["confidence"],
+                          "note": note, "unit": need.get("unit")})
+
+    # cảnh báo phụ thuộc kết quả (FRL có được đề xuất không) → chạy sau
+    sys_ctx["frl_proposed"] = any(l["layer"] == "air_prep" for l in lines)
+    for r in load_rules(con, "per_system"):
+        if "warn" not in r["then"] or r["code"] in {w.get("rule_code") for w in warns}:
             continue
-        lines.append({"layer": need["layer"], "part_number": res["part_number"],
-                      "qty": res["qty"], "rule_code": r["code"],
-                      "rationale": r["rationale"], "confidence": res["confidence"],
-                      "note": res.get("note"), "unit": need.get("unit")})
+        if matches(r["when"], sys_ctx):
+            w = _subst(r["then"]["warn"], sys_ctx, project)
+            warns.append({**w, "rule_code": r["code"], "rationale": r["rationale"]})
 
     # gộp dòng trùng mã
     merged = {}

@@ -26,11 +26,25 @@ def series_candidates(con):
     """
     out = []
     rows = con.execute(
-        """select s.id, s.code, s.catalog_id, s.name
+        """select s.id, s.code, s.catalog_id, s.name, s.part_prefix
            from series s
            where exists (select 1 from code_slot cs where cs.series_id = s.id)"""
     ).fetchall()
     for r in rows:
+        # Tiền tố khai tường minh thì tin nó. Nhưng vẫn phải sinh CẶP biến thể
+        # nam châm: SMC chèn 'D' sau chữ đầu để chỉ loại có nam châm sẵn
+        # (CM2→CDM2, CQS→CDQS). part_prefix ghi bản có nam châm ('CDM2') nên nếu
+        # chỉ dùng đúng chuỗi đó thì mã 'CM2B40-150AZ' không parse được, và
+        # has_magnet của bản CDM2 cũng bị mất.
+        if r["part_prefix"]:
+            pref = r["part_prefix"].upper()
+            base = re.sub(r"^([A-Z])D", r"\1", pref)
+            out.append({"series_id": r["id"], "code": r["code"], "name": r["name"],
+                        "prefix": pref, "has_magnet": base != pref})
+            if base != pref:
+                out.append({"series_id": r["id"], "code": r["code"], "name": r["name"],
+                            "prefix": base, "has_magnet": False})
+            continue
         raw = (r["code"] or "") + "/" + (r["catalog_id"] or "")
         raw = re.sub(r"-E$", "", raw)
         prefixes = set()
@@ -66,6 +80,7 @@ def grammar(con, series_id):
         g.append({
             "pos": s["pos"], "name": s["name"], "value_type": s["value_type"],
             "separator": s["separator"], "is_required": bool(s["is_required"]),
+            "pad": s["pad"],
             # option dài khớp trước: 'BZ' phải thắng 'B'
             "options": sorted(
                 [{"code": o["code"], "label": o["label"],
@@ -78,7 +93,14 @@ def grammar(con, series_id):
 
 
 def parse(con, part_number: str):
+    """Thử MỌI series có tiền tố khớp, chọn bản parse trọn vẹn nhất.
+
+    Cần thử hết vì nhiều series dùng chung tiền tố: 'AS2201F-01-06S' thuộc AS-E-E
+    (núm thường) còn 'AS2201F-01-06SA' thuộc AS1-E (push-lock). Chỉ thử ứng viên
+    đầu tiên là chọn sai ngữ pháp và báo dư ký tự.
+    """
     pn = part_number.strip().upper().replace(" ", "")
+    attempts = []
     for cand in series_candidates(con):
         if not pn.startswith(cand["prefix"]):
             continue
@@ -95,6 +117,7 @@ def parse(con, part_number: str):
                 m = re.match(r"^(\d{1,5})", rest)
                 if m:
                     got[slot["name"]] = int(m.group(1))
+                    opt_attrs[slot["name"]] = int(m.group(1))
                     trace.append((slot["name"], m.group(1), None))
                     rest = rest[m.end():]
                 elif slot["is_required"]:
@@ -112,13 +135,22 @@ def parse(con, part_number: str):
                     rest = rest[m.end():]
                 continue
 
-            hit = next((o for o in slot["options"]
-                        if o["code"].lower() not in NIL and rest.startswith(o["code"])), None)
+            # Một số ô có mã trùng nhau ở hai nghĩa khác nhau: ô port_size của KQ2
+            # vừa mang cỡ ren ('08' không tồn tại) vừa mang cỡ ống thứ hai của
+            # union khác đường kính ('08' → ø8). Biến thể sau khai hậu tố 'x' để
+            # phân biệt trong DB nhưng khớp cùng chuỗi số trong mã hàng.
+            cands = [(o, o["code"]) for o in slot["options"]] + \
+                    [(o, o["code"][:-1]) for o in slot["options"]
+                     if o["code"].endswith("x")]
+            cands.sort(key=lambda c: -len(c[1]))
+            hit = next((o for o, lit in cands
+                        if lit.lower() not in NIL and rest.startswith(lit)), None)
             if hit:
+                lit = hit["code"][:-1] if hit["code"].endswith("x") else hit["code"]
                 got[slot["name"]] = hit["code"]
                 trace.append((slot["name"], hit["code"], hit["label"]))
                 opt_attrs.update(hit["attrs"])
-                rest = rest[len(hit["code"]):]
+                rest = rest[len(lit):]
             else:
                 nil = next((o for o in slot["options"] if o["code"].lower() in NIL), None)
                 if nil:                       # ô có giá trị mặc định, lược khỏi mã
@@ -142,7 +174,7 @@ def parse(con, part_number: str):
         if got.get("auto_switch"):
             attrs["auto_switch"] = got["auto_switch"]
 
-        return {
+        attempts.append({
             "ok": rest == "" and not missing,
             "missing": missing or None,
             "series_id": cand["series_id"], "series": cand["code"],
@@ -150,6 +182,12 @@ def parse(con, part_number: str):
             "has_magnet": cand["has_magnet"],
             "slots": got, "attrs": attrs, "trace": trace,
             "unparsed": rest or None,
-        }
-    return {"ok": False, "error": "không nhận ra series nào có ngữ pháp",
-            "input": part_number}
+        })
+
+    if not attempts:
+        return {"ok": False, "error": "không nhận ra series nào có ngữ pháp",
+                "input": part_number}
+    # ưu tiên: parse trọn vẹn > ít ký tự dư > ít ô thiếu > khớp nhiều ô hơn
+    attempts.sort(key=lambda a: (not a["ok"], len(a["unparsed"] or ""),
+                                 len(a["missing"] or []), -len(a["slots"])))
+    return attempts[0]

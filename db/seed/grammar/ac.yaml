@@ -1,0 +1,108 @@
+# Ngữ pháp mã hàng nhập tay — bộ xử lý khí nguồn AC (Air Combination)
+#
+# NGUỒN: PDF 7-8-3-p0651-0739-AC-A_en.pdf
+#   trang  8 — AC□□-A   : Air Filter + Regulator + Lubricator     (sơ đồ đầy đủ)
+#   trang 14 — AC□□A-A  : Filter Regulator + Lubricator
+#   trang 18 — AC□□B-A  : Air Filter + Regulator                  (sơ đồ đầy đủ)
+#   trang 22 — AC□□C-A  : Air Filter + Mist Separator + Regulator
+#   trang 26 — AC□□D-A  : Filter Regulator + Mist Separator
+#   trang  9 — bảng specifications: cỡ AC ↔ cỡ cửa khí
+#   trang 23, 27 — Rated flow (L/min ANR) [AFM] cho biến thể C và D
+#
+# CẢNH BÁO đã gặp: chữ 'C' và 'D' xuất hiện ở HAI vị trí với nghĩa khác nhau —
+#   AC40C-A     : C ngay sau cỡ = loại tổ hợp (có Mist Separator)
+#   AC30-03DG-A : D sau cỡ cửa  = auto drain N.O.
+# Parser đi tuần tự theo ô nên phân biệt được, nhưng đọc mã bằng mắt thì dễ lẫn.
+#
+# GIỚI HẠN ĐÃ BIẾT: catalog chỉ cho lưu lượng của cả bộ dưới dạng ĐỒ THỊ
+# (Flow Characteristics), không phải bảng số. Chỉ biến thể C/D có dòng
+# "Rated flow [AFM]" bằng số, mà đó là lưu lượng của riêng bộ tách sương.
+# Vì vậy engine KHÔNG kiểm được lưu lượng — chỉ chọn theo cỡ cửa rồi cảnh báo.
+
+series_catalog_id: AC-A-E
+source: "PDF 7-8-3-p0651-0739-AC-A_en.pdf, trang 8/18 (sơ đồ), trang 9 (cỡ cửa), trang 23+27 (rated flow)"
+part_prefix: "AC"
+entered_by: manual
+
+slots:
+  - pos: 1
+    name: size
+    value_type: enum
+    separator: ""
+    options:
+      # port_sizes đọc từ bảng specifications trang 9 (hàng 'Port size')
+      - {code: "10", label: "cỡ 10", attrs: {ac_size: 10, port_sizes: ["M5"]}}
+      - {code: "20", label: "cỡ 20", attrs: {ac_size: 20, port_sizes: ["1/8", "1/4"]}}
+      - {code: "25", label: "cỡ 25", attrs: {ac_size: 25, port_sizes: ["1/4", "3/8"]}}
+      - {code: "30", label: "cỡ 30", attrs: {ac_size: 30, port_sizes: ["1/4", "3/8"]}}
+      - {code: "40", label: "cỡ 40", attrs: {ac_size: 40, port_sizes: ["1/4", "3/8", "1/2", "3/4"]}}
+
+  - pos: 2
+    name: combination
+    value_type: enum
+    separator: ""
+    options:
+      # phải khai TƯỜNG MINH has_mist_separator: false cho các loại không có —
+      # thiếu thì engine không phân biệt được B với C/D (cùng has_lubricator: false)
+      - {code: "Nil", label: "Air Filter + Regulator + Lubricator",
+         attrs: {has_filter: true, has_regulator: true, has_lubricator: true,
+                 has_mist_separator: false, combined_fr: false}}
+      - {code: "A",   label: "Filter Regulator + Lubricator",
+         attrs: {has_filter: true, has_regulator: true, has_lubricator: true,
+                 has_mist_separator: false, combined_fr: true}}
+      - {code: "B",   label: "Air Filter + Regulator (không có lubricator)",
+         attrs: {has_filter: true, has_regulator: true, has_lubricator: false,
+                 has_mist_separator: false, combined_fr: false}}
+      - {code: "C",   label: "Air Filter + Mist Separator + Regulator",
+         attrs: {has_filter: true, has_regulator: true, has_lubricator: false,
+                 has_mist_separator: true}}
+      - {code: "D",   label: "Filter Regulator + Mist Separator",
+         attrs: {has_filter: true, has_regulator: true, has_lubricator: false,
+                 has_mist_separator: true, combined_fr: true}}
+
+  - pos: 3
+    name: thread_type
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "Nil", label: "Rc",  attrs: {port_standard: "Rc"}}
+      - {code: "N",   label: "NPT", attrs: {port_standard: "NPT"}}
+      - {code: "F",   label: "G",   attrs: {port_standard: "G"}}
+
+  - pos: 4
+    name: port_size
+    value_type: enum
+    separator: "-"
+    options:
+      - {code: "M5", label: "M5",  attrs: {port_size: "M5"}}
+      - {code: "01", label: "1/8", attrs: {port_size: "1/8"}}
+      - {code: "02", label: "1/4", attrs: {port_size: "1/4"}}
+      - {code: "03", label: "3/8", attrs: {port_size: "3/8"}}
+      - {code: "04", label: "1/2", attrs: {port_size: "1/2"}}
+      - {code: "06", label: "3/4", attrs: {port_size: "3/4"}}
+
+  - pos: 5
+    name: auto_drain
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "Nil", label: "Without auto drain",      attrs: {auto_drain: none}}
+      - {code: "C",   label: "N.C. — cửa xả đóng khi có áp", attrs: {auto_drain: "N.C."}}
+      - {code: "D",   label: "N.O. — cửa xả mở khi mất áp",  attrs: {auto_drain: "N.O."}}
+
+  - pos: 6
+    name: pressure_gauge
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "Nil", label: "Without pressure gauge",  attrs: {gauge: none}}
+      - {code: "G",   label: "Round type pressure gauge", attrs: {gauge: round}}
+      - {code: "M",   label: "Round type pressure gauge (with color zone)",
+         attrs: {gauge: color_zone}}
+
+  - pos: 7
+    name: series_suffix
+    value_type: enum
+    separator: "-"
+    options:
+      - {code: "A", label: "series A (giá trị cố định)"}

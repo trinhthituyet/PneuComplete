@@ -1,0 +1,112 @@
+# Ngữ pháp mã hàng nhập tay — speed controller AS Push-lock type (họ AS1)
+#
+# LÝ DO TỒN TẠI FILE NÀY: BOM máy thật của bạn dùng `AS2201F-01-06SA` và
+# `AS1201F-M5-06A` — kết thúc bằng `A`. Tôi từng tư vấn `AS2201F-01-06S` (thiếu `A`)
+# vì chỉ đọc PDF AS-E-E (loại núm xoay thường, trang 830-838), trong đó KHÔNG có mã
+# nào kết thúc bằng A. Bạn xác nhận: "Hậu tố A có nghĩa là loại Push-lock type".
+# Push-lock nằm ở PDF khác: AS1-E, trang 773-800.
+#
+# NGUỒN: PDF 7-9-3-p0773-0800-AS-F_en.pdf trang 7 (sơ đồ How to Order)
+#   spine đọc bằng bbox:
+#     AS 1 2 0 1 F  M5  E  06     A     ← body size 1 (M5/10-32UNF)
+#     AS 2 2 0 1 F  01     06  S  A     ← body size 2/3/4
+#   mã thật trong cùng PDF xác nhận định dạng: AS2201F-01-04SA, AS3201F-01-06SA,
+#   AS3201F-01-08SA, AS3201F-01-10SA, AS2201F-G01-04A
+#
+# KHÁC với AS-E-E (loại thường): thêm ô `push_lock` = A ở cuối, và body size 1 có
+# thêm ô `width_across_flats` (E = 8 mm, Nil = 9 mm).
+
+series_catalog_id: AS1-E
+source: "PDF 7-9-3-p0773-0800-AS-F_en.pdf, trang 7"
+part_prefix: "AS"
+entered_by: manual
+note: >
+  Ô thread_type ở đây chỉ có Nil=R và N=NPT (không có G như AS-E-E). Mã thật
+  AS2201F-G01-04A cho thấy G đứng TRƯỚC cỡ cửa (G01) chứ không phải một ô riêng —
+  chưa encode dạng G, mã có G sẽ không parse được và engine sẽ báo thay vì đoán.
+
+slots:
+  - pos: 1
+    name: body_size
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "1", label: "M5 x 0.8, 10-32UNF", attrs: {body_size: 1, port_sizes: ["M5", "U10/32"]}}
+      - {code: "2", label: "1/8, 1/4",           attrs: {body_size: 2, port_sizes: ["1/8", "1/4"]}}
+      - {code: "3", label: "3/8",                attrs: {body_size: 3, port_sizes: ["3/8"]}}
+      - {code: "4", label: "1/2",                attrs: {body_size: 4, port_sizes: ["1/2"]}}
+
+  - pos: 2
+    name: shape
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "2", label: "Elbow",     attrs: {shape: elbow}}
+      - {code: "3", label: "Universal", attrs: {shape: universal}}
+
+  - pos: 3
+    name: control
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "0", label: "Meter-out (núm màu xám)",      attrs: {control: meter_out}}
+      - {code: "1", label: "Meter-in (núm màu xanh nhạt)", attrs: {control: meter_in}}
+
+  - pos: 4
+    name: fitting
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "1F", label: "With One-touch fitting", attrs: {fitting: one_touch}}
+
+  - pos: 5
+    name: port_size
+    value_type: enum
+    separator: "-"
+    options:
+      - {code: "M5",     label: "M5 x 0.8",  attrs: {port_standard: "M",   port_size: "M5"}}
+      - {code: "U10/32", label: "10-32UNF",  attrs: {port_standard: "UNF", port_size: "U10/32"}}
+      - {code: "01",     label: "R1/8",      attrs: {port_standard: "R",   port_size: "1/8"}}
+      - {code: "02",     label: "R1/4",      attrs: {port_standard: "R",   port_size: "1/4"}}
+      - {code: "03",     label: "R3/8",      attrs: {port_standard: "R",   port_size: "3/8"}}
+      - {code: "04",     label: "R1/2",      attrs: {port_standard: "R",   port_size: "1/2"}}
+
+  # chỉ có ở body size 1 (spine: AS 1 2 0 1 F  M5 E 06 A)
+  - pos: 6
+    name: width_across_flats
+    value_type: enum
+    separator: ""
+    is_required: 0
+    options:
+      - {code: "Nil", label: "9 mm", attrs: {width_across_flats_mm: 9}}
+      - {code: "E",   label: "8 mm", attrs: {width_across_flats_mm: 8},
+         requires: {body_size: [1]}}
+
+  - pos: 7
+    name: tube_od
+    value_type: enum
+    separator: "-"
+    options:
+      - {code: "04", label: "ø4",  attrs: {tube_od_mm: 4.0}}
+      - {code: "06", label: "ø6",  attrs: {tube_od_mm: 6.0}}
+      - {code: "08", label: "ø8",  attrs: {tube_od_mm: 8.0}}
+      - {code: "10", label: "ø10", attrs: {tube_od_mm: 10.0}}
+      - {code: "12", label: "ø12", attrs: {tube_od_mm: 12.0}}
+
+  - pos: 8
+    name: sealant
+    value_type: enum
+    separator: ""
+    options:
+      # M5 không có loại sealant (ghi chú trong PDF AS-E-E) → requires body_size 2/3/4
+      - {code: "Nil", label: "Without sealant", attrs: {sealant: false}}
+      - {code: "S",   label: "With sealant",    attrs: {sealant: true},
+         requires: {body_size: [2, 3, 4]}}
+
+  - pos: 9
+    name: push_lock
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "A", label: "Push-lock type (ký hiệu series, cố định)",
+         attrs: {knob: push_lock}}

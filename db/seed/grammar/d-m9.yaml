@@ -23,13 +23,14 @@ create_series:
   name: "Solid State Auto Switch (danh sách áp dụng cho CM2)"
   category_slug: "switch-sensor"
 source: "PDF 7-3-2-p0231-0332-CM2_en.pdf, trang 6, bảng Applicable Auto Switches"
+part_prefix: "D-"
 entered_by: manual
 
 slots:
   - pos: 1
     name: model
     value_type: enum
-    separator: "-"          # mã thật viết là D-M9BW: 'D' là tiền tố, rồi '-'
+    separator: ""           # part_prefix đã là 'D-' nên ô không thêm gạch nối nữa
     options:
       # ── solid state, 3-wire NPN ──────────────────────────────────────────
       - {code: "M9N",   label: "3-wire NPN, grommet",                    attrs: {wiring: 3-wire, output: NPN, indicator: 1-color, entry: grommet, water_resistant: false}}

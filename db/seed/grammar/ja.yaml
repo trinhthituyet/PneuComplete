@@ -1,0 +1,48 @@
+# Ngữ pháp mã hàng nhập tay — Floating Joint họ JA
+#
+# NGUỒN: PDF 7-3-2-p1221-1249-J_en.pdf trang 15, bảng "Accessory Dimensions /
+# Rod end nut" — cột 'd: Thread nominal size' cho ren của TỪNG mã JA. Đọc trực tiếp.
+#
+# VÌ SAO CẦN: BOM máy thật dùng JA30-10-125 (5 cái) và JB20-5-080-X11 (4 cái).
+# Bạn xác nhận: "Đa số trường hợp là xài Floating Join, nhưng không phải tất cả
+# trường hợp" → luật R-JOINT-01 đề xuất với độ tin cậy 0.6, bạn tự bỏ khi không cần.
+#
+# Cách chọn: khớp `rod_end_thread` của xy-lanh với ren của joint. Với CM2:
+#   bore 20 → M8x1.25  → JA20-8-125
+#   bore 25 → M10x1.25 → JA30-10-125   ← đúng mã BOM đang dùng
+#   bore 32 → M10x1.25 → JA30-10-125   ← đúng mã BOM đang dùng
+#   bore 40 → M14x1.5  → JA40-14-150
+#
+# LƯU Ý: mã JA gộp cả 3 phần (cỡ thân - đường kính ren - bước ren) thành một chuỗi
+# không tách được thành ô độc lập, nên để nguyên 1 ô. Bảng gốc ghi ren dạng 'M10×1.25'
+# (dấu nhân toàn phần); ở đây chuẩn hoá thành 'M10x1.25' để khớp với dữ liệu đã trích
+# từ cột MM của bảng kích thước xy-lanh.
+# Họ JB (BOM có JB20-5-080-X11) là loại khác, CHƯA encode.
+
+series_catalog_id: J-E
+part_prefix: "JA"
+source: "PDF 7-3-2-p1221-1249-J_en.pdf, trang 15, cột 'd: Thread nominal size'"
+entered_by: manual
+
+slots:
+  - pos: 1
+    name: model
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "6-3-050",   label: "M3×0.5",   attrs: {rod_end_thread: "M3x0.5"}}
+      - {code: "10-4-070",  label: "M4×0.7",   attrs: {rod_end_thread: "M4x0.7"}}
+      - {code: "15-5-080",  label: "M5×0.8",   attrs: {rod_end_thread: "M5x0.8"}}
+      - {code: "15-6-100",  label: "M6×1",     attrs: {rod_end_thread: "M6x1"}}
+      - {code: "20-8-100",  label: "M8×1",     attrs: {rod_end_thread: "M8x1"}}
+      - {code: "20-8-125",  label: "M8×1.25",  attrs: {rod_end_thread: "M8x1.25"}}
+      - {code: "32-10-100", label: "M10×1",    attrs: {rod_end_thread: "M10x1"}}
+      - {code: "30-10-125", label: "M10×1.25", attrs: {rod_end_thread: "M10x1.25"}}
+      - {code: "25-10-150", label: "M10×1.5",  attrs: {rod_end_thread: "M10x1.5"}}
+      - {code: "40-12-125", label: "M12×1.25", attrs: {rod_end_thread: "M12x1.25"}}
+      - {code: "40-12-150", label: "M12×1.5",  attrs: {rod_end_thread: "M12x1.5"}}
+      - {code: "40-12-175", label: "M12×1.75", attrs: {rod_end_thread: "M12x1.75"}}
+      - {code: "40-14-150", label: "M14×1.5",  attrs: {rod_end_thread: "M14x1.5"}}
+      - {code: "50-16-150", label: "M16×1.5",  attrs: {rod_end_thread: "M16x1.5"}}
+      - {code: "63-16-200", label: "M16×2",    attrs: {rod_end_thread: "M16x2"}}
+      - {code: "63-18-150", label: "M18×1.5",  attrs: {rod_end_thread: "M18x1.5"}}

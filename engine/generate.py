@@ -35,17 +35,31 @@ def _match(opt, want):
     return hits
 
 
-def generate(con, series_id, want, prefix=None):
-    """want: dict thuộc tính mong muốn (khớp với attrs của option)."""
+def generate(con, series_id, want, prefix=None, soft=()):
+    """want: dict thuộc tính mong muốn (khớp với attrs của option).
+
+    soft: tên các khoá chỉ là SỞ THÍCH. Nếu không option nào thoả thì bỏ ràng buộc
+    đó và chọn giá trị mặc định, kèm ghi chú — thay vì báo gap. Cần thiết vì nhiều
+    lựa chọn không tồn tại ở mọi cỡ: speed controller cỡ M5 KHÔNG có loại sealant
+    (ghi chú trong catalog AS), nên yêu cầu 'có sealant' phải tự nhượng bộ.
+    """
+    relaxed = []
     g = grammar(con, series_id)
     if not g:
         return {"ok": False, "error": "series chưa có ngữ pháp"}
 
-    row = con.execute("select code, catalog_id, name from series where id=?",
+    row = con.execute("select code, catalog_id, name, part_prefix from series where id=?",
                       (series_id,)).fetchone()
     if prefix is None:
-        # tiền tố = phần chữ đầu của mã series, bỏ nhóm và hậu tố
+        # part_prefix khai tường minh là nguồn tin cậy duy nhất. Suy từ series.code
+        # sinh ra rác khi code là câu chữ: 'AS Push-lock Type' → 'AS PUSH'.
+        prefix = (row["part_prefix"] or "").strip().upper()
+    if not prefix:
         prefix = (row["code"] or "").split("/")[0].split("-")[0].strip().upper()
+        if not prefix.isalnum():
+            return {"ok": False,
+                    "error": f"series '{row['code']}' chưa khai part_prefix — "
+                             f"không suy được tiền tố mã hàng"}
 
     out, chosen, undecided = prefix, {}, []
     for slot in g:
@@ -55,7 +69,9 @@ def generate(con, series_id, want, prefix=None):
             if v is None:
                 undecided.append({"slot": slot["name"], "reason": "cần giá trị số"})
                 continue
-            out += slot["separator"] + str(int(v))
+            # đệm 0 nếu ô khai `pad`: số station SS5Y phải là '05', không phải '5'
+            txt = str(int(v)).zfill(slot.get("pad") or 0)
+            out += slot["separator"] + txt
             chosen[slot["name"]] = int(v)
             continue
 
@@ -93,6 +109,13 @@ def generate(con, series_id, want, prefix=None):
                 ok_opts.append(o)
         opts = ok_opts or opts
         scored = [(s, o) for o in opts if (s := _match(o, want)) is not None]
+        if not scored and soft:
+            # thử lại sau khi bỏ các ràng buộc mềm liên quan tới ô này
+            hard = {k: v for k, v in want.items() if k not in soft}
+            scored = [(s, o) for o in opts if (s := _match(o, hard)) is not None]
+            if scored:
+                dropped = [k for k in soft if k in want]
+                relaxed.append({"slot": slot["name"], "dropped": dropped})
         if not scored:
             undecided.append({"slot": slot["name"],
                               "reason": "không option nào thoả ràng buộc",
@@ -107,6 +130,9 @@ def generate(con, series_id, want, prefix=None):
             if nil is None:
                 if len(opts) == 1:                 # ô literal, cố định
                     picks = opts
+                elif not slot.get("is_required", True):
+                    # ô tuỳ chọn không bị ràng buộc → bỏ qua, mã vẫn hợp lệ
+                    continue
                 else:
                     undecided.append({
                         "slot": slot["name"], "reason": "không có ràng buộc và không "
@@ -128,4 +154,5 @@ def generate(con, series_id, want, prefix=None):
 
     return {"ok": not undecided, "part_number": out if not undecided else None,
             "series": row["code"], "chosen": chosen,
+            "relaxed": relaxed or None,
             "undecided": undecided or None}

@@ -45,6 +45,56 @@
         # cột MM của bảng kích thước trang 14: ren đầu cần
         map: {20: "M8x1.25", 25: "M10x1.25", 32: "M10x1.25", 40: "M14x1.5"}
 
+- series_catalog_id: CQS-Z-E
+  source: >
+    Cỡ cửa: DOCUMENT/CYL/7-3-2-p0791-0856-CQS_en.pdf trang 16 ghi "2 x M5 x 0.8".
+    Toàn bộ dải ø12–ø25 dùng M5 ren MÉT — trong cả PDF 69 trang KHÔNG có mã ren
+    Rc/1/8 nào, nên không có ngoại lệ theo bore như MGP.
+    Rãnh cảm biến: mã CDQS có nam châm sẵn (chữ D thứ hai).
+  interfaces:
+    - role: air_port
+      kind: thread
+      gender: female
+      qty: 2
+      standard: M
+      size: "M5"
+    - role: switch_rail
+      kind: rail
+      gender: neutral
+      standard: SMC-D
+      qty: 2
+
+- series_catalog_id: MGP-Z-E
+  source: >
+    Cỡ cửa: DOCUMENT/CYL/7-4-2-p0527-0601-MGP_en.pdf trang 10 ghi rõ ø12/ø16 chỉ có
+    M5 x 0.8; các bore lớn hơn dùng Rc/NPT/G theo ô port_thread. Cỡ ren từng bore
+    lấy từ bảng kích thước (cột P) — CHƯA trích tự động, tạm khai theo quy ước
+    catalog: ø20-ø25 = 1/8, ø32-ø50 = 1/4, ø63-ø100 = 3/8.
+    ⚠ CẦN XÁC NHẬN: ba dòng cuối là suy diễn, chưa đọc bảng.
+  interfaces:
+    - role: air_port
+      kind: thread
+      gender: female
+      qty: 2
+      # ø12/ø16 là ren MÉT M5 x 0.8, không phải Rc — ghi chú trang 10 của catalog.
+      # Bảng chỉ khai 2 bore đó; các bore khác rơi xuống ô port_thread.
+      standard_by:
+        attr: bore_mm
+        map: {12: "M", 16: "M"}
+      standard_from_slot:
+        slot: port_thread
+        map: {Nil: Rc, TN: NPT, TF: G}
+        default: Rc
+      size_by:
+        attr: bore_mm
+        map: {12: "M5", 16: "M5", 20: "1/8", 25: "1/8",
+              32: "1/4", 40: "1/4", 50: "1/4", 63: "3/8", 80: "3/8", 100: "3/8"}
+    - role: switch_rail
+      kind: rail
+      gender: neutral
+      standard: SMC-D
+      qty: 2
+
 - series_catalog_id: AS-E-E
   source: >
     PDF 7-9-3-p0830-0838-AS-F_en.pdf trang 8: ô port_size cho ren nối vào
@@ -61,6 +111,36 @@
       gender: female
       qty: 1
       tube_od_from_attr: tube_od_mm
+
+- series_catalog_id: AS1-E
+  source: >
+    PDF 7-9-3-p0773-0800-AS-F_en.pdf trang 7. Giao diện giống AS-E-E: một đầu ren
+    male vặn vào cửa xy-lanh, một đầu one-touch cắm ống. Khác biệt push-lock chỉ ở
+    cơ cấu khoá núm, không đổi giao diện kết nối.
+  interfaces:
+    - role: air_in
+      kind: thread
+      gender: male
+      qty: 1
+      standard_from_attr: port_standard
+      size_from_attr: port_size
+    - role: air_out
+      kind: onetouch
+      gender: female
+      qty: 1
+      tube_od_from_attr: tube_od_mm
+
+- series_catalog_id: J-E
+  source: >
+    PDF 7-3-2-p1221-1249-J_en.pdf trang 15. Floating joint có 2 đầu ren: một đầu
+    vặn vào cần xy-lanh (female, nhận ren male của cần), một đầu ra tải.
+  interfaces:
+    - role: rod_end
+      kind: thread
+      gender: female
+      qty: 1
+      standard: M
+      size_from_attr: rod_end_thread
 
 - series_catalog_id: TU-E
   source: "PDF 7-9-2-p0682-0683-TU-TIUB_en.pdf trang 2: ô model cho OD/ID"

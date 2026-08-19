@@ -1,0 +1,108 @@
+# Ngữ pháp mã hàng nhập tay — Compact Cylinder CQS (ø12, ø16, ø20, ø25)
+#
+# NGUỒN: DOCUMENT/CYL/7-3-2-p0791-0856-CQS_en.pdf trang 7
+#   "Compact Cylinder: Standard Type / Double Acting, Single Rod"
+#   spine bbox:  CQS  B  20  30  D      và dòng dưới:  CDQS  B  20 …
+#
+# Đối chiếu mã thật trong BOM:
+#   CDQSB20-25D-M9BZ      = CDQS · mounting B · ø20 · stroke 25 · D · switch M9BZ
+#   CDQSL25-100DCM-M9BZ   = CDQS · mounting L · ø25 · stroke 100 · D · C+M · M9BZ
+#   CDQSG25-250DCM-M9BZ   = CDQS · mounting G · ø25 · stroke 250 · D · C+M · M9BZ
+#
+# ĐIỂM DỄ SAI: 'CM' KHÔNG phải một mã mà là HAI option ghép liền —
+#   C = With rubber bumper      (trang 7, y=286)
+#   M = Rod end male thread     (trang 7, y=294)
+# Vì vậy tách thành 2 ô riêng, mỗi ô tuỳ chọn. Nếu gộp thành 1 option 'CM' thì
+# các mã chỉ có C hoặc chỉ có M sẽ không parse được.
+#
+# 'CDQS' vs 'CQS': chữ D thứ hai = có nam châm sẵn (built-in magnet) để gắn cảm
+# biến từ — cùng quy ước với CM2/CDM2. Xử lý bằng part_prefix riêng cho từng dạng.
+
+series_catalog_id: CQS-Z-E
+create_series:
+  code: "CQS/CDQS"
+  name: "Compact Cylinder CQS (Double Acting, Single Rod)"
+  category_slug: "air-cylinders"
+part_prefix: "CDQS"
+source: "DOCUMENT/CYL/7-3-2-p0791-0856-CQS_en.pdf trang 7"
+entered_by: manual
+note: >
+  part_prefix khai 'CDQS' (bản có nam châm) vì cả 3 mã trong BOM đều là CDQS.
+  Bản không nam châm 'CQS' chưa khai — sẽ không parse được và engine sẽ báo,
+  đúng hành vi cần có thay vì đoán.
+
+slots:
+  - pos: 1
+    name: mounting
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "B",  label: "Through-hole / Both ends tapped common (Standard)",
+         attrs: {mounting: through_hole}}
+      - {code: "LC", label: "Compact foot type",      attrs: {mounting: compact_foot}}
+      - {code: "L",  label: "Foot type",              attrs: {mounting: foot}}
+      - {code: "F",  label: "Rod side flange type",   attrs: {mounting: rod_flange}}
+      - {code: "G",  label: "Head side flange type",  attrs: {mounting: head_flange}}
+      - {code: "D",  label: "Double clevis type",     attrs: {mounting: double_clevis}}
+
+  - pos: 2
+    name: bore
+    value_type: enum
+    separator: ""
+    options:
+      # rod_dia_mm đọc từ bảng Theoretical Output trang 8, cột 'Rod size'.
+      # rod_end_male_thread đọc từ bảng "Rod End Male Thread" trang 34 — CHỈ có
+      # nghĩa khi ô rod_end = M. Ren này quyết định mã floating joint:
+      # ø25 → M10x1.25 → JA30-10-125, đúng mã BOM máy 23-432 dùng.
+      - {code: "12", label: "12 mm",
+         attrs: {bore_mm: 12.0, rod_dia_mm: 6.0,  rod_end_male_thread: "M5x0.8"}}
+      - {code: "16", label: "16 mm",
+         attrs: {bore_mm: 16.0, rod_dia_mm: 8.0,  rod_end_male_thread: "M6x1"}}
+      - {code: "20", label: "20 mm",
+         attrs: {bore_mm: 20.0, rod_dia_mm: 10.0, rod_end_male_thread: "M8x1.25"}}
+      - {code: "25", label: "25 mm",
+         attrs: {bore_mm: 25.0, rod_dia_mm: 12.0, rod_end_male_thread: "M10x1.25"}}
+
+  - pos: 3
+    name: stroke
+    value_type: integer
+    separator: "-"
+
+  - pos: 4
+    name: acting
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "D", label: "Double acting", attrs: {acting: double}}
+
+  - pos: 5
+    name: bumper
+    value_type: enum
+    separator: ""
+    is_required: 0
+    options:
+      - {code: "Nil", label: "Standard",           attrs: {bumper: none}}
+      - {code: "C",   label: "With rubber bumper", attrs: {bumper: rubber}}
+
+  - pos: 6
+    name: rod_end
+    value_type: enum
+    separator: ""
+    is_required: 0
+    options:
+      - {code: "Nil", label: "Standard (female thread)", attrs: {rod_end: female}}
+      - {code: "M",   label: "Rod end male thread",      attrs: {rod_end: male}}
+
+  - pos: 7
+    name: head_boss
+    value_type: enum
+    separator: ""
+    is_required: 0
+    options:
+      - {code: "Nil", label: "Không có boss",     attrs: {head_boss: false}}
+      - {code: "F",   label: "Boss on head end",  attrs: {head_boss: true}}
+
+  - pos: 8
+    name: auto_switch
+    value_type: free
+    separator: "-"

@@ -1,0 +1,113 @@
+# Ngữ pháp mã hàng nhập tay — Regulator AR10 (dòng riêng, hậu tố -A)
+#
+# NGUỒN: DOCUMENT/FRL/ES40-60-AR10-A.pdf trang 1
+#   spine:  AR10  M5  …  A
+#   mã thật trong chính PDF xác nhận thứ tự ô:
+#       AR10-M5BG-1NR-A        → BG = B+G,  1NR = 1+N+R
+#       AR10-M5BG-NR-A-X406
+#   mã thật trong BOM máy 24-236: AR10-M5BG-N-A ×2
+#
+# ⚠ KHÁC HẲN họ AR20-D…AR60-D (db/seed/grammar/ar.yaml): AR10 chỉ có cỡ cửa M5,
+# hậu tố series là '-A' thay vì '-D', và các option xếp thành HAI NHÓM ghép liền:
+#     nhóm Option        : mounting + pressure gauge          → 'BG'
+#     nhóm Semi-standard : set pressure + exhaust + flow dir + knob + unit → '1NR'
+# Mỗi chữ trong nhóm là MỘT ô riêng. Gộp 'BG' thành một option thì mã chỉ có B
+# hoặc chỉ có G sẽ không parse được — cùng loại bẫy như 'CM' của CQS.
+
+series_catalog_id: AR10-A-E
+create_series:
+  code: "AR10-A"
+  name: "Regulator AR10-A"
+  category_slug: "air-preparation-equipment"
+part_prefix: "AR"
+source: "DOCUMENT/FRL/ES40-60-AR10-A.pdf trang 1"
+entered_by: manual
+
+slots:
+  - pos: 1
+    name: size
+    value_type: enum
+    separator: ""
+    options:
+      - {code: "10", label: "AR10", attrs: {ar_size: 10}}
+
+  - pos: 2
+    name: port_size
+    value_type: enum
+    separator: "-"
+    options:
+      # PDF trang 1: "Port size ... M5" — AR10 chỉ có một cỡ cửa
+      - {code: "M5", label: "M5 x 0.8", attrs: {port_standard: "M", port_size: "M5"}}
+
+  # ── nhóm Option: ghép liền, không có dấu phân cách giữa các ô ──────────────
+  - pos: 3
+    name: mounting
+    value_type: enum
+    separator: ""
+    is_required: 0
+    options:
+      - {code: "Nil", label: "Without mounting option",       attrs: {mounting_opt: none}}
+      - {code: "B",   label: "With bracket",                  attrs: {mounting_opt: bracket}}
+      - {code: "H",   label: "With set nut (for panel mount)", attrs: {mounting_opt: set_nut}}
+
+  - pos: 4
+    name: pressure_gauge
+    value_type: enum
+    separator: ""
+    is_required: 0
+    options:
+      - {code: "Nil", label: "Without pressure gauge",        attrs: {gauge: none}}
+      - {code: "G",   label: "Round type pressure gauge",     attrs: {gauge: round}}
+
+  # ── nhóm Semi-standard: dấu '-' đứng trước ô ĐẦU TIÊN của nhóm ────────────
+  - pos: 5
+    name: set_pressure
+    value_type: enum
+    separator: "-"
+    is_required: 0
+    options:
+      - {code: "Nil", label: "0.05 to 0.7 MPa setting", attrs: {set_pressure_mpa: "0.05-0.7"}}
+      - {code: "1",   label: "0.02 to 0.2 MPa setting", attrs: {set_pressure_mpa: "0.02-0.2"}}
+
+  - pos: 6
+    name: exhaust
+    value_type: enum
+    separator: ""
+    is_required: 0
+    options:
+      - {code: "Nil", label: "Relieving type",     attrs: {exhaust: relieving}}
+      - {code: "N",   label: "Non-relieving type", attrs: {exhaust: non_relieving}}
+
+  - pos: 7
+    name: flow_direction
+    value_type: enum
+    separator: ""
+    is_required: 0
+    options:
+      - {code: "Nil", label: "Left to right", attrs: {flow_dir: left_to_right}}
+      - {code: "R",   label: "Right to left", attrs: {flow_dir: right_to_left}}
+
+  - pos: 8
+    name: knob
+    value_type: enum
+    separator: ""
+    is_required: 0
+    options:
+      - {code: "Nil", label: "Downward", attrs: {knob_dir: down}}
+      - {code: "Y",   label: "Upward",   attrs: {knob_dir: up}}
+
+  - pos: 9
+    name: pressure_unit
+    value_type: enum
+    separator: ""
+    is_required: 0
+    options:
+      - {code: "Nil", label: "Name plate và đồng hồ theo đơn vị chuẩn", attrs: {unit_alt: false}}
+      - {code: "Z",   label: "Name plate và đồng hồ theo đơn vị khác",  attrs: {unit_alt: true}}
+
+  - pos: 10
+    name: series_suffix
+    value_type: enum
+    separator: "-"
+    options:
+      - {code: "A", label: "series A (giá trị cố định)"}

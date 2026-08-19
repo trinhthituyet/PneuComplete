@@ -1,11 +1,17 @@
 """Kết nối DB + khởi tạo schema. Chỉ dùng stdlib."""
 import json
+import os
 import sqlite3
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DB_PATH = ROOT / "pneu.db"
-CACHE_DIR = ROOT / "cache"
+
+# PNEU_DB cho phép đặt DB ở NGOÀI thư mục mã nguồn. Cần cho Docker: mã nguồn nằm
+# trong ảnh (mất khi cập nhật phiên bản), còn phương án BOM người dùng dựng ra
+# phải nằm ở volume /data để sống sót. Không có biến này thì volume vô nghĩa —
+# mọi module đều gọi db.connect() không tham số nên chúng cùng đọc biến này.
+DB_PATH = Path(os.environ["PNEU_DB"]) if os.environ.get("PNEU_DB") else ROOT / "pneu.db"
+CACHE_DIR = Path(os.environ.get("PNEU_CACHE") or ROOT / "cache")
 SCHEMA = ROOT / "db" / "schema_sqlite.sql"
 
 

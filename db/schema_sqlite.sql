@@ -39,6 +39,16 @@ create table if not exists series (
   id          integer primary key autoincrement,
   code        text not null,                -- 'CM2/CDM2/Z', 'AS'
   catalog_id  text,                         -- id trong URL: 'CM2-CDM2-Z-E'
+  -- Tiền tố THẬT của mã hàng, phải khai tường minh vì không suy ra được từ
+  -- catalog_id: cả AS-E-E (núm thường) và AS1-E (push-lock) đều có mã bắt đầu
+  -- bằng 'AS', nhưng catalog_id 'AS1-E' sinh ra tiền tố giả 'AS1' làm parser
+  -- chọn sai ngữ pháp và báo dư ký tự.
+  part_prefix text,
+  -- 'manual' = ngữ pháp do người đọc catalog và nhập tay (đã duyệt) ·
+  -- 'auto'   = do parser PDF sinh. Parser KHÔNG được ghi đè bản 'manual':
+  -- đã gặp lỗi thật — lệnh `grammar` chạy lại đè ô 'bore' lên ngữ pháp TU
+  -- nhập tay và làm parser hỏng.
+  grammar_source text,
   maker       text not null default 'SMC',
   name        text,                         -- 'Air Cylinder'
   category_id integer references category(id),
@@ -64,6 +74,10 @@ create table if not exists code_slot (
   name        text not null,
   is_required integer not null default 1,
   separator   text not null default '',
+  -- Số chữ số tối thiểu cho ô kiểu integer, đệm 0 phía trước. Nhiều mã SMC
+  -- dùng mã 2 chữ số có đệm: số station của SS5Y ghi '05' chứ không phải '5'
+  -- (catalog: '02 = 2 stations'). Không đệm thì sinh ra mã không tồn tại.
+  pad         integer,
   value_type  text not null default 'enum'
               check (value_type in ('enum','integer','free')),
   unique (series_id, pos)
