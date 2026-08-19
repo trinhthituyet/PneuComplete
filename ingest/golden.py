@@ -22,7 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from crawler import db          # noqa: E402
-from engine import bom          # noqa: E402
+from engine import bom, learn          # noqa: E402
 from engine import parser as P  # noqa: E402
 
 # Họ CẦN thông tin theo TỪNG xy-lanh mà BOM KHÔNG ghi lại — không thể đo công bằng.
@@ -153,7 +153,21 @@ def compare(con, machine):
 
     cfg = guess_project(con, lines)
     dbg = cfg.pop("_tube_m_by_od", None)
-    res = bom.build(con, inputs, cfg, project_name=f"golden:{machine['name'][:30]}")
+
+    # BỎ RA MỘT MÁY (leave-one-out). Chốt chống tự lừa quan trọng nhất của phép đo:
+    # tri thức trong engine/learn.py phải học từ các máy KHÁC máy đang chấm. Học
+    # từ chính máy đang chấm rồi báo điểm cao là đưa trước đáp án cho bài thi.
+    #
+    # Lưu ý cfg vẫn lấy TỪ máy đang chấm — nhưng chỉ những khoá RIÊNG MÁY mà engine
+    # về nguyên tắc không suy được (tổng mét ống, cỡ van, kiểu manifold). Đó là để
+    # phép so công bằng, ta đang kiểm khả năng SUY LUẬN. Còn các khoá THÓI QUEN thì
+    # phải đến từ máy khác, nếu không thì không đo được nó có CHUYỂN sang máy mới
+    # được hay không.
+    for k in learn.HABIT_KEYS:
+        cfg.pop(k, None)
+
+    res = bom.build(con, inputs, cfg, project_name=f"golden:{machine['name'][:30]}",
+                    learn_exclude=[machine["id"]])
 
     # gộp theo mã
     got = Counter()

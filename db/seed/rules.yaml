@@ -364,3 +364,30 @@
     vì kiểu manifold do bạn quyết định (cách đi dây, cách gá), không suy được từ
     danh sách xy-lanh. BOM máy 23-432 dùng SY5000-26-20A ×4 (Type 20).
   source: DOCUMENT/MAINFOLD/7-1-2-p0723-0963-SY3000_en.pdf trang 73
+
+- code: R-PREF-00
+  name: Sở thích chưa biết — báo gap, không đoán
+  # Luật này KHÔNG tự sinh gì — engine tự thêm gap và trỏ rule_code về đây.
+  # Nó tồn tại vì hai lý do: project_output.rule_code có khoá ngoại tới
+  # rule(code), và để lý do hiện ra trong UI như mọi dòng khác.
+  #
+  # scope phải thuộc CHECK của schema (per_actuator/per_valve/per_station/
+  # per_system) — KHÔNG nới CHECK chỉ để lách. Dùng điều kiện không bao giờ
+  # đúng để nó được nạp mà không bao giờ kích hoạt.
+  scope: per_system
+  priority: 999
+  when:
+    all:
+      - {attr: __never__, eq: true}
+  then: {}
+  rationale: >
+    Một số lựa chọn là SỞ THÍCH MUA HÀNG chứ không suy được từ kỹ thuật: màu ống,
+    chiều dài cuộn, họ speed controller, thế hệ FRL. Engine lấy chúng từ hai
+    nguồn: bạn khai tường minh, hoặc học từ BOM máy cũ (engine/learn.py). Không
+    có nguồn nào thì BÁO GAP.
+    Vì sao không dùng mặc định: golden test kiểu bỏ-ra-một-máy cho thấy khi rơi
+    về mặc định hardcode, engine đề xuất TU0604BU-20 ×15 trong khi BOM thật là
+    TU0604B-200 ×1 — sai màu, sai cuộn, sai số lượng 15 lần, mà vẫn đưa ra mã cụ
+    thể như thể chắc chắn. Thiếu một dòng còn sửa được; mua sai 15 cuộn ống thì
+    không.
+  source: golden test bỏ-ra-một-máy trên BOM 23-432 và 24-236, 2026-08-19

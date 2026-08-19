@@ -355,3 +355,32 @@ create table if not exists review_item (
 create index if not exists ri_queue_idx on review_item (state, confidence desc)
        where state = 'pending';
 create index if not exists ri_run_idx   on review_item (extract_run_id);
+
+-- ═══════════════════════════════════════════════════════════════════
+-- I. TRI THỨC HỌC ĐƯỢC
+-- ═══════════════════════════════════════════════════════════════════
+-- Lựa chọn rút ra từ BOM đã có + thao tác sửa của người dùng.
+--
+-- KHÔNG phải trọng số mô hình: mỗi dòng đọc được, xoá được, và ghi rõ học từ
+-- máy nào. Đó là điều kiện để người ký BOM tin được nó.
+--
+-- Tri thức ở đây chỉ XẾP HẠNG giữa các phương án ĐÃ HỢP LỆ. Đồ thị giao diện
+-- (part_interface + thread_compat) vẫn là thứ quyết định lắp được hay không —
+-- học được "thích push-lock" thì tốt, học được "M5 lắp vào R1/8" thì phải chặn.
+create table if not exists learned_pref (
+  id         integer primary key autoincrement,
+  kind       text not null,            -- 'config' | 'choice' | 'include' | 'qty'
+  subject    text not null,            -- khoá cấu hình, vd 'speed_controller_series'
+  ctx_key    text not null default '', -- ngữ cảnh đã tổng quát hoá, '' = toàn cục
+  ctx_level  integer not null default 4,-- 0=mã chính xác … 4=toàn cục
+  value      text not null,            -- json
+  n_support  integer not null default 0,
+  n_conflict integer not null default 0,
+  evidence   text,                     -- json: máy/lần sửa nào dạy ra điều này
+  enabled    integer not null default 1,-- người dùng tắt được từng mục
+  updated_at text not null default (datetime('now')),
+  unique (kind, subject, ctx_key)
+);
+
+create index if not exists lp_lookup_idx on learned_pref (subject, ctx_level desc)
+       where enabled = 1;

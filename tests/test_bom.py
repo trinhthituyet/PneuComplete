@@ -6,13 +6,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import tmpdb                                # noqa: E402,F401  PHẢI trước crawler.db
 from crawler import db                      # noqa: E402
-from engine import bom, materialize         # noqa: E402
+from engine import bom, learn, materialize         # noqa: E402
 
 
-def _build(inputs, project=None):
+def _build(inputs, project=None, use_learned=False):
+    """use_learned=False mặc định: giữ test TẤT ĐỊNH.
+
+    Tri thức học được lấy từ bảng bom_line trong DB, nên nếu bật thì thêm/bớt một
+    BOM là đổi kết quả test — người sửa test về sau sẽ không hiểu vì sao. Phần học
+    có test riêng: test_hoc_tu_bom_co_san.
+    """
     con = db.connect()
     bom.seed_rules(con)
-    res = bom.build(con, inputs, project, project_name="test")
+    res = bom.build(con, inputs, project, project_name="test",
+                    use_learned=use_learned)
     con.close()
     return res
 
@@ -26,8 +33,14 @@ def test_bom_5_xylanh():
 
     tube_total_m phải khai tường minh: engine không tự ước lượng chiều dài ống
     (mục A3-5 — người dùng bác bỏ giá trị mặc định 3 m/mối nối).
+
+    tube_roll_length_m cũng phải khai: nó thuộc NEED_EVIDENCE trong build() vì
+    đoán sai chiều dài cuộn làm lệch SỐ LƯỢNG cuộn (golden test bỏ-ra-một-máy:
+    mặc định 20 m cho ra 15 cuộn trong khi thực tế 1 cuộn 200 m). Không khai và
+    chưa học được thì engine báo gap — xem test_khong_khai_chieu_dai_ong_thi_bao_gap.
     """
-    r = _build([("CDM2L32-500Z", 5)], {"tube_total_m": 60})
+    r = _build([("CDM2L32-500Z", 5)],
+               {"tube_total_m": 60, "tube_roll_length_m": 20, "tube_color": "BU"})
     assert _line(r, "CDM2L32-500Z")["qty"] == 5
     # 2 speed controller mỗi xy-lanh × 5. Mã kết thúc 'SA' = Push-lock type —
     # đúng loại BOM máy thật dùng (AS2201F-01-06SA), xác nhận 2026-08-18.
@@ -383,6 +396,68 @@ def test_build_tu_dong_don():
     finally:
         bom.PROJECT_KEEP = old
         con.close()
+
+
+def test_hoc_tu_bom_co_san():
+    """Học lựa chọn từ BOM đã nhập — đo được trên dữ liệu thật.
+
+    Tín hiệu mạnh nhất: 69 cái speed controller push-lock, nhất quán 100% qua cả
+    hai máy. Đây là thứ trước đây tôi hardcode trong DEFAULT_PROJECT.
+    """
+    con = db.connect()
+    if not con.execute("select count(*) from bom_line").fetchone()[0]:
+        con.close()
+        return                      # DB chưa nhập BOM (bản phát hành) → bỏ qua
+    prefs = {p["subject"]: p for p in learn.learn(con)}
+    con.close()
+
+    sc = prefs.get("speed_controller_series")
+    assert sc, f"không học được họ speed controller: {list(prefs)}"
+    assert sc["value"] == "AS1-E", sc
+    assert sc["n_conflict"] == 0, f"BOM thật nhất quán 100%, sao có mâu thuẫn: {sc}"
+    assert sc["usable"], sc
+
+
+def test_hoc_khong_ghi_de_cau_hinh_ban_khai():
+    """Tri thức học được KHÔNG BAO GIỜ thắng cấu hình khai tường minh.
+
+    Nếu ngược lại thì người dùng mất quyền điều khiển, và mất một cách âm thầm.
+    """
+    r = _build([("CDM2L32-500Z", 2)],
+               {"tube_total_m": 20, "tube_roll_length_m": 20,
+                "speed_controller_series": "AS-E-E"},   # cố ý NGƯỢC thói quen
+               use_learned=True)
+    codes = [l["part_number"] for l in r["lines"]]
+    push = [c for c in codes if c.startswith("AS") and c.endswith(("A", "SA"))]
+    assert not push, f"tri thức đã ghi đè cấu hình khai tay: {codes}"
+
+
+def test_khoa_rieng_may_khong_bao_gio_hoc():
+    """Khoá phụ thuộc lưu lượng/layout không được xếp vào nhóm thói quen.
+
+    Đoán sai cỡ van hay tổng mét ống là mua sai hàng. Hai máy thật cùng dùng
+    SY5000 và ống ø6, nhưng chúng cỡ gần bằng nhau (17 và 16 xy-lanh) nên N=2
+    không tách được "thói quen" khỏi "trùng hợp".
+    """
+    for k in ("valve_series_size", "tube_od_mm", "tube_total_m", "frl_size",
+              "valve_mounting", "manifold_type", "main_line_port_size"):
+        assert k not in learn.HABIT_KEYS, f"{k} không được coi là thói quen"
+        assert k in learn.MACHINE_KEYS, f"{k} phải nằm trong MACHINE_KEYS"
+
+
+def test_mau_thuan_thi_khong_dung_thay_vi_lay_trung_binh():
+    """Mâu thuẫn quá ngưỡng → không dùng. Trung bình của 1 và 14 là 7, số không tồn tại."""
+    con = db.connect()
+    if not con.execute("select count(*) from bom_line").fetchone()[0]:
+        con.close()
+        return
+    prefs = {p["subject"]: p for p in learn.learn(con)}
+    con.close()
+    roll = prefs.get("tube_roll_length_m")
+    if roll:
+        # BOM thật có cả cuộn 200 m và 100 m → mâu thuẫn 2 vs 2
+        assert roll["n_conflict"] > 0, roll
+        assert not roll["usable"], f"mâu thuẫn ngang nhau mà vẫn dùng: {roll}"
 
 
 if __name__ == "__main__":

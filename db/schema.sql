@@ -359,3 +359,25 @@ create table review_item (
 create index ri_queue_idx on review_item (state, confidence desc)
        where state = 'pending';
 create index ri_run_idx   on review_item (extract_run_id);
+
+-- ═══════════════════════════════════════════════════════════════════
+-- I. TRI THỨC HỌC ĐƯỢC
+-- ═══════════════════════════════════════════════════════════════════
+-- Xem chú thích trong db/schema_sqlite.sql. Chỉ xếp hạng phương án đã hợp lệ;
+-- đồ thị giao diện vẫn là thứ quyết định lắp được hay không.
+create table learned_pref (
+  id         bigserial primary key,
+  kind       text not null,
+  subject    text not null,
+  ctx_key    text not null default '',
+  ctx_level  int  not null default 4,
+  value      jsonb not null,
+  n_support  int  not null default 0,
+  n_conflict int  not null default 0,
+  evidence   jsonb,
+  enabled    boolean not null default true,
+  updated_at timestamptz not null default now(),
+  unique (kind, subject, ctx_key)
+);
+
+create index lp_lookup_idx on learned_pref (subject, ctx_level desc) where enabled;

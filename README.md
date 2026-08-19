@@ -47,6 +47,8 @@ python3 tests/test_docker.py     # 61 — đóng gói Docker (không cần daemo
 ```sh
 python3 -m engine.cli "CDM2L32-500Z x4 valve=double" --tube-total-m 60
 python3 -m ingest.golden show                 # so BOM engine sinh vs BOM đã mua
+python3 -m engine.learn                       # xem thói quen học được từ BOM cũ
+python3 -m engine.learn --save                # ghi vào bảng learned_pref
 python3 tools/package.py                      # → dist/PneuComplete.zip
 python3 tools/package.py --clean-db           # → dist/pneu.db (bản sạch)
 ```
@@ -71,6 +73,7 @@ python3 -m crawler.run grammar        # nạp db/seed/grammar/*.yaml
 | `db/seed/rules.yaml` | 12 quy tắc kỹ thuật; mỗi quy tắc có `rationale` (hiện lên UI) và `source`. |
 | `db/seed/interfaces.yaml` | Template cửa/ren cho từng họ — nền tảng của suy luận. |
 | `series.grammar_source` | `'manual'` được **bảo vệ** khỏi bộ parse máy. Từng bị parser ghi đè làm vỡ ngữ pháp TU. |
+| `engine/learn.py` | Học **lựa chọn** từ BOM cũ (đo được: 69 cái push-lock, nhất quán 100%). KHÔNG học số lượng — lệch 2–5× giữa các máy. Xem `docs/DESIGN.md` §10. |
 
 **Không commit:** `pneu.db`, `BOM/`, `DOCUMENT/`, `cache/`, `answer1.xlsx` — xem
 `.gitignore`, mỗi dòng có ghi lý do.

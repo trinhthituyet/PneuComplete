@@ -435,3 +435,83 @@ nhiều) · `pdftotext -layout` (có sẵn trên máy) · FastAPI · React + Vit
 6. Phần mềm chỉ dùng nội bộ, hay sau này phát hành/bán ra ngoài? — quyết định mức độ phải cẩn
    trọng với dữ liệu crawl (§4.5).
 7. Máy chạy crawler có IP tĩnh / mạng công ty không? Nếu bị chặn thì crawl từ đâu.
+
+---
+
+## 10. Học thói quen người dùng (2026-08-19)
+
+Bổ sung này **xét lại** quyết định gốc ở §1 ("suy luận theo ràng buộc, không dùng
+học máy"). Lý do gốc vẫn đúng — 2 BOM thì thống kê là đoán — nhưng số liệu đo
+trên chính dữ liệu đó cho thấy có một loại tri thức học được chắc chắn.
+
+### Đo được gì
+
+| | máy 23-432 | máy 24-236 | |
+|---|---|---|---|
+| push-lock (-A) | 32/32 | 37/37 | **100%, 69 mẫu** |
+| `KQ2L` / xy-lanh | 1.59 | 4.62 | lệch 2.9× |
+| `KQ2U` / xy-lanh | 1.76 | 3.81 | lệch 2.2× |
+| `JA30` / xy-lanh | 0.29 | 0.06 | lệch 4.8× |
+
+Kết luận: **học LỰA CHỌN được, học SỐ LƯỢNG không.** Và điều quan trọng về mặt
+thiết kế: bằng chứng cho lựa chọn nằm TRONG một BOM (32 cái push-lock trong cùng
+một máy là 32 lần khẳng định), nên không cần chờ nhiều máy.
+
+### Bốn tầng bằng chứng, thứ tự ưu tiên tường minh
+
+```
+1  RÀNG BUỘC (part_interface + thread_compat)   → CHẶN, học không được vượt
+2  KHUYẾN NGHỊ CATALOG                          → tiên nghiệm
+3  THỐNG KÊ TỪ BOM CÔNG TY (engine/learn.py)    → chỉ cho LỰA CHỌN
+4  CẤU HÌNH BẠN KHAI                            → LUÔN THẮNG
+```
+
+Tri thức học được chỉ **xếp hạng giữa các phương án đã hợp lệ**. Học "thích
+push-lock" thì tốt; "M5 lắp vào R1/8" phải bị chặn ở tầng 1. Và tầng 3 không bao
+giờ ghi đè tầng 4 — nếu ngược lại thì người dùng mất quyền điều khiển một cách âm
+thầm (`test_hoc_khong_ghi_de_cau_hinh_ban_khai` canh điều này).
+
+### Phân loại khoá (engine/learn.py)
+
+`HABIT_KEYS` = thuộc tính người mua, chuyển được sang máy mới: họ speed
+controller, núm, màu ống, chiều dài cuộn, thế hệ FRL.
+
+`MACHINE_KEYS` = phụ thuộc lưu lượng/layout, **phải khai lại từng máy**: cỡ van,
+ø ống, tổng mét, cỡ FRL, kiểu manifold, kiểu gá van.
+
+Cảnh báo N=2: `tube_od_mm=6` và `valve_series_size=SY5000` giống nhau ở cả hai
+máy, nhưng chúng do lưu lượng quyết định. Hai máy có 17 và 16 xy-lanh — gần bằng
+nhau — nên **không tách được "thói quen" khỏi "trùng hợp vì máy cùng cỡ"**. Xếp
+vào `MACHINE_KEYS` là phía an toàn.
+
+### Ngưỡng và cách xử lý mâu thuẫn
+
+Dùng làm mặc định khi: thuộc `HABIT_KEYS` · mâu thuẫn ≤ ½ số ủng hộ · thấy ở ≥2
+máy **hoặc** lặp ≥10 lần trong 1 máy.
+
+**Mâu thuẫn thì HỎI, không lấy trung bình.** Trung bình của 1 và 14 là 7 — con số
+không tồn tại trong thực tế.
+
+### Chưa khai và chưa học được thì sao
+
+Phân theo HẬU QUẢ của việc đoán sai, không theo "có phải sở thích hay không":
+
+| | Xử lý | Vì sao |
+|---|---|---|
+| lệch **số lượng** (`tube_roll_length_m`) | **gap**, không đoán | mặc định 20 m cho ra `TU0604BU-20 ×15` trong khi thật là `TU0604B-200 ×1` — sai 15× |
+| lệch **biến thể** (màu, hậu tố, thế hệ) | ra dòng + cảnh báo `PREF_GUESSED` | bỏ luôn dòng thì mất giá trị "không bỏ sót"; số lượng vẫn đúng, và số lượng mới là chỗ tốn tiền |
+
+### Đo trung thực: bỏ ra một máy
+
+`ingest/golden.py` học từ các máy **khác** máy đang chấm (`learn_exclude`). Học từ
+chính máy đang chấm rồi báo điểm là đưa trước đáp án.
+
+Hệ quả: điểm từ **36% → 17%**. 36% là con số bị rò đáp án. 17% là thật.
+
+Điều đáng giá hơn con số: với bỏ-ra-một-máy, **mã speed controller đúng ở cả hai
+máy** (`AS2201F-01-06SA`, `AS1201F-M5-06A`) — thói quen chuyển được sang máy chưa
+từng thấy. Chỉ số lượng lệch, mà số lượng đã biết là không suy được.
+
+Với 2 máy, bỏ-ra-một-máy nghĩa là học từ đúng 1 máy, nên điều kiện "≥2 máy" không
+bao giờ đạt — chỉ tín hiệu lặp nhiều (speed controller, 69 mẫu) sống sót. **Đây là
+giới hạn của dữ liệu, không phải của thuật toán.** Thêm máy thứ ba là mở ra ngay.

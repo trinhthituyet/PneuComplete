@@ -17,7 +17,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from crawler import db
-from engine import calc, conf, generate, materialize
+from engine import calc, conf, generate, learn, materialize
 from engine import parser as P
 
 RULES_YAML = db.ROOT / "db" / "seed" / "rules.yaml"
@@ -356,7 +356,8 @@ def _expand_valve_function(cfg):
             "valve_solenoid": m["solenoid"], "valve_center": m["center"]}
 
 
-def build(con, inputs, project=None, project_name="demo"):
+def build(con, inputs, project=None, project_name="demo", learn_exclude=None,
+          use_learned=True):
     """inputs: [(mã, số_lượng)] hoặc [(mã, số_lượng, {override})].
 
     Override theo TỪNG actuator cần thiết vì loại van phụ thuộc CHỨC NĂNG của cơ
@@ -365,7 +366,57 @@ def build(con, inputs, project=None, project_name="demo"):
     đồng thời SY5120 (single) ×5, SY5220 (double) ×2, SY5420 (3-pos exhaust) ×4 —
     luật chung "mỗi xy-lanh một van 5/2 double" sai với thực tế.
     """
-    project = {**DEFAULT_PROJECT, **(project or {})}
+    # THỨ TỰ ƯU TIÊN CẤU HÌNH — tường minh, vì đây là chỗ dễ sai nhất khi thêm
+    # tri thức học được:
+    #
+    #   DEFAULT_PROJECT   mặc định trung tính về kỹ thuật (áp suất, chu kỳ)
+    #     ← learned       thói quen học từ BOM cũ của bạn (engine/learn.py)
+    #     ← project       cấu hình bạn khai lần này  ← LUÔN THẮNG
+    #
+    # Tri thức học được KHÔNG BAO GIỜ ghi đè điều bạn khai tường minh. Nếu ngược
+    # lại thì người dùng mất quyền điều khiển, và tệ hơn là mất một cách âm thầm.
+    #
+    # learn_exclude: bỏ các máy này khỏi việc học. Dùng cho golden test kiểu
+    # bỏ-ra-một-máy — học từ chính máy đang chấm là tự đưa trước đáp án.
+    # Sở thích chưa khai và chưa học được thì xử lý thế nào? Phân biệt theo HẬU QUẢ
+    # của việc đoán sai, không theo "có phải sở thích hay không":
+    #
+    #   NEED_EVIDENCE   đoán sai làm lệch SỐ LƯỢNG → báo gap, tuyệt đối không đoán
+    #   WARN_IF_GUESSED đoán sai chỉ lệch BIẾN THỂ (hậu tố), số lượng vẫn đúng
+    #                   → vẫn ra dòng + cảnh báo rõ phải kiểm chỗ nào
+    #
+    # VÌ SAO tách: golden test bỏ-ra-một-máy cho thấy mặc định 20 m cuộn làm engine
+    # đề xuất `TU0604BU-20 ×15` trong khi thực tế `TU0604B-200 ×1` — sai 15 lần số
+    # lượng. Không đoán được thì thà thiếu dòng.
+    # Nhưng bỏ luôn cả dòng speed controller thì mất giá trị chính của phần mềm là
+    # "không bỏ sót vật tư", trong khi đoán sai hậu tố A chỉ tốn một lần kiểm lại.
+    # Số lượng vẫn đúng, và đúng số lượng mới là chỗ tốn tiền.
+    NEED_EVIDENCE = ("tube_roll_length_m",)
+    WARN_IF_GUESSED = ("tube_color", "speed_controller_series",
+                       "speed_controller_knob", "frl_series")
+
+    # use_learned=False: bỏ hẳn phần học. Cần cho test — kết quả engine không được
+    # phụ thuộc vào việc DB đang có BOM nào. Không có cờ này thì thêm một BOM vào
+    # DB là làm đổi kết quả test, và người sửa test sẽ không hiểu vì sao.
+    learned, learn_err = {}, None
+    try:
+        if use_learned:
+            learned = learn.preferences(con, exclude=learn_exclude or ())
+    except Exception as e:
+        # Học được là tốt, không học được thì engine vẫn phải chạy — tri thức là
+        # phần tăng thêm, không phải điều kiện để dựng BOM.
+        # Nhưng KHÔNG im lặng: nuốt lỗi ở đây thì một lỗi trong learn.py sẽ chỉ
+        # biểu hiện thành "BOM hơi khác trước" mà không ai lần ra được.
+        learn_err = f"{type(e).__name__}: {e}"
+    explicit = project or {}
+    project = {**DEFAULT_PROJECT, **learned, **explicit}
+    # Khoá nào chỉ có giá trị nhờ mặc định hardcode → coi như CHƯA BIẾT.
+    unknown_pref = [k for k in NEED_EVIDENCE
+                    if k not in explicit and k not in learned]
+    for k in unknown_pref:
+        project[k] = None
+    guessed_pref = [k for k in WARN_IF_GUESSED
+                    if k not in explicit and k not in learned]
     templates = materialize.load_templates()
     materialize.seed_thread_compat(con)
 
@@ -375,6 +426,38 @@ def build(con, inputs, project=None, project_name="demo"):
     prune_projects(con)
 
     lines, warns, gaps, calcs = [], [], [], []
+    if learn_err:
+        warns.append({"severity": "warn", "code": "LEARN_FAILED",
+                      "message": f"Không đọc được tri thức đã học: {learn_err}. "
+                                 f"BOM vẫn dựng bằng mặc định.",
+                      "detail": learn_err})
+    elif learned:
+        warns.append({"severity": "info", "code": "LEARNED_APPLIED",
+                      "message": "Áp thói quen học từ BOM cũ: "
+                                 + ", ".join(f"{k}={v}" for k, v in sorted(learned.items())),
+                      "detail": learned})
+    if guessed_pref:
+        warns.append({
+            "severity": "warn", "code": "PREF_GUESSED",
+            "message": ("Các lựa chọn sau dùng MẶC ĐỊNH vì bạn chưa khai và engine "
+                        "chưa học được từ BOM cũ — hãy kiểm lại hậu tố mã hàng: "
+                        + ", ".join(f"{k}={project.get(k)}" for k in guessed_pref)
+                        + ". Số lượng không bị ảnh hưởng. Nhập BOM máy cũ "
+                          "(python3 -m ingest.bom_import) để engine học đúng thói quen."),
+            "detail": {k: project.get(k) for k in guessed_pref}})
+    for k in unknown_pref:
+        gaps.append({
+            "rule_code": "R-PREF-00",
+            "requirement": k,
+            # khoá "reason" là hình dạng chung của mọi gap trong engine — thiếu nó
+            # thì UI và test không đọc được. Test đã bắt đúng lỗi này.
+            "reason": f"chưa biết lựa chọn cho '{k}'",
+            "rationale": (
+                f"Chưa biết bạn chọn gì cho '{k}'. Engine KHÔNG đoán vì đoán sai "
+                f"là mua sai hàng. Hai cách khắc phục: khai trực tiếp ở mục cấu "
+                f"hình, hoặc nhập BOM máy cũ để engine học "
+                f"(python3 -m ingest.bom_import <tệp.xlsx>)."),
+        })
     per_act = load_rules(con, "per_actuator")
     onetouch_open = 0
     # Đếm đầu one-touch THEO TỪNG ĐƯỜNG KÍNH. Máy thật dùng nhiều cỡ ống cùng lúc
@@ -473,7 +556,10 @@ def build(con, inputs, project=None, project_name="demo"):
     roll = project["tube_roll_length_m"]
     # KHÔNG ước lượng chiều dài ống (A3-5). Chỉ tính khi người dùng đã khai tổng mét.
     total_m = project.get("tube_total_m")
-    rolls = math.ceil(total_m / roll) if total_m else None
+    # roll có thể là None: chiều dài cuộn là SỞ THÍCH MUA HÀNG, nằm trong
+    # NEED_EVIDENCE — chưa khai và chưa học được thì không đoán. Trước đây rơi về
+    # mặc định 20 m và cho ra "TU0604BU-20 ×15" trong khi thực tế là 1 cuộn 200 m.
+    rolls = math.ceil(total_m / roll) if (total_m and roll) else None
     sys_ctx = {
         "actuator_count": sum(i[1] for i in inputs),
         "valve_count": sum(l["qty"] for l in lines if l["layer"] == "valve"),
@@ -520,7 +606,9 @@ def build(con, inputs, project=None, project_name="demo"):
                 share = (n_ends / onetouch_open) if onetouch_open else 1.0
                 m_v = (project.get("tube_total_m") or 0) * share
                 roll = project["tube_roll_length_m"]
-                ctx_v["tube_rolls_needed"] = max(1, math.ceil(m_v / roll)) if m_v else None
+                # roll có thể None (sở thích chưa khai/chưa học) — không đoán
+                ctx_v["tube_rolls_needed"] = (
+                    max(1, math.ceil(m_v / roll)) if (m_v and roll) else None)
                 ctx_v["tube_od_mm"] = od
             res = _resolve_need(con, need, ctx_v, proj_v, None, templates)
             if "gap" in res:
