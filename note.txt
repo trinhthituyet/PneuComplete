@@ -1,42 +1,145 @@
-Mở phiếu
+Kết luận
 
-  open /Users/tuyet/Study/PneuComplete/docs/REVIEW-A3.md
+  Luận điểm chính
 
-  Mở PDF đối chiếu — trang cụ thể cho từng mục
+  Engine hiện tại là bộ sinh mã theo cấu hình, không phải bộ suy luận.
+  Đếm trên rules.yaml:
 
-  ┌─────────────────────────┬───────────────────────┬────────────────────────────────────┐
-  │           mục           │        mở file        │               trang                │
-  ├─────────────────────────┼───────────────────────┼────────────────────────────────────┤
-  │ A3-1 cột D = đường kính │ pdfs/CM2-CDM2-Z-E.pdf │ 14 (bảng kích thước + bản vẽ)      │
-  │  cần?                   │                       │                                    │
-  ├─────────────────────────┼───────────────────────┼────────────────────────────────────┤
-  │ A3-2 quy ước D-M9       │ pdfs/CM2-CDM2-Z-E.pdf │ 6 (bảng Applicable Auto Switches,  │
-  │                         │                       │ nửa dưới)                          │
-  ├─────────────────────────┼───────────────────────┼────────────────────────────────────┤
-  │ A3-3 TU0604 = OD6/ID4?  │ pdfs/TU-E.pdf         │ 1–2                                │
-  ├─────────────────────────┼───────────────────────┼────────────────────────────────────┤
-  │ A3-4 dây N              │ pdfs/CM2-CDM2-Z-E.pdf │ 6 (chú thích lead wire)            │
-  ├─────────────────────────┼───────────────────────┼────────────────────────────────────┤
-  │ A3-5 3 m ống/mối nối    │ —                     │ kinh nghiệm của bạn, không có      │
-  │                         │                       │ trong catalog                      │
-  ├─────────────────────────┼───────────────────────┼────────────────────────────────────┤
-  │ A3-6 CM2 single acting  │ pdfs/CM2-CDM2-Z-E.pdf │ 6 (ô Type of actuation)            │
-  ├─────────────────────────┼───────────────────────┼────────────────────────────────────┤
-  │ A3-7 cột MM = ren đầu   │ pdfs/CM2-CDM2-Z-E.pdf │ 14                                 │
-  │ cần?                    │                       │                                    │
-  └─────────────────────────┴───────────────────────┴────────────────────────────────────┘
+  35  ô mã ← BẠN KHAI
+  16  ô mã ← hằng số tôi gán cứng
+   3  ô mã ← SUY từ actuator
 
-  Thư mục pdfs/ là symlink vào cache, không chiếm thêm đĩa, đã cho vào .gitignore.
+  3 trên 54. Cái tôi vẫn gọi là "suy luận theo ràng buộc" thực chất đang
+  chạy ở 6% công suất.
 
-  Ghi quyết định
+  Nhưng nguyên nhân không phải kiến trúc sai. Nền tảng đúng:
+  interfaces.yaml suy bore → cỡ cửa thật, thread_compat chặn ren không
+  khớp thật, calc.py đã ra lưu lượng thật. Vấn đề là ba loại liên kết bị 
+  đứt, và tôi đã lấp bằng cách hỏi người dùng.
 
-  python3 -m crawler.review ok A3-1
-  python3 -m crawler.review no A3-2 "ghi rõ sai ở đâu"
-  python3 -m crawler.review status
+  Gốc của mọi thứ là bore
 
-  Nếu chỉ có thời gian cho 2 mục: A3-1 (ảnh hưởng số liệu lực kéo) và A3-2 (ảnh hưởng mã cảm
-  biến bạn đặt hàng).
+  Một mã xy-lanh quyết định nhiều hơn tôi từng khai thác:
 
-  Tôi dừng ở đây, chờ kết quả duyệt của bạn. Xong thì cho tôi biết — mục nào no tôi sửa
-  trước, rồi mới sang giai đoạn B. Nếu trong lúc duyệt bạn thấy chỗ nào tôi hiểu sai ngoài 7
-  mục này, cứ nói luôn.
+  bore ─┬→ cỡ cửa ────→ ren speed controller ──→ ø ống nhánh     [CHẠY]
+        ├→ ø cần ─────→ lực đẩy/kéo                              [CHẠY]
+        ├→ ren đầu cần → floating joint                           [CHẠY,
+  thiếu dữ liệu MGP]
+        ├→ chuẩn ren ──→ ren FRL, ren fitting                     [ĐỨT]
+        │
+        └→ (bore, stroke, cycle, count) → LƯU LƯỢNG              [CHẠY]
+                                            ├→ cỡ van (Cv)        [ĐỨT —
+  thiếu số]
+                                            ├→ cỡ FRL            [ĐỨT —
+  thiếu số]
+                                            ├→ cỡ cửa trục chính  [ĐỨT —
+  thiếu số]
+                                            └→ ø ống              [ĐỨT —
+  thiếu quy ước]
+
+  Lưu lượng đã tính ra rồi (total_flow_lpm, required_flow_lpm nằm trong
+  sys_ctx). Thiếu đúng một thứ: bảng tra lưu lượng → cỡ. Bốn giá trị đang
+  bắt bạn khai đều treo ở một mắt đứt duy nhất đó.
+
+  35 giá trị "bạn khai" không cùng loại — và mỗi loại chữa khác nhau
+
+  ┌─────────┬──────────────────────────────┬───────────────┬────────┐
+  │  Loại   │            Ví dụ             │   Cách chữa   │  Chi   │
+  │         │                              │               │  phí   │
+  ├─────────┼──────────────────────────────┼───────────────┼────────┤
+  │ Đã biết │ thread_standard (cửa xy-lanh │ nối lại liên  │ rất    │
+  │  mà vẫn │  đã cho Rc)                  │ kết           │ thấp   │
+  │  hỏi    │                              │               │        │
+  ├─────────┼──────────────────────────────┼───────────────┼────────┤
+  │ Suy     │ frl_size, valve_series_size, │               │        │
+  │ được    │  main_line_port_size,        │ số hoá đồ thị │ trung  │
+  │ nếu có  │ tube_od_mm                   │  catalog      │ bình   │
+  │ số      │                              │               │        │
+  ├─────────┼──────────────────────────────┼───────────────┼────────┤
+  │ Sở      │                              │ học từ BOM cũ │        │
+  │ thích   │ màu ống, cuộn, núm           │  (đã đo: 69   │ thấp   │
+  │ mua     │ push-lock, thế hệ FRL        │ mẫu, 100%)    │        │
+  │ hàng    │                              │               │        │
+  ├─────────┼──────────────────────────────┼───────────────┼────────┤
+  │ Chỉ bạn │ chức năng van từng cơ cấu,   │ phải hỏi,     │ 0      │
+  │  biết   │ layout, số vùng khí          │ đừng cố suy   │        │
+  └─────────┴──────────────────────────────┴───────────────┴────────┘
+
+  Nhóm cuối là chỗ tôi đã làm đúng. Ba nhóm trên là việc còn lại.
+
+  Phát hiện nghiêm trọng nhất: ràng buộc giữa các ô chỉ phủ 4%
+
+  21/449 lựa chọn có khai `requires`
+
+  Cơ chế đã có sẵn (code_option.requires) và dùng đúng ở vài chỗ — AS-E-E
+  sealant S requires body_size [1,2,3], SY-E port_size C6 requires 
+  piping "3". Nhưng 96% lựa chọn không khai gì.
+
+  Hậu quả cụ thể: ngữ pháp AS1 ràng buộc port_size ↔ body_size (body 1
+  chỉ có M5, U10/32) nhưng không ràng buộc tube_od ↔ body_size. Nên
+  engine sinh AS1201F-M5-12A — thân nhỏ nhất, cửa M5, mà cắm ống ø12 —
+  không một lời cảnh báo.
+
+  Tôi chưa mở trang 7 của PDF để xác nhận mã đó có thật hay không. Và đó 
+  chính là vấn đề: engine không có cách nào biết.
+
+  Đây là rủi ro đúng đắn, không phải rủi ro độ phủ, nên nó đứng trên mọi
+  việc khác: thiếu một dòng thì bạn thấy và thêm vào; một mã trông hợp lệ
+  mà không tồn tại thì đi thẳng vào đơn hàng.
+
+  Ba liên kết đứt cụ thể, đo được
+
+  1. interfaces.yaml của CM2 tra ô port_thread mà ngữ pháp CM2 không có ô
+  đó → luôn rơi về Rc. Xy-lanh NPT/G không truyền được chuẩn ren xuống
+  hạ nguồn. (MGP có ô này nên chạy đúng — chứng tỏ cơ chế ổn, chỉ thiếu
+  dữ liệu.)
+  2. thread_standard: "Rc" gán cứng trong DEFAULT_PROJECT thay vì lấy từ
+  cửa xy-lanh đã parse.
+  3. MGP thiếu ren đầu cần → luật floating joint im lặng. Nhưng thêm dữ
+  liệu này thì luật lại bắn 14 lần trong khi BOM thật có 1 — nên đây là
+  chỗ cần hỏi theo từng cơ cấu, không phải thêm dữ liệu.
+
+  Thứ tự tôi đề nghị
+
+  ┌─────┬───────────────────────────┬────────────────────────────────┐
+  │     │           Việc            │          Vì sao trước          │
+  ├─────┼───────────────────────────┼────────────────────────────────┤
+  │     │ Khai requires cho các ô   │ Rủi ro đúng đắn > rủi ro độ    │
+  │ 1   │ còn lại, ưu tiên cặp      │ phủ. Đọc catalog là ra, không  │
+  │     │ tube_od ↔ body_size       │ cần suy                        │
+  ├─────┼───────────────────────────┼────────────────────────────────┤
+  │ 2   │ Nối 2 liên kết đứt (chuẩn │ Rất rẻ, sửa lỗi tiềm ẩn với    │
+  │     │  ren)                     │ xy-lanh NPT/G                  │
+  ├─────┼───────────────────────────┼────────────────────────────────┤
+  │ 3   │ Số hoá đồ thị lưu lượng   │ Mắt đứt duy nhất chặn 4 giá    │
+  │     │                           │ trị. Docker đã có pdftoppm     │
+  ├─────┼───────────────────────────┼────────────────────────────────┤
+  │ 4   │ Học sở thích từ BOM cũ    │ Đã làm và đã revert; lấy lại   │
+  │     │                           │ bằng git cherry-pick f2b4c3f   │
+  ├─────┼───────────────────────────┼────────────────────────────────┤
+  │     │                           │ Chỉ cấp thêm topology — cần    │
+  │ 5   │ Đồ thị đấu nối            │ cho ống trục chính và số ngã   │
+  │     │                           │ 3, nhưng đắt nhất              │
+  └─────┴───────────────────────────┴────────────────────────────────┘
+
+  Điều chỉnh lại đánh giá trước của tôi
+
+  Tôi từng xếp đồ thị đấu nối là hướng đáng làm và nêu topology là lý do
+  mạnh nhất. Vẫn đúng, nhưng sai thứ tự: bốn việc trên rẻ hơn, chữa lỗi
+  đúng đắn thật, và khai thác dữ liệu đã nằm trong tay. Đồ thị mở ra
+  thông tin mới; bốn việc kia mới là dùng hết thông tin đã có.
+
+  Và về "học thói quen": dữ liệu nói rõ giới hạn — học được lựa chọn,
+  không học được số lượng. Nên học không bao giờ thay được ba việc đầu;
+  nó chỉ bù nhóm sở thích.
+
+  Cần bạn
+
+  Hai câu, tôi không tự trả lời được:
+
+  1. AS1201F-M5-12A có tồn tại trong catalog không? Nếu không, tôi cần
+  biết dải ø ống hợp lệ cho từng body_size — trang 7 của
+  7-9-3-p0773-0800-AS-F_en.pdf là đủ.
+  2. Tốc độ khí tối đa bạn dùng khi chọn ø ống (m/s cho nhánh và cho trục
+  chính)? Có con số đó thì tube_od_mm chuyển từ "bạn khai" sang "engine
+  suy" mà không cần đồ thị nào.
