@@ -80,50 +80,81 @@ Cách này cửa sổ đen **phải để nguyên, đừng đóng** — đóng l
 
 ## 2. Dùng phần mềm
 
-### Bước 1 — Nhập xy-lanh
+Phần mềm làm việc trên **sơ đồ đấu nối**: bạn vẽ các thiết bị thành khối và nối
+dây giữa chúng, thay vì chỉ liệt kê danh sách.
 
-Ở bảng **Actuator**, gõ mã xy-lanh vào cột "Mã hàng", ví dụ:
+### Bước 1 — Đưa thiết bị vào sơ đồ
 
-```
-CDM2L32-500Z
-MGPM25-200Z-M9BL
-CDQSB20-25D-M9BZ
-```
+Cột trái là danh sách **nhóm thiết bị** (Xy-lanh, Van điều khiển, Bộ xử lý khí,
+PLC, Tuỳ chỉnh…). Có hai cách:
 
-Gõ xong bấm ra ngoài ô, phần mềm kiểm tra ngay:
+- **Kéo** một nhóm từ cột trái vào vùng giữa, hoặc **bấm** vào nhóm đó
+- **Nhập nhanh nhiều xy-lanh:** dán danh sách mã vào ô "Nhập nhanh", mỗi dòng
+  một mã, rồi bấm *Tạo node xy-lanh*. Viết `MGPM25-200Z-M9BL x4` để đặt số lượng.
 
-- **Viền xanh** → hiểu được mã, hiện luôn thông số (đường kính, hành trình…)
-- **Viền đỏ** → có chỗ chưa hiểu, hiện rõ *"chưa hiểu phần …"*
+Khối mới hiện ra **rỗng**, có tiêu đề là tên nhóm và **màu riêng theo loại**
+(xy-lanh xanh, van tím, xử lý khí xanh lá, ống cam, phụ kiện vàng, điện hồng).
 
-Nhập số lượng, và chọn **Loại van** cho từng xy-lanh:
+### Bước 2 — Gõ mã hàng vào khối
 
-| Chọn | Khi nào |
+Gõ vào ô trong khối rồi bấm ra ngoài. Phần mềm kiểm ngay:
+
+- **Viền xanh + dấu ✓** → hiểu được mã, hiện luôn thông số (đường kính, hành trình)
+- **Viền đỏ + dấu ✗** → ghi rõ *"chưa hiểu phần …"*
+- **Viền xám nét đứt** → bạn đã bật *mã tự do*, phần mềm không kiểm
+
+Khi mã đúng, phần mềm còn **tự thay các cổng của khối** bằng cổng thật đọc từ
+catalog — ví dụ xy-lanh hiện đúng 2 cửa khí `A (Rc1/8)` và `B (Rc1/8)`.
+
+### Bước 3 — Nối dây
+
+Cổng là các **điểm tròn** quanh khối: cửa khí ở hai bên, cửa điện ở đáy.
+
+1. Bấm vào một cổng → vào chế độ nối, dây bám theo con trỏ
+2. Bấm cổng đích → xong
+
+Giữa hai lần bấm bạn vẫn **di chuyển và phóng to** được để nhắm đúng cổng. Nếu
+quen tay kéo-thả thì kéo từ cổng nguồn sang cổng đích cũng được. **Esc** để huỷ.
+
+Phần mềm tự đoán loại kết nối theo cặp thiết bị (van → xy-lanh là *điều khiển*,
+bộ xử lý khí → van là *nguồn cấp*). Không đoán được thì nó **hỏi** chứ không tự
+chọn bừa. Bấm vào dây để đổi loại.
+
+> **Vì sao phải nối dây:** nhờ đó phần mềm biết 8 cụm van dùng **chung một** bộ
+> xử lý khí, biết van nào điều khiển xy-lanh nào, và lấy được điện áp coil từ
+> khối PLC. Danh sách phẳng không diễn đạt được những quan hệ này.
+
+### Bước 4 — Khai thêm ở cột phải
+
+Bấm một khối → thẻ **Node** hiện chi tiết: nhãn, mã hàng, số lượng, loại van, và
+công tắc **"Mã tự do"** cho thiết bị ngoài catalog SMC.
+
+Thẻ **Cấu hình** chứa mục *"Cần bạn khai"* — những thông tin phần mềm **không thể
+tự suy**, mỗi dòng kèm lý do. Để trống cũng được, phần mềm sẽ báo ở *"Cần bạn
+quyết định"* thay vì đoán.
+
+### Bước 5 — Bấm "Dựng BOM"
+
+Thẻ **BOM** hiện:
+
+- **Đọc được từ sơ đồ** — mấy vùng khí, xy-lanh nào đã có van, điện áp lấy từ PLC
+- **Tính toán** — lực đẩy/kéo, khí tiêu thụ
+- **BOM** theo 6 tầng, dòng nhập tay có nhãn *"nhập tay"*
+- **Cảnh báo** và **Cần bạn quyết định**
+
+Bấm **CSV** để mở bằng Excel.
+
+### Thanh công cụ
+
+| Nút | Việc |
 |---|---|
-| `single` | Cơ cấu kẹp, đẩy một chiều |
-| `double` | Đi–về, cần giữ vị trí khi mất điện |
-| `3pos_closed` | Cần dừng được ở giữa hành trình |
-| `3pos_exhaust` | Dừng giữa, xả khí hai buồng |
-| `3pos_pressure` | Dừng giữa, giữ áp hai buồng |
+| ↶ ↷ | Hoàn tác / làm lại (`Ctrl+Z`, `Ctrl+Shift+Z`) |
+| Nhân bản | Copy khối đang chọn — tiện khi có nhiều cụm giống nhau |
+| Xoá | Xoá khối hoặc dây đang chọn (`Delete`) |
+| Vừa khung | Thu cả sơ đồ vào vừa màn hình |
+| Mã tự do | Bật/tắt nhanh cho khối đang chọn |
 
-### Bước 2 — Khai những thứ phần mềm không tự biết
-
-Mục **"Cần bạn khai"** liệt kê các thông tin phần mềm **không thể tự suy ra**,
-mỗi dòng kèm lý do vì sao. Ví dụ tổng mét ống phụ thuộc layout máy của bạn —
-phần mềm không biết khoảng cách từ tủ van tới từng xy-lanh.
-
-**Để trống cũng được.** Phần mềm sẽ không tự đoán, mà báo ở mục
-*"Cần bạn quyết định"* để bạn tự điền sau.
-
-### Bước 3 — Bấm "Dựng BOM"
-
-Kết quả bên phải gồm:
-
-- **Tính toán** — lực đẩy/kéo, khí tiêu thụ, tốc độ piston, kèm các giả định
-- **BOM** theo 6 tầng: actuator · van · xử lý khí · đường ống · phụ kiện · điện
-- **Cảnh báo** — chỗ cần chú ý về kỹ thuật
-- **Cần bạn quyết định** — chỗ phần mềm **không đoán**
-
-Bấm **Xuất CSV** để mở bằng Excel.
+Lăn chuột để phóng to/nhỏ, kéo vùng trống để di chuyển sơ đồ.
 
 ---
 
@@ -165,7 +196,9 @@ cậy thấp.
 | Mở lại thấy mất phương án cũ | Kiểm tra thư mục `data/` còn nằm cạnh các tệp kia không |
 | "Hệ thống không cho phép mở kết nối" | Tường lửa hoặc diệt virus đang chặn — nhờ IT cho phép Python kết nối nội bộ |
 | "Thiếu tệp dữ liệu" | Giải nén lại **toàn bộ** thư mục, đừng chỉ lấy vài tệp |
-| Nhập mã mà viền đỏ | Phần mềm chưa biết họ sản phẩm đó — xem mục dưới |
+| Nhập mã mà viền đỏ | Phần mềm chưa biết họ sản phẩm đó — bật **Mã tự do** để vẫn đưa vào BOM, xem mục dưới |
+| Nối dây mà bị cảnh báo sai cổng | Bạn đang nối cổng điện vào cổng khí. Phần mềm không chặn nhưng dòng BOM từ dây đó không đáng tin |
+| Đổi mã rồi mất dây nối | Mã mới có cổng khác — dây nối vào cổng không còn tồn tại bị bỏ, có thông báo ở góc phải |
 
 ### Phần mềm chưa biết mã của tôi
 

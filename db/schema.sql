@@ -359,3 +359,10 @@ create table review_item (
 create index ri_queue_idx on review_item (state, confidence desc)
        where state = 'pending';
 create index ri_run_idx   on review_item (extract_run_id);
+
+-- Sơ đồ đấu nối của một phương án. Xem chú thích ở db/schema_sqlite.sql.
+create table project_graph (
+  project_id bigint primary key references project(id) on delete cascade,
+  graph_json jsonb not null default '{}',
+  updated_at timestamptz not null default now()
+);

@@ -14,6 +14,10 @@ API:
     POST /api/bom              {inputs, config} → BOM + cảnh báo + gap
     GET  /api/csv?project=N    xuất BOM ra CSV
     GET  /api/defaults         cấu hình mặc định + danh sách khoá cần khai
+    GET  /api/groups           nhóm thiết bị + cổng mặc định (cho palette canvas)
+    GET  /api/ports?code=X&group=Y  cổng THẬT của một mã hàng
+    GET  /api/graph?project=N  đọc lại sơ đồ đã lưu
+    POST /api/bom              nhận CẢ HAI: {inputs,config} phẳng, hoặc {graph,config}
 
 Cờ dòng lệnh:
     --port N        cổng, mặc định 8765
@@ -36,6 +40,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from crawler import db                      # noqa: E402
 from engine import bom                      # noqa: E402
+from engine import graph as G               # noqa: E402
+from engine import materialize              # noqa: E402
 from engine import parser as P              # noqa: E402
 
 HERE = Path(__file__).resolve().parent
@@ -68,6 +74,25 @@ def api_series(con):
     return [dict(r) for r in rows]
 
 
+def api_groups():
+    """Nhóm thiết bị cho palette. UI KHÔNG hard-code danh sách này."""
+    return {
+        "groups": [{"key": k, "label": v["label"], "layer": v["layer"],
+                    "is_actuator": bool(v.get("is_actuator")),
+                    "ports": v["ports"]}
+                   for k, v in G.GROUPS.items()],
+        "edge_kinds": [{"key": k, "label": v} for k, v in G.EDGE_KINDS.items()],
+        # cặp nhóm → loại cạnh mặc định, để UI không phải hỏi mỗi lần vẽ dây
+        "default_edge_kind": [{"from": a, "to": b, "kind": k}
+                              for (a, b), k in G.DEFAULT_EDGE_KIND.items()],
+    }
+
+
+def api_ports(con, code, group):
+    """Cổng thật của một mã. Gọi sau khi /api/parse thành công."""
+    return {"ports": G.ports_for(con, code, group, materialize.load_templates())}
+
+
 def api_parse(con, code):
     if not code:
         return {"ok": False, "error": "thiếu mã"}
@@ -80,6 +105,15 @@ def api_parse(con, code):
 
 
 def api_bom(con, payload):
+    """Nhận payload PHẲNG (cũ) hoặc ĐỒ THỊ (mới).
+
+    Giữ tương thích ngược là có chủ đích: bảng phẳng vẫn là cách nhập nhanh nhiều
+    xy-lanh (mục 4 của tài liệu yêu cầu), không bỏ.
+    """
+    gr = payload.get("graph")
+    if gr:
+        return api_bom_graph(con, payload, gr)
+
     inputs = []
     for it in payload.get("inputs", []):
         code = (it.get("code") or "").strip()
@@ -92,17 +126,7 @@ def api_bom(con, payload):
     if not inputs:
         return {"error": "chưa nhập actuator nào"}
 
-    cfg = {}
-    for k, v in (payload.get("config") or {}).items():
-        if v in (None, "", "auto"):
-            continue
-        if k in ("tube_total_m", "tube_od_mm", "tube_roll_length_m",
-                 "pressure_mpa", "cycle_s", "safety_factor"):
-            cfg[k] = float(v)
-        elif k in ("use_manifold", "frl_lubricator", "frl_mist_separator", "automation"):
-            cfg[k] = v in (True, "true", "1", "co", "có")
-        else:
-            cfg[k] = v
+    cfg = _clean_config(payload.get("config") or {})
 
     bom.seed_rules(con)
     res = bom.build(con, inputs, cfg, project_name=payload.get("name") or "web")
@@ -112,6 +136,59 @@ def api_bom(con, payload):
         "calc": res["calc"], "system": res["system"],
         "lines": res["lines"], "warnings": res["warnings"], "gaps": res["gaps"],
     }
+
+
+def api_bom_graph(con, payload, gr):
+    res_g = G.resolve(con, gr)
+    if not res_g["inputs"] and not res_g["manual_lines"]:
+        return {"error": "sơ đồ chưa có thiết bị nào dựng được BOM "
+                         "(cần ít nhất 1 node xy-lanh có mã, hoặc 1 node tự do)"}
+
+    cfg = _clean_config(payload.get("config") or {})
+    # config_extra (vd điện áp lấy từ node PLC) là SUY LUẬN, nên xếp DƯỚI cấu hình
+    # người dùng khai tay — cùng nguyên tắc với thứ tự ưu tiên trong bom.build().
+    cfg = {**res_g["config_extra"], **cfg}
+
+    bom.seed_rules(con)
+    res = bom.build(con, res_g["inputs"], cfg,
+                    project_name=payload.get("name") or "graph") \
+        if res_g["inputs"] else _empty_result(con, cfg, payload)
+
+    lines = list(res["lines"]) + res_g["manual_lines"]
+    warnings = list(res["warnings"]) + res_g["warnings"]
+    G.save(con, res["project_id"], gr)
+    return {
+        "project_id": res["project_id"],
+        "project": {k: v for k, v in res["project"].items()},
+        "calc": res["calc"], "system": res["system"],
+        "lines": lines, "warnings": warnings, "gaps": res["gaps"],
+        "graph_info": res_g["info"],
+    }
+
+
+def _empty_result(con, cfg, payload):
+    """Sơ đồ chỉ có node tự do: vẫn tạo project để lưu sơ đồ và xuất CSV được."""
+    cur = con.execute("insert into project (name, config) values (?,?)",
+                      (payload.get("name") or "graph",
+                       json.dumps(cfg, ensure_ascii=False)))
+    con.commit()
+    return {"project_id": cur.lastrowid, "project": cfg, "calc": [], "system": {},
+            "lines": [], "warnings": [], "gaps": []}
+
+
+def _clean_config(raw):
+    cfg = {}
+    for k, v in raw.items():
+        if v in (None, "", "auto"):
+            continue
+        if k in ("tube_total_m", "tube_od_mm", "tube_roll_length_m",
+                 "pressure_mpa", "cycle_s", "safety_factor"):
+            cfg[k] = float(v)
+        elif k in ("use_manifold", "frl_lubricator", "frl_mist_separator", "automation"):
+            cfg[k] = v in (True, "true", "1", "co", "có")
+        else:
+            cfg[k] = v
+    return cfg
 
 
 def api_csv(con, project_id):
@@ -161,6 +238,14 @@ class Handler(BaseHTTPRequestHandler):
                                  "needs_input": [{"key": k, "label": l, "why": w}
                                                  for k, l, w in NEEDS_INPUT],
                                  "valve_functions": list(bom.VALVE_FUNCTION)})
+            elif u.path == "/api/groups":
+                self._send(200, api_groups())
+            elif u.path == "/api/ports":
+                self._send(200, api_ports(con, (q.get("code") or [""])[0],
+                                          (q.get("group") or ["custom"])[0]))
+            elif u.path == "/api/graph":
+                pid = int((q.get("project") or ["0"])[0])
+                self._send(200, {"graph": G.load(con, pid)})
             elif u.path == "/api/parse":
                 self._send(200, api_parse(con, (q.get("code") or [""])[0]))
             elif u.path == "/api/csv":

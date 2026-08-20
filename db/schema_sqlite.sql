@@ -355,3 +355,12 @@ create table if not exists review_item (
 create index if not exists ri_queue_idx on review_item (state, confidence desc)
        where state = 'pending';
 create index if not exists ri_run_idx   on review_item (extract_run_id);
+
+-- Sơ đồ đấu nối của một phương án (mục 5 của tài liệu yêu cầu): lưu lại để xem
+-- lại sơ đồ cũ, và về sau dò pattern kết nối lặp lại. engine/graph.py cũng tự
+-- tạo bảng này khi thiếu, vì DB cũ không có hệ migration.
+create table if not exists project_graph (
+  project_id integer primary key references project(id) on delete cascade,
+  graph_json text not null default '{}' check (json_valid(graph_json)),
+  updated_at text not null default (datetime('now'))
+);

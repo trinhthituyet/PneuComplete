@@ -108,7 +108,7 @@ def run_checks(json_mode=False):
     """Không đóng gói bản hỏng: chạy test + dựng thử một BOM."""
     problems = []
     for t in ("tests/test_parser.py", "tests/test_bom.py", "tests/test_web.py",
-              "tests/test_docker.py"):
+              "tests/test_graph.py", "tests/test_docker.py"):
         r = subprocess.run([sys.executable, t], cwd=ROOT,
                            capture_output=True, text=True)
         tail = (r.stdout or "").strip().splitlines()[-1:] or [""]
@@ -116,6 +116,19 @@ def run_checks(json_mode=False):
         print(f"  {'✓' if ok else '✗'} {t:26} {tail[0]}")
         if not ok:
             problems.append(t)
+
+    # test hình học canvas cần node. Node KHÔNG phải phụ thuộc của phần mềm —
+    # nó chỉ dùng để kiểm tệp .js lúc phát triển. Máy không có node thì bỏ qua và
+    # NÓI RÕ là đã bỏ qua, không im lặng coi như đạt.
+    if shutil.which("node"):
+        r = subprocess.run(["node", "tests/test_ui.js"], cwd=ROOT,
+                           capture_output=True, text=True)
+        tail = (r.stdout or "").strip().splitlines()[-1:] or [""]
+        print(f"  {'✓' if r.returncode == 0 else '✗'} tests/test_ui.js         {tail[0]}")
+        if r.returncode != 0:
+            problems.append("tests/test_ui.js")
+    else:
+        print("  · tests/test_ui.js         BỎ QUA (máy không có node)")
 
     # dựng thử BOM để chắc engine còn chạy với dữ liệu trong pneu.db
     try:
@@ -158,6 +171,10 @@ def run_checks(json_mode=False):
 #                              chiếm phần lớn dung lượng.
 STRIP_TABLES = [
     "machine", "bom_line", "cooccurrence",
+    # project_graph phải nằm ở ĐÂY, không chỉ dựa vào on-delete-cascade:
+    # make_clean_db chạy với `pragma foreign_keys = off` nên cascade KHÔNG bắn,
+    # sẽ để lại sơ đồ mồ côi và chốt foreign_key_check sẽ chặn việc đóng gói.
+    "project_graph",
     "project_output", "project_warning", "project_input", "project",
     "crawl_fetch", "crawl_target", "extract_run", "review_item", "source_doc",
     "a3_decision",

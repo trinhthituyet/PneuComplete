@@ -39,6 +39,8 @@ python3 start.py
 python3 tests/test_parser.py     #  6 — parse mã hàng
 python3 tests/test_bom.py        # 26 — luật + dựng BOM
 python3 tests/test_web.py        #  7 — API web
+python3 tests/test_graph.py     # 32 — sơ đồ đấu nối (gồm test chấp nhận mục 8)
+node    tests/test_ui.js        # 16 — hình học cổng canvas (cần node, không bắt buộc)
 python3 tests/test_docker.py     # 61 — đóng gói Docker (không cần daemon)
 ```
 
@@ -71,6 +73,8 @@ python3 -m crawler.run grammar        # nạp db/seed/grammar/*.yaml
 | `db/seed/rules.yaml` | 12 quy tắc kỹ thuật; mỗi quy tắc có `rationale` (hiện lên UI) và `source`. |
 | `db/seed/interfaces.yaml` | Template cửa/ren cho từng họ — nền tảng của suy luận. |
 | `series.grammar_source` | `'manual'` được **bảo vệ** khỏi bộ parse máy. Từng bị parser ghi đè làm vỡ ngữ pháp TU. |
+| `engine/graph.py` | Sơ đồ đấu nối → đầu vào engine. Lấp 3 khoảng trống khi ánh xạ `interfaces.yaml` sang cổng canvas (xem docstring). |
+| `web/index.html` | Canvas node-graph viết bằng JS thuần, **không thư viện, không CDN**. Hình học cổng tính bằng công thức, không đo DOM — đo DOM thì sai khi zoom. |
 
 **Không commit:** `pneu.db`, `BOM/`, `DOCUMENT/`, `cache/`, `answer1.xlsx` — xem
 `.gitignore`, mỗi dòng có ghi lý do.
