@@ -64,3 +64,6 @@ __pycache__/
 /spec*.md
 /Spec*.md
 /REVIEW-A3*.md
+# sơ đồ/ảnh tham khảo bạn đưa vào để đối chiếu khi thiết kế UI — cũng là đầu vào,
+# không phải mã nguồn. UI thật nằm trong web/index.html.
+/so-do-*.html
