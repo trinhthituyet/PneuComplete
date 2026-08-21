@@ -52,3 +52,15 @@ __pycache__/
 # crawl.log, web.log
 *.log
 .DS_Store
+
+# ─────────────────────────────────────────────────────────────────────
+# Tệp .md yêu cầu/spec do bạn đưa vào — KHÔNG commit
+# ─────────────────────────────────────────────────────────────────────
+# Đây là đầu vào của công việc, không phải mã nguồn. Tài liệu CỦA project nằm
+# trong docs/ và HUONG-DAN-SU-DUNG.md / README.md — hai chỗ đó vẫn commit.
+# Mẫu neo bằng "/" nên chỉ chặn ở thư mục gốc, không chặn docs/spec-*.md.
+/prompt*.md
+/Prompt*.md
+/spec*.md
+/Spec*.md
+/REVIEW-A3*.md
