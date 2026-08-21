@@ -3,966 +3,702 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PneuComplete — sơ đồ đấu nối → BOM khí nén</title>
+<title>PneuComplete — cây dự án khí nén → BOM</title>
 <style>
-/* Không dùng thư viện ngoài, không CDN — giữ nguyên nguyên tắc tự chứa của
-   project. Toàn bộ canvas node-graph dưới đây là JS/CSS thuần. */
-:root {
-  --bg:#0f1115; --panel:#171a21; --panel2:#1d212a; --line:#2a2f3a;
-  --tx:#e6e8ec; --dim:#8b93a3; --acc:#4a9eff; --ok:#3ddc84;
-  --warn:#ffb443; --err:#ff5f56; --gap:#b48cff;
-  /* MÀU THEO LAYER — mới. Tài liệu yêu cầu "dùng đúng bộ màu hiện có trong CSS"
-     nhưng CSS cũ KHÔNG có màu theo layer, chỉ có màu ngữ nghĩa (ok/warn/err).
-     Định nghĩa ở đây, dùng chung cho khối trên canvas và tiêu đề nhóm BOM, để
-     phân biệt bằng MÀU thay vì icon (mục 4). */
-  --l-actuator:#4a9eff; --l-valve:#b48cff; --l-air_prep:#3ddc84;
-  --l-piping:#ffb443;   --l-accessory:#ffd93d; --l-electrical:#ff7a9c;
-  --l-other:#8b93a3;
+/* Tự chứa: không thư viện, không CDN, không font ngoài. */
+:root{
+  --bg:#0D0F13; --panel:#151821; --panel2:#1C202B; --hover:#20242F;
+  --line:#262B37; --line-soft:#1E222C;
+  --tx:#E8EAF0; --dim:#8D95A8; --faint:#565D6D;
+  --ok:#35D4AA; --ok-bg:#173C33; --warn:#F0A947; --warn-bg:#3A2D14;
+  --err:#F2637A; --err-bg:#3A1B22; --acc:#6E8CFF; --acc-bg:#1B2440;
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  /* màu theo layer — dùng chung cho cây, sơ đồ và BOM */
+  --l-actuator:#6ED89A; --l-valve:#B490F0; --l-air_prep:#5FCBEE;
+  --l-piping:#F0A947; --l-accessory:#F0A947; --l-electrical:#F2637A;
+  --l-other:#8D95A8;
 }
-@media (prefers-color-scheme: light) {
-  :root { --bg:#f6f7f9; --panel:#fff; --panel2:#f0f2f5; --line:#dfe3e8;
-          --tx:#1b1f27; --dim:#5d6673; --acc:#0b66d0; }
+@media (prefers-color-scheme: light){
+  :root{ --bg:#f6f7f9; --panel:#fff; --panel2:#f0f2f5; --hover:#e9ecf1;
+         --line:#dfe3e8; --line-soft:#eaedf1; --tx:#1b1f27; --dim:#5d6673;
+         --faint:#8a93a1; --acc:#0b66d0; --acc-bg:#e5eefb; }
 }
-* { box-sizing:border-box; }
-body { margin:0; font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-       background:var(--bg); color:var(--tx); overflow:hidden; }
-header { padding:10px 16px; border-bottom:1px solid var(--line);
-         display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-h1 { font-size:15px; margin:0; font-weight:600; }
-.sub { color:var(--dim); font-size:12px; }
-h2 { font-size:12px; text-transform:uppercase; letter-spacing:.08em;
-     color:var(--dim); margin:0 0 8px; font-weight:600; }
-input,select,button,textarea { font:inherit; color:var(--tx); background:var(--panel2);
-       border:1px solid var(--line); border-radius:6px; padding:5px 7px; }
-input:focus,select:focus,textarea:focus { outline:2px solid var(--acc); outline-offset:-1px; }
-button { cursor:pointer; background:var(--acc); color:#fff; border:none;
-         padding:7px 12px; font-weight:600; }
-button.ghost { background:transparent; border:1px solid var(--line); color:var(--tx);
-               font-weight:400; padding:4px 9px; }
-button.ghost.on { border-color:var(--acc); color:var(--acc); }
-button:disabled { opacity:.45; cursor:default; }
-.row { display:flex; gap:7px; align-items:center; flex-wrap:wrap; }
-.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:7px 10px; }
-label.f { display:block; }
-label.f > span { display:block; font-size:11px; color:var(--dim); margin-bottom:2px; }
-label.f input, label.f select { width:100%; }
-.hint { font-size:11px; color:var(--dim); margin-top:2px; }
-.mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
-.pill { display:inline-block; font-size:11px; padding:1px 7px; border-radius:99px;
-        border:1px solid var(--line); color:var(--dim); }
-.ok{color:var(--ok)} .warn{color:var(--warn)} .err{color:var(--err)} .gapc{color:var(--gap)}
-.card { background:var(--panel); border:1px solid var(--line); border-radius:8px;
-        padding:10px 12px; margin-bottom:9px; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+     height:100vh;overflow:hidden}
+.app{display:flex;flex-direction:column;height:100vh}
+header{display:flex;align-items:center;gap:16px;padding:10px 18px;
+       background:var(--panel);border-bottom:1px solid var(--line);flex-shrink:0}
+.brand-name{font-weight:600;font-size:14px}
+.brand-sub{font-size:11px;color:var(--faint);font-family:var(--mono)}
+.ring-wrap{display:flex;align-items:center;gap:10px}
+.ring-legend{display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--dim)}
+.lrow{display:flex;align-items:center;gap:6px}
+.dot{width:7px;height:7px;border-radius:2px;flex-shrink:0}
+.lrow b{color:var(--tx);font-family:var(--mono);font-weight:500}
+.tabs{display:flex;gap:2px;margin-left:auto;background:var(--panel2);padding:3px;
+      border-radius:8px;border:1px solid var(--line)}
+.tab{padding:6px 15px;font-size:12.5px;font-weight:500;color:var(--dim);
+     border-radius:6px;cursor:pointer;user-select:none}
+.tab.active{background:var(--acc-bg);color:var(--acc)}
+.tab:hover:not(.active){color:var(--tx)}
+button{cursor:pointer;font:inherit;background:var(--acc);color:#fff;border:none;
+       padding:7px 12px;border-radius:6px;font-weight:600}
+button.ghost{background:transparent;border:1px solid var(--line);color:var(--tx);
+             font-weight:400;padding:4px 10px;font-size:12px}
+button.ghost:hover{background:var(--hover)}
+button:disabled{opacity:.45;cursor:default}
+input,select{font:inherit;color:var(--tx);background:var(--panel2);
+             border:1px solid var(--line);border-radius:5px;padding:6px 9px}
+input:focus,select:focus{outline:2px solid var(--acc);outline-offset:-1px}
+.mono{font-family:var(--mono)}
+.hint{font-size:11px;color:var(--dim);margin-top:3px}
+.pill{display:inline-block;font-size:10.5px;padding:1px 7px;border-radius:99px;
+      border:1px solid var(--line);color:var(--dim)}
+.body{display:flex;flex:1;min-height:0}
 
-/* ── bố cục 3 vùng: palette | canvas | panel phải ────────────────────────── */
-main { display:grid; grid-template-columns:172px 1fr 372px;
-       height:calc(100vh - 90px); }
-@media (max-width:1100px){ main { grid-template-columns:150px 1fr 300px; } }
-.pal, .side { overflow-y:auto; padding:12px; }
-.pal { border-right:1px solid var(--line); }
-.side { border-left:1px solid var(--line); }
+/* ── cây ─────────────────────────────────────────────────────────────────── */
+.treepanel{width:330px;flex-shrink:0;background:var(--panel);
+           border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.ttool{padding:9px 12px;border-bottom:1px solid var(--line-soft);display:flex;
+       align-items:center;gap:7px}
+.ttool-title{font-size:11px;font-weight:600;color:var(--faint);letter-spacing:.6px;
+             text-transform:uppercase}
+.tscroll{flex:1;overflow-y:auto;padding:8px 6px}
+.nrow{display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:5px;
+      cursor:pointer;font-size:13px}
+.nrow:hover{background:var(--hover)}
+.nrow.sel{background:var(--acc-bg)}
+.caret{width:14px;flex-shrink:0;text-align:center;color:var(--dim);font-size:11px}
+.caret.open{transform:rotate(90deg);color:var(--acc)}
+.caret.leaf{visibility:hidden}
+.tico{width:22px;height:18px;flex-shrink:0;border-radius:4px;display:flex;
+      align-items:center;justify-content:center;font-size:9px;font-weight:700;
+      font-family:var(--mono);background:var(--panel2)}
+.nlabel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ncode{font-family:var(--mono);font-size:10px;color:var(--faint);flex-shrink:0;
+       max-width:96px;overflow:hidden;text-overflow:ellipsis}
+.chip{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.chip.specified{background:var(--ok)} .chip.type_only{background:var(--warn)}
+.chip.empty{background:var(--err)}
+.kids{margin-left:18px;border-left:1px solid var(--line);padding-left:4px}
+.kids.hid{display:none}
 
-/* palette: CHỮ, không icon. Lý do trong mục 4 của tài liệu yêu cầu — thư viện
-   icon vẽ tay không theo kịp tốc độ mở rộng ngữ pháp (16 series và còn tăng). */
-.pitem { display:block; width:100%; text-align:left; background:var(--panel);
-         border:1px solid var(--line); border-left:3px solid var(--dim);
-         border-radius:6px; padding:7px 9px; margin-bottom:5px; cursor:grab;
-         font-size:12px; color:var(--tx); }
-.pitem:hover { border-color:var(--acc); }
-.pitem small { display:block; color:var(--dim); font-size:10px; }
-
-/* ── canvas ──────────────────────────────────────────────────────────────── */
-.cwrap { position:relative; overflow:hidden; background:
-   radial-gradient(circle, var(--line) 1px, transparent 1px) 0 0/22px 22px, var(--bg); }
-.cwrap.wiring { cursor:crosshair; }
-#world { position:absolute; inset:0; transform-origin:0 0; }
-#wires { position:absolute; inset:0; overflow:visible; pointer-events:none; }
-#wires path { fill:none; stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }
-#wires path.hit { stroke-width:12; stroke:transparent; pointer-events:stroke; cursor:pointer; }
-#wires text { font:10px sans-serif; fill:var(--dim); }
-
-.node { position:absolute; width:200px; background:var(--panel);
-        border:1px solid var(--line); border-top:3px solid var(--dim);
-        border-radius:8px; user-select:none; }
-.node.sel { outline:2px solid var(--acc); outline-offset:1px; }
-.node.pok  { border-color:var(--ok); }
-.node.perr { border-color:var(--err); }
-.node.pman { border-color:var(--dim); border-style:dashed; }
-.node .nh { padding:4px 8px; font-size:11px; color:var(--dim);
-            cursor:move; display:flex; justify-content:space-between; gap:6px; }
-.node .nh b { color:var(--tx); font-weight:600; font-size:12px;
-              overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.node .nb { padding:0 8px 6px; }
-.node input.code { width:100%; font-family:ui-monospace,Menlo,monospace; font-size:11px; }
-.node .st { font-size:10px; margin-top:3px; min-height:13px; line-height:1.35;
-            word-break:break-word; }
-/* MỤC 4 của spec — dây nối phải chạm ĐÚNG TÂM chấm cổng.
-   LỖI CŨ: .pts là position:relative và nằm SAU .nh + .nb trong luồng, nên gốc
-   toạ độ của nó đã ở dưới header+body. portPos() lại cộng HEAD+BODY lần nữa →
-   chấm cổng bị đẩy xuống ~70px so với chỗ dây neo. Đặt absolute inset:0 để hai
-   bên dùng CÙNG một gốc = góc trên-trái của node. */
-.node .pts { position:absolute; inset:0; pointer-events:none; }
-.node .pts .port { pointer-events:auto; }
-.port { position:absolute; width:11px; height:11px; border-radius:50%;
-        background:var(--panel2); border:1.5px solid var(--dim); cursor:crosshair; }
-.port:hover, .port.hot { background:var(--acc); border-color:var(--acc);
-        transform:scale(1.35); }
-.port.pneumatic { border-color:var(--l-air_prep); }
-.port.electrical { border-color:var(--l-electrical); }
-.port.mechanical { border-color:var(--l-other); }
-.plab { position:absolute; font-size:9px; color:var(--dim); white-space:nowrap;
-        pointer-events:none; }
-
-/* menu nhỏ chọn loại cạnh */
-.pop { position:fixed; z-index:50; background:var(--panel); border:1px solid var(--line);
-       border-radius:8px; padding:5px; box-shadow:0 8px 28px rgba(0,0,0,.45); }
-.pop button { display:block; width:100%; text-align:left; background:transparent;
-       color:var(--tx); font-weight:400; padding:5px 9px; font-size:12px; }
-.pop button:hover { background:var(--panel2); }
-.pop small { color:var(--dim); }
-
-.tabs { display:flex; gap:4px; margin-bottom:10px; }
-.tabs button { flex:1; font-size:12px; }
-.layer h3 { font-size:12px; margin:0 0 5px; display:flex; gap:7px; align-items:baseline;
-            border-left:3px solid var(--dim); padding-left:7px; }
-.line { padding:6px 0; border-bottom:1px solid var(--line); font-size:13px; }
-.line:last-child { border-bottom:none; }
-.line .pn { font-family:ui-monospace,Menlo,monospace; font-weight:600; }
-.line .why { font-size:11px; color:var(--dim); margin-top:2px; }
-.empty { color:var(--dim); padding:26px 6px; text-align:center; font-size:13px; }
-.calcbox { font-family:ui-monospace,Menlo,monospace; font-size:11px;
-           white-space:pre-wrap; color:var(--dim); }
-.chk { display:flex; align-items:center; gap:6px; font-size:12px; }
-.chk input { width:auto; }
-textarea { width:100%; min-height:76px; font-family:ui-monospace,Menlo,monospace;
-           font-size:11px; }
+/* ── vùng chính ──────────────────────────────────────────────────────────── */
+.main{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column}
+.view{flex:1;overflow:auto;padding:20px 26px;display:none}
+.view.active{display:block}
+h2{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--faint);
+   margin:0 0 9px;font-weight:600}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+      padding:11px 13px;margin-bottom:9px}
+.crumb{font-size:11px;color:var(--faint);font-family:var(--mono);margin-bottom:6px}
+.crumb span.go{cursor:pointer;text-decoration:underline dotted}
+.dtitle{font-size:19px;font-weight:600;display:flex;align-items:center;gap:9px;
+        flex-wrap:wrap;margin-bottom:14px}
+.nameinp{background:transparent;border:none;border-bottom:1px dashed transparent;
+         color:var(--tx);font:600 19px/1.3 inherit;padding:2px 0;min-width:150px}
+.nameinp:hover,.nameinp:focus{border-bottom-color:var(--line);outline:none}
+.badge{font-size:10px;font-weight:600;padding:3px 9px;border-radius:20px;
+       font-family:var(--mono);text-transform:uppercase}
+.badge.specified{background:var(--ok-bg);color:var(--ok)}
+.badge.type_only{background:var(--warn-bg);color:var(--warn)}
+.badge.empty{background:var(--err-bg);color:var(--err)}
+.frow{display:grid;grid-template-columns:150px 1fr 22px;gap:10px;align-items:center;
+      padding:8px 0;border-bottom:1px solid var(--line-soft)}
+.frow:last-child{border-bottom:none}
+.fname{font-size:13px;color:var(--dim)}
+.frow input,.frow select{width:100%}
+.xbtn{color:var(--faint);cursor:pointer;text-align:center}
+.xbtn:hover{color:var(--err)}
+.kidrow{display:flex;align-items:center;gap:9px;padding:8px 11px;background:var(--panel2);
+        border:1px solid var(--line);border-radius:6px;cursor:pointer;margin-bottom:5px}
+.kidrow:hover{border-color:var(--acc)}
+.kidrow .nm{flex:1;font-size:13px}
+.kidrow .cd{font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+.addrow{display:flex;gap:7px;margin-top:8px;padding:10px;background:var(--panel2);
+        border:1px dashed var(--line);border-radius:6px;align-items:center}
+.addrow select{flex:1}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;color:var(--faint);text-transform:uppercase;
+   letter-spacing:.5px;padding:7px 10px;border-bottom:1px solid var(--line);font-weight:600}
+td{padding:9px 10px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+.stat{display:flex;gap:10px;margin-bottom:14px}
+.sbox{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:8px;
+      padding:12px 14px}
+.snum{font-size:21px;font-weight:700;font-family:var(--mono)}
+.slab{font-size:11.5px;color:var(--dim);margin-top:3px}
+.alert{background:var(--err-bg);border:1px solid #5A2530;border-radius:8px;
+       padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:#F5A0AE}
+.why{font-size:11.5px;color:var(--dim);margin-top:3px}
+details summary{cursor:pointer;color:var(--faint);font-size:11px;margin-top:4px}
+.diagwrap{overflow:auto;background:var(--panel);border:1px solid var(--line);
+          border-radius:8px;padding:14px}
 </style>
 </head>
 <body>
+<div class="app">
 <header>
-  <h1>PneuComplete</h1>
-  <span class="sub">vẽ sơ đồ đấu nối → BOM có giải thích</span>
-  <span style="flex:1"></span>
-  <div class="row">
-    <button class="ghost" id="undo" title="Ctrl+Z">↶</button>
-    <button class="ghost" id="redo" title="Ctrl+Shift+Z">↷</button>
-    <button class="ghost" id="dup" title="Nhân bản node đang chọn">Nhân bản</button>
-    <button class="ghost" id="del" title="Xoá node/dây đang chọn (Delete)">Xoá</button>
-    <button class="ghost" id="fit" title="Vừa khung">Vừa khung</button>
-    <button class="ghost" id="manual" title="Bật/tắt mã tự do cho node đang chọn">Mã tự do</button>
-    <button id="run">Dựng BOM</button>
-    <button class="ghost" id="csv" disabled>CSV</button>
+  <div>
+    <div class="brand-name">PneuComplete</div>
+    <div class="brand-sub" id="sub">cây dự án → BOM</div>
   </div>
+  <div class="ring-wrap">
+    <svg width="44" height="44" viewBox="0 0 44 44">
+      <circle cx="22" cy="22" r="18" fill="none" stroke="#1C202B" stroke-width="6"/>
+      <circle id="rSpec" cx="22" cy="22" r="18" fill="none" stroke="#35D4AA" stroke-width="6"
+        stroke-linecap="round" transform="rotate(-90 22 22)"/>
+      <circle id="rTyp" cx="22" cy="22" r="18" fill="none" stroke="#F0A947" stroke-width="6"
+        stroke-linecap="round" transform="rotate(-90 22 22)"/>
+      <circle id="rEmp" cx="22" cy="22" r="18" fill="none" stroke="#F2637A" stroke-width="6"
+        stroke-linecap="round" transform="rotate(-90 22 22)"/>
+      <text id="rPct" x="22" y="26" text-anchor="middle" font-size="10.5"
+        fill="currentColor" font-weight="600" font-family="monospace">0%</text>
+    </svg>
+    <div class="ring-legend">
+      <div class="lrow"><span class="dot" style="background:#35D4AA"></span>Đã chốt mã <b id="cSpec">0</b></div>
+      <div class="lrow"><span class="dot" style="background:#F0A947"></span>Mới biết loại <b id="cTyp">0</b></div>
+      <div class="lrow"><span class="dot" style="background:#F2637A"></span>Trống <b id="cEmp">0</b></div>
+    </div>
+  </div>
+  <div class="tabs">
+    <div class="tab active" data-tab="tree">Cây dự án</div>
+    <div class="tab" data-tab="cfg">Cấu hình</div>
+    <div class="tab" data-tab="bom">BOM</div>
+    <div class="tab" data-tab="diagram">Sơ đồ</div>
+  </div>
+  <button id="run">Dựng BOM</button>
+  <button class="ghost" id="csv" disabled>CSV</button>
 </header>
-<div class="row" style="padding:5px 16px; border-bottom:1px solid var(--line); font-size:11px">
-  <span class="sub" id="tip">Kéo nhóm thiết bị từ cột trái vào canvas · bấm 1 cổng rồi bấm cổng đích để nối dây · Esc để huỷ</span>
-  <span style="flex:1"></span><span class="sub" id="status"></span>
+
+<div class="body">
+  <div class="treepanel">
+    <div class="ttool">
+      <span class="ttool-title">Cấu trúc</span>
+      <span style="margin-left:auto"></span>
+      <button class="ghost" id="addStation">+ Trạm</button>
+      <button class="ghost" id="undo" title="Ctrl+Z">↶</button>
+    </div>
+    <div class="tscroll" id="treeRoot"></div>
+    <div class="ttool" style="border-top:1px solid var(--line-soft);border-bottom:none">
+      <span class="hint" id="tstat"></span>
+    </div>
+  </div>
+  <div class="main">
+    <div class="view active" id="v-tree"></div>
+    <div class="view" id="v-cfg"></div>
+    <div class="view" id="v-bom"><div class="hint">Bấm <b>Dựng BOM</b>.</div></div>
+    <div class="view" id="v-diagram"><div class="hint">Bấm <b>Dựng BOM</b> để sinh sơ đồ.</div></div>
+  </div>
+</div>
 </div>
 
-<main>
-  <div class="pal">
-    <h2>Nhóm thiết bị</h2>
-    <div id="palette"></div>
-    <h2 style="margin-top:14px">Nhập nhanh</h2>
-    <textarea id="paste" placeholder="Dán nhiều mã, mỗi dòng 1 mã:&#10;CDM2L32-500Z&#10;MGPM25-200Z-M9BL x4"></textarea>
-    <button class="ghost" id="pastego" style="width:100%; margin-top:5px">Tạo node xy-lanh</button>
-    <div class="hint">Không bắt vẽ tay từng node — dán danh sách rồi vẽ dây thêm.</div>
-  </div>
-
-  <div class="cwrap" id="cwrap">
-    <div id="world"><svg id="wires"></svg></div>
-  </div>
-
-  <div class="side">
-    <div class="tabs">
-      <button class="ghost on" data-tab="node">Node</button>
-      <button class="ghost" data-tab="cfg">Cấu hình</button>
-      <button class="ghost" data-tab="bom">BOM</button>
-    </div>
-    <div id="tab-node"></div>
-    <div id="tab-cfg" style="display:none"></div>
-    <div id="tab-bom" style="display:none"><div class="empty">Bấm <b>Dựng BOM</b>.</div></div>
-  </div>
-</main>
-
 <script>
-const $ = s => document.querySelector(s);
-const el = (t,c,x) => { const e=document.createElement(t);
-  if(c) e.className=c; if(x!==undefined) e.textContent=x; return e; };
-const SVGNS = 'http://www.w3.org/2000/svg';
-const sv = (t,a={}) => { const e=document.createElementNS(SVGNS,t);
-  for(const k in a) e.setAttribute(k,a[k]); return e; };
+const $=s=>document.querySelector(s);
+const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;
+  if(x!==undefined)e.textContent=x;return e;};
+const SVGNS='http://www.w3.org/2000/svg';
+const sv=(t,a={})=>{const e=document.createElementNS(SVGNS,t);
+  for(const k in a) e.setAttribute(k,a[k]); return e;};
 
-let DEF={}, NEEDS=[], VFUNC=[], GROUPS={}, EDGEK=[], DEFK={}, lastProject=null;
-let NODES=[], EDGES=[], sel=null, selEdge=null, seq=1;
-let view={x:40,y:40,k:1};
-let wiring=null;                  // {node, port, kind}  đang nối dở
-let undoStack=[], redoStack=[];
+let DEF={}, NEEDS=[], VFUNC=[], GROUPS={}, PARENT_OF={}, SINGLETON=[];
+let TREE=null, sel=null, seq=1, lastProject=null, expanded=new Set(), undoStack=[];
+const ICON={frl:'FRL',manifold:'MFD',valve:'V',cylinder:'CY',speed_controller:'SC',
+  regulator:'R',silencer:'SI',fitting:'F',tubing:'TU',sensor:'SN',plc:'PLC',custom:'?'};
+const LAYER_VN={actuator:'ACTUATOR',valve:'VAN',air_prep:'XỬ LÝ KHÍ',piping:'ĐƯỜNG ỐNG',
+  accessory:'PHỤ KIỆN',electrical:'ĐIỆN / CẢM BIẾN',other:'KHÁC'};
+const LAYER_ORDER=['actuator','valve','air_prep','piping','accessory','electrical','other'];
+const COND=[['pressure_mpa','Áp suất (MPa)'],['cycle_s','Chu kỳ (s)'],
+  ['tube_od_mm','Ống ø (mm)'],['tube_color','Màu ống'],['tube_roll_length_m','Cuộn (m)'],
+  ['voltage','Điện áp coil'],['safety_factor','Hệ số đồng thời']];
 
-const LAYER_VN = {actuator:'ACTUATOR', valve:'VAN', air_prep:'XỬ LÝ KHÍ',
-  piping:'ĐƯỜNG ỐNG', accessory:'PHỤ KIỆN', electrical:'ĐIỆN / CẢM BIẾN', other:'KHÁC'};
-const LAYER_ORDER = ['actuator','valve','air_prep','piping','accessory','electrical','other'];
-const COND = [
-  ['pressure_mpa','Áp suất (MPa)'], ['cycle_s','Chu kỳ (s)'],
-  ['tube_od_mm','Ống ø (mm)'], ['tube_color','Màu ống'],
-  ['tube_roll_length_m','Cuộn (m)'], ['voltage','Điện áp coil'],
-  ['valve_mounting','Kiểu cửa van'], ['safety_factor','Hệ số đồng thời'],
-];
-const EDGE_COLOR = {pneumatic_control:'var(--l-actuator)', pneumatic_supply:'var(--l-air_prep)',
-  electrical_signal:'var(--l-electrical)', mechanical_mount:'var(--l-other)'};
+function* walk(n,p=null,d=0){ yield [n,p,d];
+  for(const c of n.children||[]) yield* walk(c,n,d+1); }
+const findN=id=>{ for(const [n] of walk(TREE)) if(n.id===id) return n; return null; };
+const parentOf=id=>{ for(const [n,p] of walk(TREE)) if(n.id===id) return p; return null; };
+const layerOf=t=>(GROUPS[t]||{}).layer||'other';
+const statusOf=n=>n.code?'specified':(Object.keys(n.attrs||{}).length?'type_only':'empty');
+function snap(){ undoStack.push(JSON.stringify({TREE,seq})); if(undoStack.length>50) undoStack.shift(); }
+function undo(){ if(!undoStack.length) return; const d=JSON.parse(undoStack.pop());
+  TREE=d.TREE; seq=d.seq; sel=null; render(); }
 
-/* ── hình học node/cổng ─────────────────────────────────────────────────────
-   Toạ độ cổng tính BẰNG CÔNG THỨC, không đo DOM: đo DOM thì sai khi zoom và khi
-   node vừa tạo chưa kịp layout. Bù lại phải bảo đảm CSS đặt chấm cổng theo đúng
-   công thức này — .pts là position:absolute inset:0 nên hai bên cùng một gốc.
-
-   MỤC 3 của spec — bố trí theo cạnh (`side` do backend gán theo datasheet):
-     l/r : hai bên, cách nhau đều SP px
-     t   : cạnh trên, dàn đều theo chiều ngang
-     b   : cạnh dưới
-     e   : hàng ĐIỆN tách riêng dưới cùng (coil) */
-const NW = 200, HEAD = 24, BODY = 46, SP = 24, EROW = 20;
-
-function hasPorts(n){
-  // MỤC 2: chưa có mã hàng hợp lệ thì KHÔNG hiện cổng nào — lúc đó chưa biết
-  // thiết bị thật có bao nhiêu cổng, hiện cổng giả định chỉ gây rối.
-  // Node "mã tự do" vẫn được hiện cổng: người dùng đã tự khẳng định thiết bị đó
-  // tồn tại, và không cho nối dây thì thiết bị ngoài catalog không vào được sơ đồ.
-  return !!(n.manual || (n.parsed && n.parsed.ok));
-}
-function layout(n){
-  const ps = hasPorts(n) ? (n.ports||[]) : [];
-  const pick = sd => ps.filter(p => (p.side || (p.kind==='electrical'?'e':
-                     p.direction==='in'?'l':'r')) === sd);
-  return {L:pick('l'), R:pick('r'), T:pick('t'), B:pick('b'), E:pick('e')};
-}
-function nodeH(n){
-  const {L,R,E} = layout(n);
-  return HEAD + BODY + Math.max(L.length, R.length, 1)*SP + 6 + (E.length?EROW:0);
-}
-const spread = (k, cnt) => NW/(cnt+1)*(k+1);
-function portPos(n,pid){
-  const {L,R,T,B,E} = layout(n);
-  const x0=n.position.x, y0=n.position.y, h=nodeH(n);
-  const eh = E.length?EROW:0;
-  let i;
-  if((i=L.findIndex(p=>p.id===pid))>=0) return {x:x0,      y:y0+HEAD+BODY+i*SP+9};
-  if((i=R.findIndex(p=>p.id===pid))>=0) return {x:x0+NW,   y:y0+HEAD+BODY+i*SP+9};
-  if((i=T.findIndex(p=>p.id===pid))>=0) return {x:x0+spread(i,T.length), y:y0};
-  if((i=B.findIndex(p=>p.id===pid))>=0) return {x:x0+spread(i,B.length), y:y0+h-eh};
-  if((i=E.findIndex(p=>p.id===pid))>=0) return {x:x0+spread(i,E.length), y:y0+h};
-  return {x:x0+NW/2, y:y0+h/2};
-}
-const byId = id => NODES.find(n=>n.id===id);
-
-/* ── undo/redo (mục 10) ─────────────────────────────────────────────────── */
-function snap(){ return JSON.stringify({NODES,EDGES,seq}); }
-function push(){ undoStack.push(snap()); if(undoStack.length>60) undoStack.shift();
-  redoStack.length=0; }
-function restore(s){ const d=JSON.parse(s); NODES=d.NODES; EDGES=d.EDGES; seq=d.seq;
-  sel=selEdge=null; draw(); inspect(); }
-
-/* ── khởi động ─────────────────────────────────────────────────────────── */
 async function boot(){
-  const d = await (await fetch('/api/defaults')).json();
+  const d=await (await fetch('/api/defaults')).json();
   DEF=d.defaults; NEEDS=d.needs_input; VFUNC=d.valve_functions;
-  const g = await (await fetch('/api/groups')).json();
+  const g=await (await fetch('/api/groups')).json();
   g.groups.forEach(x=>GROUPS[x.key]=x);
-  EDGEK = g.edge_kinds;
-  g.default_edge_kind.forEach(x=>DEFK[x.from+'>'+x.to]=x.kind);
+  PARENT_OF=g.parent_of||{}; SINGLETON=g.singleton||[];
+  TREE={id:'n0',type:'frl',name:'Bộ xử lý khí (nguồn chung)',code:'',qty:1,attrs:{},children:[]};
+  expanded.add('n0');
+  buildCfg(); addStation(); render();
+}
 
-  const pal=$('#palette');
-  g.groups.forEach(x=>{
-    const b=el('button','pitem'); b.draggable=true;
-    b.style.borderLeftColor=`var(--l-${x.layer})`;
-    b.appendChild(el('span',null,x.label));
-    b.appendChild(el('small',null,LAYER_VN[x.layer]||x.layer));
-    b.addEventListener('dragstart',e=>e.dataTransfer.setData('text/plain',x.key));
-    b.onclick=()=>addNode(x.key, 60+Math.random()*160, 60+Math.random()*160);
-    pal.appendChild(b);
+/* ── vẽ cây ─────────────────────────────────────────────────────────────── */
+function render(){
+  const r=$('#treeRoot'); r.innerHTML=''; r.appendChild(renderNode(TREE));
+  renderDetail(); updateRing();
+  let n=0,c=0; for(const [x] of walk(TREE)){ n++; if(x.code) c++; }
+  $('#tstat').textContent=`${n} thiết bị · ${c} đã có mã`;
+}
+function renderNode(n){
+  const wrap=el('div');
+  const kids=n.children||[], open=expanded.has(n.id);
+  const row=el('div','nrow'+(sel===n.id?' sel':''));
+  row.onclick=e=>{e.stopPropagation(); sel=n.id; render();};
+  const car=el('div','caret '+(kids.length?(open?'open':''):'leaf'),'▸');
+  if(kids.length) car.onclick=e=>{e.stopPropagation();
+    expanded.has(n.id)?expanded.delete(n.id):expanded.add(n.id); render();};
+  row.appendChild(car);
+  const ic=el('div','tico',ICON[n.type]||'?');
+  ic.style.color=`var(--l-${layerOf(n.type)})`;
+  row.appendChild(ic);
+  row.appendChild(el('div','nlabel',n.name||(GROUPS[n.type]||{}).label||n.type));
+  if(n.code) row.appendChild(el('div','ncode',n.code));
+  row.appendChild(el('div','chip '+statusOf(n)));
+  wrap.appendChild(row);
+  if(kids.length){
+    const kw=el('div','kids'+(open?'':' hid'));
+    kids.forEach(c=>kw.appendChild(renderNode(c)));
+    wrap.appendChild(kw);
+  }
+  return wrap;
+}
+
+/* ── panel chi tiết ─────────────────────────────────────────────────────── */
+function allowedChildren(type){
+  // Loại nào thêm được vào node này — lấy TỪ ENGINE (/api/groups → PARENT_OF),
+  // KHÔNG hard-code ở UI. Thêm họ thiết bị mới chỉ sửa engine/tree.py.
+  return Object.keys(PARENT_OF).filter(k=>(PARENT_OF[k].allowed||[]).includes(type));
+}
+function renderDetail(){
+  const v=$('#v-tree'); const n=sel?findN(sel):TREE;
+  if(!n){ v.innerHTML='<div class="hint">chưa chọn thiết bị</div>'; return; }
+  v.innerHTML='';
+  const g=GROUPS[n.type]||{};
+
+  const path=[]; (function up(x){ const p=parentOf(x.id); if(p) up(p); path.push(x); })(n);
+  const cb=el('div','crumb');
+  path.forEach((x,i)=>{
+    if(i===path.length-1) cb.appendChild(el('span',null,x.name||x.type));
+    else { const s=el('span','go',x.name||x.type);
+      s.onclick=()=>{sel=x.id;render();}; cb.appendChild(s);
+      cb.appendChild(el('span',null,' / ')); }
   });
-  buildCfg();
-  inspect();
-}
+  v.appendChild(cb);
 
-function buildCfg(){
-  const t=$('#tab-cfg'); t.innerHTML='';
-  const s1=el('div'); s1.appendChild(el('h2',null,'Cần bạn khai — engine không suy được'));
-  const g1=el('div','grid2');
-  NEEDS.forEach(n=>{
-    const w=el('label','f'); w.appendChild(el('span',null,n.label));
-    let inp;
-    if(n.key==='valve_function'){ inp=el('select');
-      inp.appendChild(new Option('— để trống → gap','')); VFUNC.forEach(v=>inp.appendChild(new Option(v,v)));
-    } else if(n.key==='manifold_type'){ inp=el('select');
-      inp.appendChild(new Option('— để trống → gap',''));
-      ['20, 23, 20SA, 23SA','20P, 23P'].forEach(v=>inp.appendChild(new Option('Type '+v,v)));
-    } else { inp=el('input'); inp.placeholder='để trống → gap'; }
-    inp.dataset.k=n.key; w.appendChild(inp); w.appendChild(el('div','hint',n.why));
-    g1.appendChild(w);
-  });
-  s1.appendChild(g1); t.appendChild(s1);
-
-  const s2=el('div'); s2.appendChild(el('h2',null,'Điều kiện làm việc'));
-  const g2=el('div','grid2');
-  COND.forEach(([k,lab])=>{
-    const w=el('label','f'); w.appendChild(el('span',null,lab));
-    let inp;
-    if(k==='valve_mounting'){ inp=el('select');
-      ['body_ported','base_mounted'].forEach(v=>inp.appendChild(new Option(v,v)));
-    } else inp=el('input');
-    inp.dataset.c=k; inp.value=DEF[k]??''; w.appendChild(inp); g2.appendChild(w);
-  });
-  s2.appendChild(g2);
-  const mw=el('label','f'); mw.appendChild(el('span',null,'Gá van lên manifold'));
-  const mi=el('input'); mi.type='checkbox'; mi.dataset.c='use_manifold';
-  const lab=el('div','chk'); lab.appendChild(mi);
-  lab.appendChild(el('span','hint','ảnh hưởng gasket, end plate, đế manifold'));
-  mw.appendChild(lab); s2.appendChild(mw);
-  t.appendChild(s2);
-}
-
-/* ── thêm/sửa node ─────────────────────────────────────────────────────── */
-function addNode(group,x,y,code=''){
-  push();
-  const g=GROUPS[group]||{ports:[],label:group,layer:'other'};
-  const n={id:'n'+(seq++), group, code, label:'', qty:1, manual:false,
-    overrides:{}, ports:JSON.parse(JSON.stringify(g.ports||[])),
-    position:{x:Math.round(x),y:Math.round(y)}, parsed:null};
-  NODES.push(n); sel=n.id; selEdge=null; draw(); inspect();
-  if(code) checkCode(n);
-  return n;
-}
-
-async function checkCode(n){
-  const code=(n.code||'').trim();
-  if(n.manual || !code){ n.parsed=null; draw(); inspect(); return; }
-  try{
-    const r=await (await fetch('/api/parse?code='+encodeURIComponent(code))).json();
-    n.parsed=r;
-    if(r.ok){
-      // cổng THẬT đọc từ interfaces.yaml, thay cổng mặc định của nhóm
-      const p=await (await fetch(`/api/ports?code=${encodeURIComponent(code)}&group=${n.group}`)).json();
-      if(p.ports && p.ports.length){
-        const keep=new Set(p.ports.map(x=>x.id));
-        // cạnh trỏ tới cổng không còn tồn tại thì bỏ, kèm thông báo
-        const before=EDGES.length;
-        EDGES=EDGES.filter(e=>!((e.from===n.id&&!keep.has(e.from_port))||
-                               (e.to===n.id&&!keep.has(e.to_port))));
-        if(EDGES.length<before) note(`đổi mã → bỏ ${before-EDGES.length} dây nối vào cổng không còn tồn tại`);
-        n.ports=p.ports;
-      }
-    }
-  }catch(e){ n.parsed={ok:false,error:String(e)}; }
-  draw(); inspect();
-}
-
-/* ── vẽ ─────────────────────────────────────────────────────────────────── */
-function draw(){
-  const w=$('#world');
-  [...w.querySelectorAll('.node')].forEach(e=>e.remove());
-  w.style.transform=`translate(${view.x}px,${view.y}px) scale(${view.k})`;
-
-  NODES.forEach(n=>{
-    const g=GROUPS[n.group]||{};
-    const d=el('div','node'); d.dataset.id=n.id;
-    d.style.left=n.position.x+'px'; d.style.top=n.position.y+'px';
-    d.style.borderTopColor=`var(--l-${g.layer||'other'})`;
-    if(n.id===sel) d.classList.add('sel');
-    if(n.manual) d.classList.add('pman');
-    else if(n.parsed) d.classList.add(n.parsed.ok?'pok':'perr');
-
-    const h=el('div','nh');
-    h.appendChild(el('b',null,n.label||g.label||n.group));
-    h.appendChild(el('span',null,'×'+n.qty));
-    d.appendChild(h);
-
-    const b=el('div','nb');
-    const i=el('input','code'); i.value=n.code||'';
-    i.placeholder = n.manual ? 'mã tự do (không kiểm tra)' : 'mã hàng…';
-    i.addEventListener('mousedown',e=>e.stopPropagation());
-    i.addEventListener('change',()=>{ push(); n.code=i.value.trim(); checkCode(n); });
-    i.addEventListener('blur',()=>{ if(n.code!==i.value.trim()){ push(); n.code=i.value.trim(); checkCode(n);} });
-    b.appendChild(i);
-    const st=el('div','st');
-    if(n.manual) st.innerHTML='<span class="sub">tự do — không qua kiểm tra kỹ thuật</span>';
-    else if(n.parsed && n.parsed.ok){
-      const a=n.parsed.attrs||{};
-      const bits=Object.entries(a).filter(([k])=>!k.startsWith('_')).slice(0,3)
-        .map(([k,v])=>`${k}=${v}`).join(' · ');
-      st.innerHTML=`<span class="ok">✓</span> <span class="sub">${bits}</span>`;
-    } else if(n.parsed){
-      const p=n.parsed;
-      const why=p.error||(p.unparsed?`chưa hiểu phần "${p.unparsed}"`:'')||
-                (p.missing?`thiếu ô ${p.missing.join(', ')}`:'không hiểu mã');
-      st.innerHTML=`<span class="err">✗ ${why}</span>`;
-    }
-    if(n.filledBy)
-      st.innerHTML += `<div class="sub">◂ engine chọn · ${n.filledBy}</div>`;
-    if(!hasPorts(n))
-      st.innerHTML = st.innerHTML || '<span class="sub">chưa xác định cổng</span>';
-    b.appendChild(st); d.appendChild(b);
-
-    const pts=el('div','pts');
-    const {L,R,T,B,E}=layout(n);
-    const hgt=nodeH(n), eh=E.length?EROW:0;
-    const put=(p,x,y,align)=>{
-      const dot=el('div','port '+(p.kind||'pneumatic'));
-      dot.dataset.node=n.id; dot.dataset.port=p.id;
-      dot.style.left=(x-5.5)+'px'; dot.style.top=(y-5.5)+'px';
-      dot.title=(p.label||p.id)+(p.size?`  ${p.standard||''}${p.size}`:'');
-      if(wiring && wiring.node===n.id && wiring.port===p.id) dot.classList.add('hot');
-      pts.appendChild(dot);
-      const lb=el('div','plab',p.label||p.id);
-      if(align==='l'){ lb.style.left=(x+9)+'px'; lb.style.top=(y-6)+'px'; }
-      else if(align==='r'){ lb.style.right=(NW-x+9)+'px'; lb.style.top=(y-6)+'px'; }
-      else if(align==='t'){ lb.style.left=(x+7)+'px'; lb.style.top=(y+1)+'px'; }
-      else { lb.style.left=(x+7)+'px'; lb.style.top=(y-11)+'px'; }
-      pts.appendChild(lb);
-    };
-    L.forEach((p,k)=>put(p,0,HEAD+BODY+k*SP+9,'l'));
-    R.forEach((p,k)=>put(p,NW,HEAD+BODY+k*SP+9,'r'));
-    T.forEach((p,k)=>put(p,spread(k,T.length),0,'t'));
-    B.forEach((p,k)=>put(p,spread(k,B.length),hgt-eh,'b'));
-    E.forEach((p,k)=>put(p,spread(k,E.length),hgt,'b'));
-    d.appendChild(pts);
-    d.style.height=nodeH(n)+'px';
-    w.appendChild(d);
-  });
-  drawWires();
-}
-
-function drawWires(){
-  const s=$('#wires'); s.innerHTML='';
-  EDGES.forEach(e=>{
-    const a=byId(e.from), b=byId(e.to);
-    if(!a||!b) return;
-    const dd=orthPath(a,e.from_port,b,e.to_port);
-    const hit=sv('path',{d:dd,class:'hit'});
-    hit.addEventListener('click',ev=>{ ev.stopPropagation(); selEdge=e.id; sel=null; draw(); inspect(); });
-    s.appendChild(hit);
-    s.appendChild(sv('path',{d:dd, stroke:EDGE_COLOR[e.kind]||'var(--dim)',
-      'stroke-dasharray': e.kind==='electrical_signal'?'5 3':
-                          e.kind==='mechanical_mount'?'2 3':'',
-      'stroke-opacity': e.id===selEdge?1:.8,
-      'stroke-width': e.id===selEdge?3.5:2}));
-  });
-  if(wiring && wiring.cur){
-    const a=byId(wiring.node); if(!a) return;
-    const p1=portPos(a,wiring.port);
-    s.appendChild(sv('path',{d:`M${p1.x},${p1.y} L${wiring.cur.x},${wiring.cur.y}`,
-      stroke:'var(--acc)','stroke-dasharray':'4 3'}));
+  const t=el('div','dtitle');
+  const ni=el('input','nameinp'); ni.value=n.name||'';
+  ni.onchange=()=>{snap(); n.name=ni.value; render();};
+  t.appendChild(ni);
+  const stt=statusOf(n);
+  t.appendChild(el('span','badge '+stt,
+    {specified:'Đã chốt mã',type_only:'Mới biết loại',empty:'Trống'}[stt]));
+  t.appendChild(el('span','pill',g.label||n.type));
+  if(n.filled_by_bom) t.appendChild(el('span','pill','engine chọn'));
+  if(n.id!==TREE.id){
+    const del=el('button','ghost','Xoá'); del.style.marginLeft='auto';
+    del.onclick=()=>{snap(); const p=parentOf(n.id);
+      p.children=p.children.filter(c=>c.id!==n.id); sel=p.id; render();};
+    t.appendChild(del);
   }
-}
+  v.appendChild(t);
 
-/* ── MỤC 1: Manhattan routing (elbow connector) ─────────────────────────────
-   Thay Bezier bằng đoạn ngang/dọc vuông góc, kiểu Visio/draw.io — đúng cách đọc
-   sơ đồ P&ID. Ba bước:
-     1. mỗi cổng có HƯỚNG THOÁT theo cạnh nó nằm (trái/phải/trên/dưới)
-     2. đi ra một đoạn mồi (stub) theo hướng thoát, rồi gấp tối đa 2 lần
-     3. nếu đường giữa đè lên thân node khác thì dịch làn ra ngoài bbox node đó
-   Bo góc bằng cung tròn r=6 — vẫn là đường vuông góc, không phải cubic bezier. */
-const STUB=16, R=6;
-function portSide(n,pid){
-  const {L,R:Rt,T,B}=layout(n);
-  if(T.some(p=>p.id===pid)) return 't';
-  if(B.some(p=>p.id===pid)) return 'b';
-  if(Rt.some(p=>p.id===pid)) return 'r';
-  if(L.some(p=>p.id===pid)) return 'l';
-  return 'r';
-}
-const stepOut=(p,side)=>({
-  l:{x:p.x-STUB,y:p.y}, r:{x:p.x+STUB,y:p.y},
-  t:{x:p.x,y:p.y-STUB}, b:{x:p.x,y:p.y+STUB}}[side]);
-
-function nodeBox(n){ return {x0:n.position.x, y0:n.position.y,
-  x1:n.position.x+NW, y1:n.position.y+nodeH(n)}; }
-function blocked(x,y,skip){
-  return NODES.some(n=>{ if(skip.includes(n.id)) return false;
-    const b=nodeBox(n); return x>b.x0-6&&x<b.x1+6&&y>b.y0-6&&y<b.y1+6; });
-}
-function laneX(x,y1,y2,skip){
-  // dịch làn dọc sang phải/trái cho tới khi không xuyên qua node nào
-  for(let d=0; d<=6; d++){
-    for(const s of (d?[-1,1]:[1])){
-      const cx=x+s*d*(NW/2+STUB);
-      let hit=false;
-      for(let y=Math.min(y1,y2); y<=Math.max(y1,y2); y+=12) if(blocked(cx,y,skip)){hit=true;break;}
-      if(!hit) return cx;
-    }
-  }
-  return x;
-}
-function laneY(y,x1,x2,skip){
-  for(let d=0; d<=6; d++){
-    for(const s of (d?[-1,1]:[1])){
-      const cy=y+s*d*40;
-      let hit=false;
-      for(let x=Math.min(x1,x2); x<=Math.max(x1,x2); x+=12) if(blocked(x,cy,skip)){hit=true;break;}
-      if(!hit) return cy;
-    }
-  }
-  return y;
-}
-function orthPath(a,pa,b,pb){
-  const p1=portPos(a,pa), p2=portPos(b,pb);
-  const s1=portSide(a,pa), s2=portSide(b,pb);
-  const q1=stepOut(p1,s1), q2=stepOut(p2,s2);
-  const skip=[a.id,b.id];
-  const pts=[p1,q1];
-  const h1=(s1==='l'||s1==='r'), h2=(s2==='l'||s2==='r');
-  if(h1&&h2){
-    const mx=laneX((q1.x+q2.x)/2, q1.y, q2.y, skip);
-    pts.push({x:mx,y:q1.y},{x:mx,y:q2.y});
-  } else if(!h1&&!h2){
-    const my=laneY((q1.y+q2.y)/2, q1.x, q2.x, skip);
-    pts.push({x:q1.x,y:my},{x:q2.x,y:my});
-  } else if(h1){
-    pts.push({x:q2.x,y:q1.y});
-  } else {
-    pts.push({x:q1.x,y:q2.y});
-  }
-  pts.push(q2,p2);
-  return roundPath(dedupe(pts));
-}
-function dedupe(pts){
-  const out=[];
-  pts.forEach(p=>{ const l=out[out.length-1];
-    if(!l||Math.abs(l.x-p.x)>0.5||Math.abs(l.y-p.y)>0.5) out.push(p); });
-  // bỏ điểm giữa nằm thẳng hàng (3 điểm cùng x hoặc cùng y)
-  const r=[out[0]];
-  for(let i=1;i<out.length-1;i++){
-    const a=r[r.length-1], m=out[i], b=out[i+1];
-    const col=(Math.abs(a.x-m.x)<0.5&&Math.abs(m.x-b.x)<0.5)||
-              (Math.abs(a.y-m.y)<0.5&&Math.abs(m.y-b.y)<0.5);
-    if(!col) r.push(m);
-  }
-  if(out.length>1) r.push(out[out.length-1]);
-  return r;
-}
-function roundPath(pts){
-  if(pts.length<2) return '';
-  let d=`M${pts[0].x},${pts[0].y}`;
-  for(let i=1;i<pts.length-1;i++){
-    const p=pts[i-1], c=pts[i], n=pts[i+1];
-    const r1=Math.min(R, Math.hypot(c.x-p.x,c.y-p.y)/2);
-    const r2=Math.min(R, Math.hypot(n.x-c.x,n.y-c.y)/2);
-    const r=Math.max(0,Math.min(r1,r2));
-    const u1={x:Math.sign(c.x-p.x),y:Math.sign(c.y-p.y)};
-    const u2={x:Math.sign(n.x-c.x),y:Math.sign(n.y-c.y)};
-    d+=` L${c.x-u1.x*r},${c.y-u1.y*r}`;
-    if(r>0.5) d+=` Q${c.x},${c.y} ${c.x+u2.x*r},${c.y+u2.y*r}`;
-  }
-  const e=pts[pts.length-1];
-  d+=` L${e.x},${e.y}`;
-  return d;
-}
-
-/* ── panel chi tiết node (mục 4) ────────────────────────────────────────── */
-function inspect(){
-  const t=$('#tab-node'); t.innerHTML='';
-  if(selEdge){
-    const e=EDGES.find(x=>x.id===selEdge);
-    if(e){
-      const c=el('div','card');
-      c.appendChild(el('h2',null,'Dây nối'));
-      const a=byId(e.from), b=byId(e.to);
-      c.appendChild(el('div','hint',
-        `${(a&&a.label)||e.from}.${e.from_port} → ${(b&&b.label)||e.to}.${e.to_port}`));
-      const s=el('select');
-      EDGEK.forEach(k=>s.appendChild(new Option(k.label,k.key)));
-      s.value=e.kind; s.onchange=()=>{ push(); e.kind=s.value; draw(); };
-      const w=el('label','f'); w.appendChild(el('span',null,'Loại kết nối'));
-      w.appendChild(s); c.appendChild(w);
-      t.appendChild(c);
-    }
-    return;
-  }
-  const n=byId(sel);
-  if(!n){
-    t.innerHTML=`<div class="empty">Chưa chọn node.<br>
-      <span class="sub">${NODES.length} node · ${EDGES.length} dây</span></div>`;
-    return;
-  }
-  const g=GROUPS[n.group]||{};
-  const c=el('div','card');
-  c.appendChild(el('h2',null,g.label||n.group));
-
-  const mk=(lab,inp)=>{ const w=el('label','f'); w.appendChild(el('span',null,lab));
-    w.appendChild(inp); c.appendChild(w); return inp; };
-
-  const li=el('input'); li.value=n.label||''; li.placeholder='vd SV1, Push Cylinder';
-  li.onchange=()=>{ push(); n.label=li.value; draw(); };
-  mk('Nhãn (tự do)',li);
-
+  const c1=el('div','card'); c1.appendChild(el('h2',null,'Mã hàng'));
+  const rw=el('div','frow'); rw.appendChild(el('div','fname','model_code'));
+  const box=el('div');
   const ci=el('input','mono'); ci.value=n.code||'';
-  ci.onchange=()=>{ push(); n.code=ci.value.trim(); checkCode(n); };
-  mk('Mã hàng',ci);
+  ci.placeholder='để trống → engine tự chọn'; ci.setAttribute('list','codes-'+n.type);
+  ci.onchange=()=>{snap(); n.code=ci.value.trim(); delete n.filled_by_bom;
+    checkCode(n,box); render();};
+  box.appendChild(ci);
+  box.appendChild(el('div','why'));
+  rw.appendChild(box); rw.appendChild(el('div'));
+  c1.appendChild(rw);
+  c1.appendChild(el('div','hint',
+    'Để TRỐNG nếu muốn engine tự chọn: cỡ van suy từ lưu lượng, tiết lưu suy từ cửa xy-lanh.'));
+  v.appendChild(c1);
+  loadCodes(n.type); if(n.code) checkCode(n,box);
 
-  const qi=el('input'); qi.type='number'; qi.min=1; qi.value=n.qty;
-  qi.onchange=()=>{ push(); n.qty=+qi.value||1; draw(); };
-  mk('Số lượng',qi);
-
-  const chk=el('div','chk'); const cb=el('input'); cb.type='checkbox'; cb.checked=!!n.manual;
-  cb.onchange=()=>{ push(); n.manual=cb.checked; if(n.manual) n.parsed=null; checkCode(n); };
-  chk.appendChild(cb); chk.appendChild(el('span',null,'Mã tự do (không kiểm tra kỹ thuật)'));
-  c.appendChild(chk);
-  c.appendChild(el('div','hint','Bật khi thiết bị không thuộc catalog SMC. '+
-    'Vẫn vào BOM để không sót, nhưng đánh dấu rõ là nhập tay.'));
-
-  if(n.manual){
-    const ni=el('input'); ni.value=n.note||''; ni.placeholder='vd mua ngoài';
-    ni.onchange=()=>{ push(); n.note=ni.value; };
-    mk('Ghi chú',ni);
-  } else {
-    const vs=el('select'); vs.appendChild(new Option('(theo mặc định)',''));
+  const c2=el('div','card'); c2.appendChild(el('h2',null,'Thông số'));
+  const mk=(lab,inp)=>{const r=el('div','frow'); r.appendChild(el('div','fname',lab));
+    r.appendChild(inp); r.appendChild(el('div')); c2.appendChild(r); return inp;};
+  const qi=el('input'); qi.type='number'; qi.min=1; qi.value=n.qty||1;
+  qi.onchange=()=>{snap(); n.qty=+qi.value||1; render();}; mk('qty',qi);
+  if(n.type==='valve'){
+    const vs=el('select'); vs.appendChild(new Option('(engine tự chọn)',''));
     VFUNC.forEach(f=>vs.appendChild(new Option(f,f)));
     vs.value=(n.overrides||{}).valve_function||'';
-    vs.onchange=()=>{ push(); n.overrides=n.overrides||{};
-      if(vs.value) n.overrides.valve_function=vs.value; else delete n.overrides.valve_function; };
-    mk('Loại van (override — thắng luật mặc định)',vs);
-    if(n.group==='plc'){
-      const vi=el('input'); vi.value=(n.attrs||{}).voltage||'';
-      vi.placeholder='24VDC'; vi.onchange=()=>{ push(); n.attrs=n.attrs||{};
-        n.attrs.voltage=vi.value; };
-      mk('Điện áp ngõ ra (dùng cho luật chọn van)',vi);
-    }
+    vs.onchange=()=>{snap(); n.overrides=n.overrides||{};
+      if(vs.value) n.overrides.valve_function=vs.value;
+      else delete n.overrides.valve_function;};
+    mk('Loại van (override)',vs);
   }
-  t.appendChild(c);
+  if(n.type==='plc'){
+    const vi=el('input'); vi.value=(n.attrs||{}).voltage||''; vi.placeholder='24VDC';
+    vi.onchange=()=>{snap(); n.attrs=n.attrs||{}; n.attrs.voltage=vi.value;};
+    mk('Điện áp ngõ ra',vi);
+  }
+  const lb=el('label'); lb.style.cssText='display:flex;gap:7px;align-items:center;font-size:12.5px;padding-top:9px';
+  const cb2=el('input'); cb2.type='checkbox'; cb2.checked=!!n.manual;
+  cb2.onchange=()=>{snap(); n.manual=cb2.checked; render();};
+  lb.appendChild(cb2); lb.appendChild(el('span',null,'Mã tự do — ngoài catalog, không kiểm'));
+  c2.appendChild(lb); v.appendChild(c2);
 
-  if(n.ports && n.ports.length){
-    const pc=el('div','card'); pc.appendChild(el('h2',null,`Cổng — ${n.ports.length}`));
-    n.ports.forEach(p=>{
-      const r=el('div','row');
-      r.appendChild(el('span','pill',p.kind));
-      r.appendChild(el('span','mono',p.label||p.id));
-      if(p.size) r.appendChild(el('span','hint',`${p.standard||''}${p.size}`));
-      pc.appendChild(r);
-    });
-    if(n.parsed && n.parsed.ok)
-      pc.appendChild(el('div','hint','Cổng đọc từ interfaces.yaml theo mã hàng.'));
-    t.appendChild(pc);
-  }
-}
-
-/* ── nối dây: bấm-bấm là mặc định, kéo-thả là lối tắt (mục 12) ──────────── */
-function toWorld(ev){
-  const r=$('#cwrap').getBoundingClientRect();
-  return {x:(ev.clientX-r.left-view.x)/view.k, y:(ev.clientY-r.top-view.y)/view.k};
-}
-function startWire(node,port){ wiring={node,port,cur:null}; $('#cwrap').classList.add('wiring');
-  $('#tip').textContent='Đang nối — bấm cổng đích để hoàn tất, Esc để huỷ'; draw(); }
-function cancelWire(){ wiring=null; $('#cwrap').classList.remove('wiring');
-  $('#tip').textContent='Kéo nhóm thiết bị từ cột trái vào canvas · bấm 1 cổng rồi bấm cổng đích để nối dây · Esc để huỷ';
-  draw(); }
-function finishWire(node,port,ev){
-  if(!wiring) return;
-  if(wiring.node===node && wiring.port===port){ cancelWire(); return; }
-  const a=byId(wiring.node), b=byId(node);
-  if(!a||!b){ cancelWire(); return; }
-  const kind = DEFK[a.group+'>'+b.group] || DEFK[b.group+'>'+a.group] || null;
-  const make=k=>{ push();
-    EDGES.push({id:'e'+(seq++), from:wiring.node, from_port:wiring.port,
-                to:node, to_port:port, kind:k});
-    cancelWire(); };
-  if(kind) make(kind);
-  else pickKind(ev,make);   // không suy đoán được thì HỎI, không tự chọn bừa
-}
-function pickKind(ev,cb){
-  const p=el('div','pop');
-  p.style.left=Math.min(ev.clientX,innerWidth-230)+'px';
-  p.style.top=Math.min(ev.clientY,innerHeight-190)+'px';
-  p.appendChild(el('div','hint','Loại kết nối:'));
-  EDGEK.forEach(k=>{ const b=el('button'); b.innerHTML=`${k.key}<br><small>${k.label}</small>`;
-    b.onclick=()=>{ p.remove(); cb(k.key); }; p.appendChild(b); });
-  const x=el('button','ghost','huỷ'); x.onclick=()=>{ p.remove(); cancelWire(); };
-  p.appendChild(x);
-  document.body.appendChild(p);
-}
-
-/* ── chuột: kéo node, kéo dây, pan, zoom ────────────────────────────────── */
-let drag=null;
-$('#cwrap').addEventListener('mousedown',ev=>{
-  const port=ev.target.closest('.port');
-  if(port){
-    ev.preventDefault(); ev.stopPropagation();
-    const nd=port.dataset.node, pt=port.dataset.port;
-    if(wiring) finishWire(nd,pt,ev);
-    else { startWire(nd,pt); drag={mode:'wire',x0:ev.clientX,y0:ev.clientY}; }
-    return;
-  }
-  const nEl=ev.target.closest('.node');
-  if(nEl){
-    sel=nEl.dataset.id; selEdge=null; draw(); inspect();
-    if(ev.target.closest('.nh')){
-      const n=byId(sel);
-      drag={mode:'node',id:sel,ox:n.position.x,oy:n.position.y,
-            x0:ev.clientX,y0:ev.clientY,moved:false};
-    }
-    return;
-  }
-  if(wiring){ cancelWire(); return; }
-  sel=null; selEdge=null; draw(); inspect();
-  drag={mode:'pan',x0:ev.clientX,y0:ev.clientY,vx:view.x,vy:view.y};
-});
-addEventListener('mousemove',ev=>{
-  if(wiring){ wiring.cur=toWorld(ev); drawWires(); }
-  if(!drag) return;
-  const dx=ev.clientX-drag.x0, dy=ev.clientY-drag.y0;
-  if(drag.mode==='node'){
-    if(!drag.moved){ if(Math.abs(dx)+Math.abs(dy)<3) return; push(); drag.moved=true; }
-    const n=byId(drag.id); if(!n) return;
-    n.position.x=Math.round(drag.ox+dx/view.k); n.position.y=Math.round(drag.oy+dy/view.k);
-    draw();
-  } else if(drag.mode==='pan'){
-    view.x=drag.vx+dx; view.y=drag.vy+dy; draw();
-  }
-});
-addEventListener('mouseup',ev=>{
-  // Kéo-thả: nếu người dùng KÉO từ cổng (đi xa >6px) rồi nhả trên cổng khác thì
-  // nối luôn. Bấm-bấm và kéo-thả dùng chung một đường code, không phải 2 tool.
-  if(drag && drag.mode==='wire' && wiring){
-    const far=Math.abs(ev.clientX-drag.x0)+Math.abs(ev.clientY-drag.y0)>6;
-    const port=document.elementFromPoint(ev.clientX,ev.clientY);
-    const p=port&&port.closest&&port.closest('.port');
-    if(far){ if(p) finishWire(p.dataset.node,p.dataset.port,ev); else cancelWire(); }
-  }
-  drag=null;
-});
-$('#cwrap').addEventListener('wheel',ev=>{
-  ev.preventDefault();
-  const r=$('#cwrap').getBoundingClientRect();
-  const mx=ev.clientX-r.left, my=ev.clientY-r.top;
-  const k=Math.min(2.5,Math.max(.35,view.k*(ev.deltaY<0?1.12:1/1.12)));
-  view.x=mx-(mx-view.x)*(k/view.k); view.y=my-(my-view.y)*(k/view.k); view.k=k; draw();
-},{passive:false});
-$('#cwrap').addEventListener('dragover',ev=>ev.preventDefault());
-$('#cwrap').addEventListener('drop',ev=>{
-  ev.preventDefault();
-  const g=ev.dataTransfer.getData('text/plain'); if(!GROUPS[g]) return;
-  const p=toWorld(ev); addNode(g,p.x-NW/2,p.y-20);
-});
-addEventListener('keydown',ev=>{
-  if(ev.key==='Escape'){ cancelWire(); document.querySelectorAll('.pop').forEach(e=>e.remove()); }
-  if(ev.target.matches('input,select,textarea')) return;
-  if(ev.key==='Delete'||ev.key==='Backspace'){ ev.preventDefault(); delSel(); }
-  if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='z'){ ev.preventDefault();
-    ev.shiftKey?doRedo():doUndo(); }
-});
-
-/* ── thao tác ───────────────────────────────────────────────────────────── */
-function delSel(){
-  if(selEdge){ push(); EDGES=EDGES.filter(e=>e.id!==selEdge); selEdge=null; }
-  else if(sel){ push(); EDGES=EDGES.filter(e=>e.from!==sel&&e.to!==sel);
-    NODES=NODES.filter(n=>n.id!==sel); sel=null; }
-  draw(); inspect();
-}
-function doUndo(){ if(!undoStack.length) return; redoStack.push(snap()); restore(undoStack.pop()); }
-function doRedo(){ if(!redoStack.length) return; undoStack.push(snap()); restore(redoStack.pop()); }
-function dupSel(){
-  const n=byId(sel); if(!n) return; push();
-  const c=JSON.parse(JSON.stringify(n)); c.id='n'+(seq++);
-  c.position={x:n.position.x+28,y:n.position.y+28};
-  NODES.push(c); sel=c.id; draw(); inspect();
-}
-function fit(){
-  if(!NODES.length){ view={x:40,y:40,k:1}; draw(); return; }
-  const xs=NODES.map(n=>n.position.x), ys=NODES.map(n=>n.position.y);
-  const x0=Math.min(...xs)-40, y0=Math.min(...ys)-40;
-  const x1=Math.max(...xs)+NW+40, y1=Math.max(...ys.map((y,i)=>y+nodeH(NODES[i])))+40;
-  const r=$('#cwrap').getBoundingClientRect();
-  const k=Math.min(2,Math.max(.35,Math.min(r.width/(x1-x0), r.height/(y1-y0))));
-  view={k, x:-x0*k+(r.width-(x1-x0)*k)/2, y:-y0*k+(r.height-(y1-y0)*k)/2};
-  draw();
-}
-function note(m){ $('#status').innerHTML=`<span class="warn">${m}</span>`;
-  setTimeout(()=>{ if($('#status').textContent===m) $('#status').textContent=''; },5000); }
-
-$('#paste').addEventListener('keydown',e=>e.stopPropagation());
-$('#pastego').onclick=()=>{
-  const lines=$('#paste').value.split('\n').map(s=>s.trim()).filter(Boolean);
-  if(!lines.length) return;
-  push();
-  let y=60;
-  lines.forEach(l=>{
-    // "MÃ x4" → mã + số lượng
-    const m=l.match(/^(\S+)\s*[x×]\s*(\d+)$/i);
-    const code=m?m[1]:l, q=m?+m[2]:1;
-    const n=addNode('cylinder',60,y,code); n.qty=q; y+=nodeH(n)+24;
+  const c3=el('div','card'); c3.appendChild(el('h2',null,'Thuộc tính đã biết'));
+  const ks=Object.keys(n.attrs||{});
+  if(!ks.length) c3.appendChild(el('div','hint','chưa có — khai được cả khi chưa biết mã'));
+  ks.forEach(k=>{
+    const r=el('div','frow');
+    const ki=el('input'); ki.value=k;
+    ki.onchange=()=>{snap(); const val=n.attrs[k]; delete n.attrs[k];
+      n.attrs[ki.value]=val; render();};
+    r.appendChild(ki);
+    const vi=el('input'); vi.value=n.attrs[k];
+    vi.oninput=()=>{n.attrs[k]=vi.value;};
+    r.appendChild(vi);
+    const x=el('div','xbtn','✕'); x.onclick=()=>{snap(); delete n.attrs[k]; render();};
+    r.appendChild(x); c3.appendChild(r);
   });
-  $('#paste').value=''; fit();
-};
+  const ab=el('button','ghost','+ thuộc tính');
+  ab.onclick=()=>{snap(); n.attrs=n.attrs||{};
+    n.attrs['thuoc_tinh_'+(Object.keys(n.attrs).length+1)]=''; render();};
+  c3.appendChild(ab); v.appendChild(c3);
 
-/* ── dựng BOM ───────────────────────────────────────────────────────────── */
+  const c4=el('div','card');
+  c4.appendChild(el('h2',null,`Thiết bị con — ${(n.children||[]).length}`));
+  (n.children||[]).forEach(c=>{
+    const r=el('div','kidrow');
+    r.onclick=()=>{sel=c.id; expanded.add(n.id); render();};
+    r.appendChild(el('div','chip '+statusOf(c)));
+    r.appendChild(el('div','nm',c.name||c.type));
+    r.appendChild(el('div','cd',c.code||'chưa có mã'));
+    c4.appendChild(r);
+  });
+  const allow=allowedChildren(n.type);
+  if(allow.length){
+    const ar=el('div','addrow');
+    const sl=el('select');
+    allow.forEach(k=>sl.appendChild(new Option((GROUPS[k]||{}).label||k,k)));
+    ar.appendChild(sl);
+    const b=el('button','ghost','+ Thêm');
+    b.onclick=()=>{
+      const ty=sl.value;
+      if(SINGLETON.includes(ty) && [...walk(TREE)].some(([x])=>x.type===ty)){
+        $('#sub').textContent='chỉ nên có 1 '+ty+' — BOM thật dùng 1 manifold nhiều station';
+        return; }
+      snap();
+      const k={id:'n'+(seq++),type:ty,name:(GROUPS[ty]||{}).label||ty,code:'',qty:1,
+               attrs:{},children:[]};
+      n.children=n.children||[]; n.children.push(k);
+      expanded.add(n.id); sel=k.id; render();};
+    ar.appendChild(b); c4.appendChild(ar);
+    const why=(PARENT_OF[allow[0]]||{}).why;
+    if(why) c4.appendChild(el('div','hint','Chỉ hiện loại lắp được vào đây. '+why));
+  }
+  v.appendChild(c4);
+}
+
+const codeCache={};
+async function loadCodes(type){
+  if(codeCache[type]){ putList(type); return; }
+  try{
+    const r=await (await fetch('/api/codes?group='+encodeURIComponent(type))).json();
+    codeCache[type]=r.codes||[];
+  }catch(e){ codeCache[type]=[]; }
+  putList(type);
+}
+function putList(type){
+  let dl=document.getElementById('codes-'+type);
+  if(!dl){ dl=el('datalist'); dl.id='codes-'+type; document.body.appendChild(dl); }
+  dl.innerHTML='';
+  (codeCache[type]||[]).forEach(c=>{const o=el('option'); o.value=c; dl.appendChild(o);});
+}
+async function checkCode(n,box){
+  const st=box.querySelector('.why'); if(!st) return;
+  if(n.manual || !n.code){ st.textContent=''; return; }
+  try{
+    const r=await (await fetch('/api/parse?code='+encodeURIComponent(n.code))).json();
+    if(r.ok){
+      const a=r.attrs||{};
+      const bits=Object.entries(a).filter(([k])=>!k.startsWith('_')).slice(0,4)
+        .map(([k,v])=>`${k}=${v}`).join(' · ');
+      st.innerHTML=`<span style="color:var(--ok)">✓ ${r.series||''}</span> ${bits}`;
+    } else {
+      const why=r.error||(r.unparsed?`chưa hiểu phần "${r.unparsed}"`:'')||'không hiểu mã';
+      st.innerHTML=`<span style="color:var(--err)">✗ ${why}</span>`;
+    }
+  }catch(e){ st.textContent=String(e); }
+}
+
+/* Một TRẠM = một van + một xy-lanh. Nhập mã xy-lanh là đủ — engine suy phần còn
+   lại (đo được: 1 mã xy-lanh + 5 giá trị mức dự án → 7 dòng BOM, 0 câu hỏi). */
+function addStation(){
+  snap();
+  const mfd=[...walk(TREE)].map(([x])=>x).find(x=>x.type==='manifold');
+  const host=mfd||TREE;
+  const nv=(host.children||[]).filter(c=>c.type==='valve').length+1;
+  const cyl={id:'n'+(seq++),type:'cylinder',name:'Xy-lanh',code:'',qty:1,attrs:{},children:[]};
+  const valve={id:'n'+(seq++),type:'valve',name:'Trạm SV'+nv,code:'',qty:1,attrs:{},
+               children:[cyl]};
+  host.children=host.children||[]; host.children.push(valve);
+  expanded.add(TREE.id); if(mfd) expanded.add(mfd.id); expanded.add(valve.id);
+  sel=cyl.id; render();
+}
+
+/* ── cấu hình ───────────────────────────────────────────────────────────── */
+function buildCfg(){
+  const v=$('#v-cfg'); v.innerHTML='';
+  const s1=el('div'); s1.appendChild(el('h2',null,'Cần bạn khai — engine không suy được'));
+  NEEDS.forEach(n=>{
+    const c=el('div','card');
+    const r=el('div','frow'); r.appendChild(el('div','fname',n.label));
+    let inp;
+    if(n.key==='valve_function'){ inp=el('select');
+      inp.appendChild(new Option('(engine tự chọn)',''));
+      VFUNC.forEach(x=>inp.appendChild(new Option(x,x)));
+    } else if(n.key==='manifold_type'){ inp=el('select');
+      inp.appendChild(new Option('— để trống → gap',''));
+      ['20, 23, 20SA, 23SA','20P, 23P'].forEach(x=>inp.appendChild(new Option('Type '+x,x)));
+    } else if(n.key==='valve_piping'){ inp=el('select');
+      [['onetouch','one-touch (C6/C8) — cắm ống trực tiếp'],
+       ['thread','ren (01/02) — vặn đầu nối vào']].forEach(([a,b])=>inp.appendChild(new Option(b,a)));
+    } else if(n.key==='fitting_shape'){ inp=el('select');
+      [['straight','thẳng'],['elbow','vuông (chữ L)'],['tee','T']]
+        .forEach(([a,b])=>inp.appendChild(new Option(b,a)));
+    } else if(n.key==='exhaust_silencer'){ inp=el('select');
+      [['true','có'],['false','không']].forEach(([a,b])=>inp.appendChild(new Option(b,a)));
+    } else { inp=el('input'); inp.placeholder='để trống → engine báo gap'; }
+    inp.dataset.k=n.key;
+    if(inp.tagName==='SELECT' && DEF[n.key]!==undefined && DEF[n.key]!==null)
+      inp.value=String(DEF[n.key]);
+    r.appendChild(inp); r.appendChild(el('div'));
+    c.appendChild(r); c.appendChild(el('div','hint',n.why));
+    s1.appendChild(c);
+  });
+  v.appendChild(s1);
+  const s2=el('div'); s2.appendChild(el('h2',null,'Điều kiện làm việc'));
+  const c=el('div','card');
+  COND.forEach(([k,lab])=>{
+    const r=el('div','frow'); r.appendChild(el('div','fname',lab));
+    const i=el('input'); i.dataset.c=k; i.value=DEF[k]??'';
+    r.appendChild(i); r.appendChild(el('div')); c.appendChild(r);
+  });
+  s2.appendChild(c); v.appendChild(s2);
+}
 function collectConfig(){
   const cfg={};
-  document.querySelectorAll('[data-k]').forEach(e=>{ if(e.value) cfg[e.dataset.k]=e.value; });
-  document.querySelectorAll('[data-c]').forEach(e=>{
-    cfg[e.dataset.c]= e.type==='checkbox'?e.checked:e.value; });
+  document.querySelectorAll('[data-k]').forEach(e=>{ if(e.value!=='') cfg[e.dataset.k]=e.value; });
+  document.querySelectorAll('[data-c]').forEach(e=>{ if(e.value!=='') cfg[e.dataset.c]=e.value; });
   return cfg;
 }
+
+function updateRing(){
+  let s=0,t=0,e=0;
+  for(const [n] of walk(TREE)){ const st=statusOf(n);
+    if(st==='specified')s++; else if(st==='type_only')t++; else e++; }
+  const tot=s+t+e||1, C=2*Math.PI*18;
+  const set=(id,len,off)=>{const x=document.getElementById(id);
+    x.setAttribute('stroke-dasharray',`${len} ${C}`);
+    x.setAttribute('stroke-dashoffset',`${-off}`);};
+  const ls=C*s/tot, lt=C*t/tot, le=C*e/tot;
+  set('rSpec',ls,0); set('rTyp',lt,ls); set('rEmp',le,ls+lt);
+  $('#rPct').textContent=Math.round(100*s/tot)+'%';
+  $('#cSpec').textContent=s; $('#cTyp').textContent=t; $('#cEmp').textContent=e;
+}
+
+/* ── dựng BOM ───────────────────────────────────────────────────────────── */
 async function run(){
-  if(!NODES.length){ note('sơ đồ chưa có thiết bị nào'); return; }
-  $('#run').disabled=true; $('#status').textContent='đang dựng…';
-  const graph={nodes:NODES.map(n=>({id:n.id,group:n.group,code:n.code||null,
-    label:n.label||null,qty:n.qty,manual:!!n.manual,note:n.note||null,
-    overrides:n.overrides||{},attrs:n.attrs||{},ports:n.ports||[],
-    position:n.position})), edges:EDGES};
+  $('#run').disabled=true; $('#sub').textContent='đang dựng…';
   try{
     const r=await (await fetch('/api/bom',{method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({graph,config:collectConfig(),name:'sơ đồ'})})).json();
-    if(r.error){ $('#status').innerHTML=`<span class="err">${r.error}</span>`; return; }
+      body:JSON.stringify({tree:TREE,config:collectConfig(),name:'cây dự án'})})).json();
+    if(r.error){ $('#sub').innerHTML=`<span style="color:var(--err)">${r.error}</span>`; return; }
     lastProject=r.project_id; $('#csv').disabled=false;
-    // MỤC 5: điền mã hàng ngược vào sơ đồ → as-built diagram. Nhìn sơ đồ là biết
-    // lắp mã gì, không phải tra chéo bảng BOM.
-    let filled=0;
-    Object.entries(r.fill||{}).forEach(([id,f])=>{
-      const n=byId(id); if(!n||n.code) return;
-      n.code=f.code; n.filledBy=f.why; n.filledQty=f.qty; filled++;
-    });
-    if(filled){ note(`đã điền mã cho ${filled} khối trên sơ đồ`);
-      // parse lại để khối lấy đúng cổng theo mã mới
-      Object.keys(r.fill||{}).forEach(id=>{ const n=byId(id); if(n) checkCode(n); });
-    }
-    draw();
-    renderBom(r); tab('bom');
-    $('#status').innerHTML=`<span class="ok">xong</span> · #${r.project_id}`;
-  }catch(e){ $('#status').innerHTML=`<span class="err">${e}</span>`; }
+    // Engine trả về CÂY đã chuẩn hoá + đã điền mã → dùng làm nguồn sự thật mới.
+    if(r.tree){ TREE=r.tree; for(const [n] of walk(TREE)) expanded.add(n.id); }
+    renderBom(r); renderDiagram(); render(); tab('bom');
+    const fx=(r.tree_fixed||[]).length;
+    $('#sub').textContent=`xong · #${r.project_id}`+(fx?` · đã dịch ${fx} thiết bị về đúng cha`:'');
+  }catch(e){ $('#sub').innerHTML=`<span style="color:var(--err)">${e}</span>`; }
   finally{ $('#run').disabled=false; }
 }
 
-function renderBom(r){
-  const o=$('#tab-bom'); o.innerHTML='';
-  if(r.graph_info){
-    const c=el('div','card'); c.appendChild(el('h2',null,'Đọc được từ sơ đồ'));
-    const gi=r.graph_info;
-    c.appendChild(el('div','hint',`vùng khí dùng chung: ${gi.supply_zones??0}`));
-    const nc=Object.keys(gi.controlled||{}).length;
-    c.appendChild(el('div','hint',`xy-lanh có van điều khiển xác định: ${nc}`));
-    if(gi.voltage_from_plc)
-      c.appendChild(el('div','hint',`điện áp coil lấy từ node PLC: ${gi.voltage_from_plc}`));
-    o.appendChild(c);
-  }
-  if(r.calc&&r.calc.length){
-    const c=el('div','card'); c.appendChild(el('h2',null,'Tính toán'));
-    let t='';
-    r.calc.forEach(x=>{ if(!x.bore_mm) return;
-      t+=`${x.item} ×${x.count} ø${x.bore_mm}`+(x.rod_mm?`, cần ø${x.rod_mm}`:'')+
-         `\n  đẩy ${x.thrust_push_N} N`+(x.thrust_pull_N?` · kéo ${x.thrust_pull_N} N`:'')+
-         `\n  khí ${x.total_flow_lpm} L/min ANR\n`; });
-    if(r.system&&r.system.total_flow_lpm!=null)
-      t+=`\nΣ ${r.system.total_flow_lpm} L/min ANR → cần cấp ${r.system.required_flow_lpm}`;
-    const p=el('div','calcbox'); p.textContent=t; c.appendChild(p); o.appendChild(c);
-  }
-  const by={}; (r.lines||[]).forEach(l=>(by[l.layer]||=[]).push(l));
-  const s=el('div'); s.appendChild(el('h2',null,`BOM — ${(r.lines||[]).length} dòng`));
-  LAYER_ORDER.forEach(L=>{
-    if(!by[L]) return;
-    const d=el('div','layer card');
-    const h=el('h3'); h.style.borderLeftColor=`var(--l-${L})`;
-    h.appendChild(el('span',null,LAYER_VN[L]||L));
-    h.appendChild(el('span','hint',`${by[L].length} dòng`)); d.appendChild(h);
-    by[L].forEach(l=>{
-      const ln=el('div','line');
-      const top=el('div','row');
-      top.appendChild(el('span','pn',l.part_number));
-      top.appendChild(el('span',null,`×${l.qty} ${l.unit||'cái'}`));
-      if(l.source==='manual') top.appendChild(el('span','pill','nhập tay'));
-      if(l.confidence!=null&&l.confidence<0.9)
-        top.appendChild(el('span','pill',`tin cậy ${Math.round(l.confidence*100)}%`));
-      ln.appendChild(top);
-      if(l.rule_code) ln.appendChild(el('div','why',`${l.rule_code}: ${l.rationale}`));
-      else if(l.rationale) ln.appendChild(el('div','why',l.rationale));
-      d.appendChild(ln);
-    });
-    s.appendChild(d);
-  });
-  o.appendChild(s);
-  if((r.warnings||[]).length){
-    const info=r.warnings.filter(x=>x.severity==='info');
-    const real=r.warnings.filter(x=>x.severity!=='info');
-    if(info.length){
-      const w=el('div'); w.appendChild(el('h2',null,'Engine đã tự quyết'));
-      info.forEach(x=>{ const c=el('div','card');
-        c.appendChild(el('div',null,'✓ '+x.message));
-        c.appendChild(dbg(x));
-        w.appendChild(c); });
-      o.appendChild(w);
-    }
-    if(real.length){
-      const w=el('div'); w.appendChild(el('h2',null,`Cảnh báo — ${real.length}`));
-      real.forEach(x=>w.appendChild(problemCard(x, x.severity==='error'?'err':'warn')));
-      o.appendChild(w);
-    }
-  }
-  const g=el('div');
-  g.appendChild(el('h2',null,`Cần bạn quyết định — ${(r.gaps||[]).length} mục`));
-  if(!(r.gaps||[]).length) g.appendChild(el('div','hint','không còn mục nào'));
-  (r.gaps||[]).forEach(x=>g.appendChild(problemCard(x,'gapc')));
-  o.appendChild(g);
-}
-
-/* ── Hiển thị vấn đề theo 3 phần (Prompt sửa cách báo lỗi) ──────────────────
-   1. Sai ở đâu · 2. Cần sửa gì · 3. Sửa như thế nào
-   Mọi thứ dài dòng — catalog, Cv, số trang, logic — nằm trong <details> Chi tiết,
-   mặc định GẬP LẠI. Trước đây rationale 600+ ký tự hiện thẳng ra, người dùng phải
-   đọc 8 câu mới biết cần điền ô nào. */
-function problemCard(x, cls){
+/* Vấn đề hiện theo 3 phần: sai ở đâu · cần sửa gì · sửa thế nào.
+   Chi tiết dài (catalog, Cv, số trang) gập trong <details>. */
+function problemCard(x,color){
   const c=el('div','card');
-  const h=el('div','row');
-  h.appendChild(el('span','mono '+cls, x.rule_code||x.code||'?'));
-  h.appendChild(el('span',null, x.what || x.reason || x.message || ''));
+  const h=el('div'); h.style.cssText='display:flex;gap:8px;align-items:baseline;flex-wrap:wrap';
+  const code=el('span','mono',x.rule_code||x.code||'?'); code.style.color=color;
+  h.appendChild(code);
+  h.appendChild(el('span',null,x.what||x.reason||x.message||''));
   c.appendChild(h);
-  if(x.field){
-    const r=el('div','why'); r.textContent='Sai ở: → '+x.field; c.appendChild(r);
-  }
-  if(x.fix){
-    const r=el('div','why'); r.textContent='Cần sửa: → '+x.fix; c.appendChild(r);
-  }
-  if(x.options && x.options.length){
-    const r=el('div','row'); r.style.marginTop='4px';
+  if(x.field) c.appendChild(el('div','why','Sai ở: → '+x.field));
+  if(x.fix)   c.appendChild(el('div','why','Cần sửa: → '+x.fix));
+  if(x.options&&x.options.length){
+    const r=el('div'); r.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-top:6px';
     r.appendChild(el('span','why','Chọn:'));
-    x.options.slice(0,8).forEach(o=>{
-      const b=el('button','ghost',String(o));
-      b.onclick=()=>applyChoice(x.field,o);
-      r.appendChild(b); });
+    x.options.slice(0,8).forEach(o=>{const b=el('button','ghost',String(o));
+      b.onclick=()=>applyChoice(x.field,o); r.appendChild(b);});
     c.appendChild(r);
-  } else if(x.how){
-    const r=el('div','why'); r.textContent='Sửa như thế nào: → '+x.how; c.appendChild(r);
-  }
-  c.appendChild(dbg(x));
+  } else if(x.how) c.appendChild(el('div','why','Sửa như thế nào: → '+x.how));
+  const d=x.detail||x.rationale;
+  if(d){ const dt=el('details'); dt.appendChild(el('summary',null,'Chi tiết / Debug'));
+    dt.appendChild(el('div','why',typeof d==='string'?d:JSON.stringify(d,null,1)));
+    c.appendChild(dt); }
   return c;
 }
-function dbg(x){
-  const d=x.detail || x.rationale;
-  if(!d) return el('span');
-  const dt=el('details'); dt.appendChild(el('summary',null,'Chi tiết / Debug'));
-  dt.appendChild(el('div','why', typeof d==='string'?d:JSON.stringify(d,null,1)));
-  return dt;
-}
-/* Bấm một lựa chọn là điền thẳng vào ô cấu hình — không bắt người dùng tự đi tìm. */
 function applyChoice(field,val){
-  const inp=document.querySelector(`[data-k="${field}"]`)||
-            document.querySelector(`[data-c="${field}"]`);
-  if(!inp){ note('không tìm thấy ô '+field); return; }
-  inp.value=String(val).replace(/^cỡ /,'');
-  tab('cfg'); inp.focus();
-  note(`đã đặt ${field} = ${inp.value} — bấm Dựng BOM lại`);
+  const i=document.querySelector(`[data-k="${field}"]`)||
+          document.querySelector(`[data-c="${field}"]`);
+  if(!i){ $('#sub').textContent='không tìm thấy ô '+field; return; }
+  i.value=String(val).replace(/^cỡ /,''); tab('cfg'); i.focus();
+  $('#sub').textContent=`đã đặt ${field}=${i.value} — bấm Dựng BOM lại`;
+}
+
+function renderBom(r){
+  const v=$('#v-bom'); v.innerHTML='';
+  const lines=r.lines||[], gaps=r.gaps||[], warns=r.warnings||[];
+  const box=el('div','stat');
+  [['#35D4AA',lines.length,'dòng BOM'],
+   ['#F0A947',warns.filter(w=>w.severity!=='info').length,'cảnh báo'],
+   ['#F2637A',gaps.length,'cần bạn quyết']].forEach(([c,n,l])=>{
+    const b=el('div','sbox'); const x=el('div','snum',String(n)); x.style.color=c;
+    b.appendChild(x); b.appendChild(el('div','slab',l)); box.appendChild(b);});
+  v.appendChild(box);
+  if(gaps.length){ const a=el('div','alert');
+    a.innerHTML=`<b>⚠ BOM chưa đầy đủ</b> — còn ${gaps.length} mục cần bạn quyết định.`;
+    v.appendChild(a); }
+
+  const info=warns.filter(w=>w.severity==='info');
+  if(info.length){
+    const s=el('div'); s.appendChild(el('h2',null,'Engine đã tự quyết'));
+    info.forEach(w=>{const c=el('div','card');
+      c.appendChild(el('div',null,'✓ '+(w.message||w.what||'')));
+      if(w.rationale){const dt=el('details');
+        dt.appendChild(el('summary',null,'Chi tiết / Debug'));
+        dt.appendChild(el('div','why',w.rationale)); c.appendChild(dt);}
+      s.appendChild(c);});
+    v.appendChild(s);
+  }
+
+  const by={}; lines.forEach(l=>(by[l.layer]||=[]).push(l));
+  const s=el('div'); s.appendChild(el('h2',null,'BOM theo tầng'));
+  const tb=el('table');
+  const th=el('thead');
+  th.innerHTML='<tr><th>Thiết bị</th><th>Lý do</th><th style="text-align:right">SL</th></tr>';
+  tb.appendChild(th);
+  const tbody=el('tbody');
+  LAYER_ORDER.forEach(L=>{
+    if(!by[L]) return;
+    const hr=el('tr'); const hd=el('td'); hd.colSpan=3;
+    hd.style.cssText=`color:var(--l-${L});font-size:11px;font-weight:600;letter-spacing:.5px`;
+    hd.textContent=LAYER_VN[L]||L; hr.appendChild(hd); tbody.appendChild(hr);
+    by[L].forEach(l=>{
+      const tr=el('tr');
+      const c1=el('td'); c1.appendChild(el('div','mono',l.part_number));
+      if(l.source==='manual') c1.appendChild(el('span','pill','nhập tay'));
+      tr.appendChild(c1);
+      const c2=el('td','why');
+      c2.textContent=(l.rule_code?l.rule_code+': ':'')+String(l.rationale||'').slice(0,110);
+      if(l.confidence!=null&&l.confidence<0.9)
+        c2.appendChild(el('div','pill',`tin cậy ${Math.round(l.confidence*100)}% — kiểm lại`));
+      tr.appendChild(c2);
+      const c3=el('td','mono'); c3.style.textAlign='right'; c3.textContent=l.qty;
+      tr.appendChild(c3); tbody.appendChild(tr);
+    });
+  });
+  tb.appendChild(tbody); s.appendChild(tb); v.appendChild(s);
+
+  const real=warns.filter(w=>w.severity!=='info');
+  if(real.length){ const w=el('div'); w.appendChild(el('h2',null,'Cảnh báo'));
+    real.forEach(x=>w.appendChild(problemCard(x,x.severity==='error'?'#F2637A':'#F0A947')));
+    v.appendChild(w); }
+  const gg=el('div'); gg.appendChild(el('h2',null,'Cần bạn quyết định'));
+  if(!gaps.length) gg.appendChild(el('div','hint','không còn mục nào'));
+  gaps.forEach(x=>gg.appendChild(problemCard(x,'#F2637A')));
+  v.appendChild(gg);
+}
+
+/* ── SƠ ĐỒ: bố cục tidy-tree, KHÔNG THỂ chồng lấn ────────────────────────────
+   "Không chồng lấn" được bảo đảm BẰNG CẤU TRÚC, không bằng canh tay:
+     · cột theo ĐỘ SÂU; độ rộng cột = box rộng nhất TRONG cột đó
+     · mỗi node LÁ chiếm một khe dọc RIÊNG; node cha nằm giữa các con
+   Hai điều đó ⇒ hai node không bao giờ trùng vùng.
+   Không có toạ độ nào cố định sẵn — đây đúng chỗ prototype vỡ (mainY=380 cứng,
+   và hàng phụ kiện rộng 210px nhét trong cột 176px). */
+const BOXH=44, VGAP=10, HGAP=48, PADX=16, PADY=16, CHARW=6.4;
+function boxW(n){
+  const a=(n.name||n.type||'').length, b=(n.code||'').length;
+  return Math.max(126, Math.min(268, Math.round(Math.max(a,b*0.95)*CHARW)+24));
+}
+function layoutTree(root){
+  const levels=[];
+  for(const [n,,d] of walk(root)) (levels[d]||=[]).push(n);
+  const colW=levels.map(l=>Math.max(...l.map(boxW)));
+  const colX=[]; let x=PADX;
+  colW.forEach((w,i)=>{ colX[i]=x; x+=w+HGAP; });
+  const pos=new Map(); let cursor=PADY;
+  (function place(n,d){
+    const kids=n.children||[];
+    if(!kids.length){ pos.set(n.id,{x:colX[d],y:cursor,w:colW[d]}); cursor+=BOXH+VGAP; return; }
+    kids.forEach(c=>place(c,d+1));
+    const ys=kids.map(c=>pos.get(c.id).y);
+    pos.set(n.id,{x:colX[d],y:(Math.min(...ys)+Math.max(...ys))/2,w:colW[d]});
+  })(root,0);
+  return {pos,width:Math.max(x-HGAP+PADX,200),height:Math.max(cursor-VGAP+PADY,BOXH+2*PADY)};
+}
+function renderDiagram(){
+  const v=$('#v-diagram');
+  if(!TREE){ v.innerHTML='<div class="hint">chưa có cây</div>'; return; }
+  const {pos,width,height}=layoutTree(TREE);
+  const svg=sv('svg',{viewBox:`0 0 ${width} ${height}`,width:width,height:height,
+    style:`min-width:${width}px`});
+  for(const [n] of walk(TREE)){
+    const a=pos.get(n.id);
+    (n.children||[]).forEach(c=>{
+      const b=pos.get(c.id);
+      const x1=a.x+a.w, y1=a.y+BOXH/2, x2=b.x, y2=b.y+BOXH/2, mx=x1+(x2-x1)/2;
+      svg.appendChild(sv('path',{d:`M${x1},${y1} H${mx} V${y2} H${x2}`,
+        fill:'none',stroke:'#3A4150','stroke-width':1.5}));
+    });
+  }
+  for(const [n] of walk(TREE)){
+    const p=pos.get(n.id), L=layerOf(n.type), st=statusOf(n);
+    svg.appendChild(sv('rect',{x:p.x,y:p.y,width:p.w,height:BOXH,rx:6,
+      fill:'#1C202B',stroke:`var(--l-${L})`,'stroke-width':1.6,
+      'stroke-dasharray': st==='specified'?'':st==='type_only'?'5,3':'2,3'}));
+    const cap=Math.floor((p.w-20)/CHARW);
+    const t1=sv('text',{x:p.x+10,y:p.y+18,'font-size':11,fill:'#E8EAF0','font-weight':600});
+    t1.textContent=(n.name||n.type).slice(0,cap);
+    svg.appendChild(t1);
+    const t2=sv('text',{x:p.x+10,y:p.y+33,'font-size':10,fill:`var(--l-${L})`,
+      'font-family':'monospace'});
+    t2.textContent=(n.code||(st==='type_only'?'(chưa chọn mã)':'(chưa nhập)')).slice(0,cap);
+    svg.appendChild(t2);
+  }
+  v.innerHTML='';
+  v.appendChild(el('div','hint',
+    'Sơ đồ sinh từ cây: cột theo cấp, mỗi lá một khe riêng — bố cục tính từ nội dung nên không chồng lấn.'));
+  const w=el('div','diagwrap'); w.style.marginTop='10px';
+  w.appendChild(svg); v.appendChild(w);
 }
 
 function tab(name){
-  ['node','cfg','bom'].forEach(t=>$('#tab-'+t).style.display = t===name?'':'none');
-  document.querySelectorAll('.tabs button').forEach(b=>
-    b.classList.toggle('on', b.dataset.tab===name));
+  ['tree','cfg','bom','diagram'].forEach(t=>$('#v-'+t).classList.toggle('active',t===name));
+  document.querySelectorAll('.tab').forEach(b=>
+    b.classList.toggle('active',b.dataset.tab===name));
+  if(name==='diagram') renderDiagram();
 }
-document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
 $('#run').onclick=run;
-$('#undo').onclick=doUndo; $('#redo').onclick=doRedo;
-$('#dup').onclick=dupSel; $('#del').onclick=delSel; $('#fit').onclick=fit;
-$('#manual').onclick=()=>{ const n=byId(sel); if(!n) return;
-  push(); n.manual=!n.manual; if(n.manual) n.parsed=null; checkCode(n); };
+$('#addStation').onclick=addStation;
+$('#undo').onclick=undo;
 $('#csv').onclick=()=>{ if(lastProject) location.href='/api/csv?project='+lastProject; };
+addEventListener('keydown',e=>{
+  if(e.target.matches('input,select,textarea')) return;
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){ e.preventDefault(); undo(); }
+});
 boot();
 </script>
 </body>

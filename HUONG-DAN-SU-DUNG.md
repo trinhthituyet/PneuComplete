@@ -80,97 +80,84 @@ Cách này cửa sổ đen **phải để nguyên, đừng đóng** — đóng l
 
 ## 2. Dùng phần mềm
 
-Phần mềm làm việc trên **sơ đồ đấu nối**: bạn vẽ các thiết bị thành khối và nối
-dây giữa chúng, thay vì chỉ liệt kê danh sách.
+Phần mềm làm việc trên **cây dự án**: bạn khai thiết bị theo quan hệ *cái gì gắn
+vào cái gì*, đúng như thực tế lắp máy.
 
-### Bước 1 — Đưa thiết bị vào sơ đồ
+### Chỉ cần nhập MÃ XY-LANH
 
-Cột trái là danh sách **nhóm thiết bị** (Xy-lanh, Van điều khiển, Bộ xử lý khí,
-PLC, Tuỳ chỉnh…). Có hai cách:
+Bấm **+ Trạm** ở cột trái. Phần mềm tạo sẵn một trạm gồm **1 van + 1 xy-lanh**,
+cả hai để trống mã. Bạn chỉ gõ **mã xy-lanh**:
 
-- **Kéo** một nhóm từ cột trái vào vùng giữa, hoặc **bấm** vào nhóm đó
-- **Nhập nhanh nhiều xy-lanh:** dán danh sách mã vào ô "Nhập nhanh", mỗi dòng
-  một mã, rồi bấm *Tạo node xy-lanh*. Viết `MGPM25-200Z-M9BL x4` để đặt số lượng.
+```
+CDM2L32-500Z
+```
 
-Khối mới hiện ra **rỗng**, có tiêu đề là tên nhóm và **màu riêng theo loại**
-(xy-lanh xanh, van tím, xử lý khí xanh lá, ống cam, phụ kiện vàng, điện hồng).
+Từ một mã đó phần mềm tự ra: 2 tiết lưu (đúng cỡ ren cửa xy-lanh) · 2 cảm biến ·
+1 van (đúng cỡ theo lưu lượng) · floating joint · ống · bộ xử lý khí.
 
-### Bước 2 — Gõ mã hàng vào khối
+> **Để trống mã van là có chủ đích.** Phần mềm tính cỡ van từ lưu lượng khí của
+> các xy-lanh bạn nhập. Muốn tự chọn thì gõ mã vào, phần mềm sẽ không ghi đè.
 
-Gõ vào ô trong khối rồi bấm ra ngoài. Phần mềm kiểm ngay:
+### Cây phân cấp — cái gì là con của cái gì
 
-- **Viền xanh + dấu ✓** → hiểu được mã, hiện luôn thông số (đường kính, hành trình)
-- **Viền đỏ + dấu ✗** → ghi rõ *"chưa hiểu phần …"*
-- **Viền xám nét đứt** → bạn đã bật *mã tự do*, phần mềm không kiểm
+```
+Bộ xử lý khí (nguồn chung)
+└── Manifold                     1 cái cho cả máy
+    ├── Trạm SV1                 ← van
+    │   └── Xy-lanh              ← BẠN NHẬP MÃ Ở ĐÂY
+    │       ├── Tiết lưu cửa A   ← vặn vào cửa xy-lanh
+    │       └── Tiết lưu cửa B
+    └── Trạm SV2 → ...
+```
 
-Khi mã đúng, phần mềm còn **tự thay các cổng của khối** bằng cổng thật đọc từ
-catalog — ví dụ xy-lanh hiện đúng 2 cửa khí `A (Rc1/8)` và `B (Rc1/8)`.
+Ba quan hệ này lấy từ catalog, không phải quy ước:
 
-### Bước 3 — Nối dây
+- **Tiết lưu là con của xy-lanh** — nó vặn trực tiếp vào cửa xy-lanh (ren ngoài
+  R1/8 vào cửa trong Rc1/8), nên cỡ ren suy ra được, bạn không phải nhập.
+- **Một manifold cho cả máy** — BOM máy thật: 11 van dùng **1** đế `SS5Y5-20-12`
+  12 station, không phải 11 đế rời.
+- **Giảm âm gắn ở manifold** — xả là chung, BOM thật chỉ có 2 cái cho 11 van.
 
-Cổng là các **điểm tròn** quanh khối: cửa khí ở hai bên, cửa điện ở đáy.
+Nếu bạn đặt sai chỗ, phần mềm **tự dịch về đúng cha và nói rõ đã dịch gì** — xem
+dòng chữ cạnh tên phần mềm sau khi bấm Dựng BOM.
 
-1. Bấm vào một cổng → vào chế độ nối, dây bám theo con trỏ
-2. Bấm cổng đích → xong
+### Thêm thiết bị
 
-Giữa hai lần bấm bạn vẫn **di chuyển và phóng to** được để nhắm đúng cổng. Nếu
-quen tay kéo-thả thì kéo từ cổng nguồn sang cổng đích cũng được. **Esc** để huỷ.
+Bấm một node → khung **Thiết bị con** → chọn loại → **+ Thêm**. Danh sách chỉ
+hiện loại **lắp được vào đó**, nên không thể tạo cây sai.
 
-Phần mềm tự đoán loại kết nối theo cặp thiết bị (van → xy-lanh là *điều khiển*,
-bộ xử lý khí → van là *nguồn cấp*). Không đoán được thì nó **hỏi** chứ không tự
-chọn bừa. Bấm vào dây để đổi loại.
+### Ba màu trạng thái
 
-> **Vì sao phải nối dây:** nhờ đó phần mềm biết 8 cụm van dùng **chung một** bộ
-> xử lý khí, biết van nào điều khiển xy-lanh nào, và lấy được điện áp coil từ
-> khối PLC. Danh sách phẳng không diễn đạt được những quan hệ này.
+| Màu | Nghĩa |
+|---|---|
+| 🟢 xanh | Đã chốt mã — sẵn sàng lên BOM |
+| 🟡 vàng | Mới biết loại (đã ghi thuộc tính, chưa có mã) |
+| 🔴 đỏ | Trống |
 
-### Bước 4 — Khai thêm ở cột phải
+Vòng tròn trên đầu là tỉ lệ đã chốt mã.
 
-Bấm một khối → thẻ **Node** hiện chi tiết: nhãn, mã hàng, số lượng, loại van, và
-công tắc **"Mã tự do"** cho thiết bị ngoài catalog SMC.
+### Bốn tab
 
-Thẻ **Cấu hình** chứa mục *"Cần bạn khai"* — những thông tin phần mềm **không thể
-tự suy**, mỗi dòng kèm lý do. Để trống cũng được, phần mềm sẽ báo ở *"Cần bạn
-quyết định"* thay vì đoán.
-
-### Bước 5 — Bấm "Dựng BOM"
-
-Phần mềm **tự quyết** những gì nó tính được, không hỏi bạn nữa:
-
-- **Cỡ van** — tính từ lưu lượng khí của các xy-lanh bạn nhập
-- **Loại van** — tác động kép → van 5/2, tác động đơn → van 3/2
-
-> **Nhưng loại van thì hãy kiểm lại.** Máy thật thường dùng lẫn nhiều loại: cơ cấu
-> kẹp dùng 5/2 một cuộn, cơ cấu cần dừng giữa hành trình dùng 5/3. Phần mềm không
-> biết chức năng từng cơ cấu nên nó đoán là 5/2 hai cuộn và **hiện độ tin cậy 50%**
-> trên dòng đó. Sửa ở từng khối để lên 90%.
-
-
-Thẻ **BOM** hiện:
-
-- **Đọc được từ sơ đồ** — mấy vùng khí, xy-lanh nào đã có van, điện áp lấy từ PLC
-- **Tính toán** — lực đẩy/kéo, khí tiêu thụ
-- **BOM** theo 6 tầng, dòng nhập tay có nhãn *"nhập tay"*
-- **Engine đã tự quyết** — những gì phần mềm tự tính, để bạn kiểm lại
-- **Cảnh báo** và **Cần bạn quyết định** — mỗi mục chỉ 3 dòng ngắn:
-  *sai ở đâu · cần sửa gì · bấm chọn giá trị*. Muốn xem lý do dài, số trang
-  catalog thì mở **Chi tiết / Debug**.
+| Tab | Nội dung |
+|---|---|
+| **Cây dự án** | khai thiết bị |
+| **Cấu hình** | những gì phần mềm không suy được, mỗi dòng kèm lý do |
+| **BOM** | kết quả, kèm *Engine đã tự quyết* để bạn kiểm lại |
+| **Sơ đồ** | vẽ lại cây kèm mã đã chọn — nhìn là biết lắp gì |
 
 Bấm **CSV** để mở bằng Excel.
 
-### Thanh công cụ
+### Khi phần mềm cần bạn quyết
 
-| Nút | Việc |
-|---|---|
-| ↶ ↷ | Hoàn tác / làm lại (`Ctrl+Z`, `Ctrl+Shift+Z`) |
-| Nhân bản | Copy khối đang chọn — tiện khi có nhiều cụm giống nhau |
-| Xoá | Xoá khối hoặc dây đang chọn (`Delete`) |
-| Vừa khung | Thu cả sơ đồ vào vừa màn hình |
-| Mã tự do | Bật/tắt nhanh cho khối đang chọn |
+Mỗi mục chỉ 3 dòng ngắn:
 
-Lăn chuột để phóng to/nhỏ, kéo vùng trống để di chuyển sơ đồ.
-
----
+```
+R-FRL-01  ⚠ thiếu Cỡ cửa đường trục chính
+Sai ở:    → main_line_port_size
+Cần sửa:  → Chọn Cỡ cửa đường trục chính
+Chọn:     [1/8] [1/4] [3/8] [1/2]      ← bấm là điền thẳng vào Cấu hình
+▸ Chi tiết / Debug                      ← lý do dài, số trang catalog
+```
 
 ## 3. Ba điều cần hiểu để dùng đúng
 

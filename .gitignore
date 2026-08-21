@@ -67,3 +67,7 @@ __pycache__/
 # sơ đồ/ảnh tham khảo bạn đưa vào để đối chiếu khi thiết kế UI — cũng là đầu vào,
 # không phải mã nguồn. UI thật nằm trong web/index.html.
 /so-do-*.html
+# ghi chú/thông tin bạn dán vào — cùng loại đầu vào, không phải mã nguồn.
+# note.txt (do bạn tạo trên GitHub) vẫn theo dõi, nên không dùng mẫu *.txt chung.
+/Thông tin*.txt
+/thong-tin*.txt

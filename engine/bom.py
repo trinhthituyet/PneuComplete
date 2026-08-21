@@ -66,6 +66,16 @@ DEFAULT_PROJECT = {
     "tube_roll_length_m": 20,
     "sealant": True,
     "speed_controller_shape": "elbow",
+    # ── SỞ THÍCH (§3 của spec cây): nhiều phương án đều lắp được, chọn theo ý
+    # người dùng. Khai MỘT LẦN ở mức dự án, không phải từng thiết bị. Đây là nhóm
+    # engine có thể HỌC từ BOM cũ, khác hẳn nhóm ràng buộc kỹ thuật.
+    #   valve_piping     : cửa van ra ống one-touch (C6/C8…) hay ren (01/02…).
+    #                      Phụ thuộc cách đi ống của bạn, không suy được.
+    #   fitting_shape    : đầu nối thẳng / vuông (chữ L) / T
+    #   exhaust_silencer : có gắn giảm âm ở cửa xả manifold hay không
+    "valve_piping": "onetouch",
+    "fitting_shape": "elbow",
+    "exhaust_silencer": True,
     # Họ speed controller: AS1-E = push-lock (hậu tố A) — đúng loại BOM thật dùng.
     # Đổi sang "AS-E-E" nếu muốn loại núm xoay thường.
     "speed_controller_series": "AS1-E",

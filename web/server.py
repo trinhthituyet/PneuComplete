@@ -16,6 +16,7 @@ API:
     GET  /api/defaults         cấu hình mặc định + danh sách khoá cần khai
     GET  /api/groups           nhóm thiết bị + cổng mặc định (cho palette canvas)
     GET  /api/ports?code=X&group=Y  cổng THẬT của một mã hàng
+    GET  /api/codes?group=X    mã hàng gợi ý cho một nhóm (đọc DB, không hard-code)
     GET  /api/graph?project=N  đọc lại sơ đồ đã lưu
     POST /api/bom              nhận CẢ HAI: {inputs,config} phẳng, hoặc {graph,config}
 
@@ -43,6 +44,7 @@ from engine import bom                      # noqa: E402
 from engine import graph as G               # noqa: E402
 from engine import materialize              # noqa: E402
 from engine import parser as P              # noqa: E402
+from engine import tree as T                # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 
@@ -61,6 +63,14 @@ NEEDS_INPUT = [
      "Phụ thuộc CHỨC NĂNG từng cơ cấu — khai riêng cho từng xy-lanh ở bảng bên trên."),
     ("manifold_type", "Kiểu manifold",
      "Type 20 và Type 20P dùng end plate khác nhau; chọn sai thì không lắp được."),
+    # Ba khoá SỞ THÍCH — nhiều phương án đều lắp được nên engine không tự chọn,
+    # nhưng chỉ hỏi MỘT LẦN cho cả dự án, không hỏi từng thiết bị.
+    ("valve_piping", "Cửa van: one-touch hay ren",
+     "Cắm ống trực tiếp (C6/C8) hay vặn đầu nối vào ren (01/02) — tuỳ cách bạn đi ống."),
+    ("fitting_shape", "Kiểu đầu nối",
+     "Thẳng · vuông (chữ L) · T. Cùng lắp được, chọn theo chỗ hẹp/rộng của máy."),
+    ("exhaust_silencer", "Gắn giảm âm cửa xả",
+     "Trên manifold xả là chung nên chỉ cần 1–2 cái, không phải mỗi van một cái."),
 ]
 
 
@@ -85,12 +95,44 @@ def api_groups():
         # cặp nhóm → loại cạnh mặc định, để UI không phải hỏi mỗi lần vẽ dây
         "default_edge_kind": [{"from": a, "to": b, "kind": k}
                               for (a, b), k in G.DEFAULT_EDGE_KIND.items()],
+        # Quy tắc cha–con để UI biết loại nào thêm được vào đâu. UI KHÔNG
+        # hard-code danh sách này — thêm họ thiết bị mới chỉ sửa engine/tree.py.
+        "parent_of": {k: {"allowed": [a for a in v[0]], "why": v[1]}
+                      for k, v in T.PARENT_OF.items()},
+        "singleton": list(T.SINGLETON),
     }
 
 
 def api_ports(con, code, group):
     """Cổng thật của một mã. Gọi sau khi /api/parse thành công."""
     return {"ports": G.ports_for(con, code, group, materialize.load_templates())}
+
+
+def api_codes(con, group):
+    """Mã hàng gợi ý cho một nhóm thiết bị — đọc từ DB, KHÔNG hard-code.
+
+    Lấy các mã đã có trong bảng `part` thuộc đúng layer của nhóm. Chỉ là GỢI Ý:
+    người dùng vẫn gõ mã tự do được, và /api/parse mới là chỗ kiểm.
+    """
+    layer = (G.GROUPS.get(group) or {}).get("layer")
+    if not layer:
+        return {"codes": []}
+    # part không mang layer, nên lần theo series → catalog_id của các họ đã biết
+    rows = con.execute(
+        """select distinct p.part_number from part p
+           join series s on s.id = p.series_id
+           where exists (select 1 from code_slot cs where cs.series_id = s.id)
+           order by p.part_number limit 400""").fetchall()
+    want = {"actuator": ("CDM2", "CM2", "MGP", "CDQS", "CQS", "CDG", "CJ2", "MHZ"),
+            "valve": ("SY", "SS5Y", "VT"),
+            "air_prep": ("AC", "AR", "AF", "AW"),
+            "accessory": ("AS",),
+            "piping": ("TU", "KQ2", "KSL"),
+            "electrical": ("D-M9", "ISE", "ZS"),
+            }.get(layer, ())
+    out = [r["part_number"] for r in rows
+           if not want or r["part_number"].upper().startswith(want)]
+    return {"codes": out[:60], "layer": layer}
 
 
 def api_parse(con, code):
@@ -110,6 +152,9 @@ def api_bom(con, payload):
     Giữ tương thích ngược là có chủ đích: bảng phẳng vẫn là cách nhập nhanh nhiều
     xy-lanh (mục 4 của tài liệu yêu cầu), không bỏ.
     """
+    tr = payload.get("tree")
+    if tr:
+        return api_bom_tree(con, payload, tr)
     gr = payload.get("graph")
     if gr:
         return api_bom_graph(con, payload, gr)
@@ -138,7 +183,40 @@ def api_bom(con, payload):
     }
 
 
-def api_bom_graph(con, payload, gr):
+def api_bom_tree(con, payload, root):
+    """Dựng BOM từ CÂY dự án. Cây là cách nhập chính, thay canvas kéo dây.
+
+    Ba bước, thứ tự có lý do:
+      1. validate  — báo chỗ đặt sai, KHÔNG sửa
+      2. normalize — dịch về đúng cha, và NÓI RA đã dịch gì
+      3. to_graph  — dịch cha–con thành cạnh để dùng lại nguyên resolver đã có
+    """
+    problems = T.validate(root)
+    root, fixed = T.normalize(root)
+    gr = T.to_graph(root)
+
+    res = api_bom_graph(con, payload, gr, tree=root)
+    if res.get("error"):
+        return res
+
+    warns = list(res.get("warnings") or [])
+    for pb in problems:
+        warns.append({**pb, "code": pb["rule_code"],
+                      "message": pb["what"], "rationale": pb.get("detail") or ""})
+    if fixed:
+        warns.append({
+            "severity": "info", "code": "TREE_NORMALIZED", "rule_code": "T-PARENT-01",
+            "what": f"đã dịch {len(fixed)} thiết bị về đúng cha",
+            "message": "Đã dịch về đúng cha: " + " · ".join(fixed),
+            "fix": "Kiểm lại cây bên trái", "rationale": "",
+            "detail": "\n".join(fixed)})
+    res["warnings"] = warns
+    res["tree"] = root
+    res["tree_fixed"] = fixed
+    return res
+
+
+def api_bom_graph(con, payload, gr, tree=None):
     res_g = G.resolve(con, gr)
     if not res_g["inputs"] and not res_g["manual_lines"]:
         return {"error": "sơ đồ chưa có thiết bị nào dựng được BOM "
@@ -166,7 +244,16 @@ def api_bom_graph(con, payload, gr):
         if f:
             n["code"] = f["code"]
             n["filled_by_bom"] = True
-    G.save(con, res["project_id"], gr)
+    if tree is not None:
+        # điền mã vào chính CÂY (nguồn sự thật khi nhập bằng cây), rồi lưu cây
+        for n, _, _ in T.walk(tree):
+            f = fill.get(n.get("id"))
+            if f and not n.get("code"):
+                n["code"] = f["code"]
+                n["filled_by_bom"] = True
+        T.save(con, res["project_id"], tree)
+    else:
+        G.save(con, res["project_id"], gr)
     return {
         "project_id": res["project_id"],
         "project": {k: v for k, v in res["project"].items()},
@@ -250,12 +337,14 @@ class Handler(BaseHTTPRequestHandler):
                                  "valve_functions": list(bom.VALVE_FUNCTION)})
             elif u.path == "/api/groups":
                 self._send(200, api_groups())
+            elif u.path == "/api/codes":
+                self._send(200, api_codes(con, (q.get("group") or [""])[0]))
             elif u.path == "/api/ports":
                 self._send(200, api_ports(con, (q.get("code") or [""])[0],
                                           (q.get("group") or ["custom"])[0]))
             elif u.path == "/api/graph":
                 pid = int((q.get("project") or ["0"])[0])
-                self._send(200, {"graph": G.load(con, pid)})
+                self._send(200, {"graph": G.load(con, pid), "tree": T.load(con, pid)})
             elif u.path == "/api/parse":
                 self._send(200, api_parse(con, (q.get("code") or [""])[0]))
             elif u.path == "/api/csv":

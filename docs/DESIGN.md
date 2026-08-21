@@ -504,3 +504,60 @@ người ký BOM thấy chỗ cần kiểm. Bạn khai tay thì 90%.
 
 `tests/test_ui.js` nay kiểm cả **CSS** `.node .pts`, vì bài học: bản trước test
 `portPos()` xanh mà UI vẫn sai — test chỉ kiểm một phía của hợp đồng.
+
+
+---
+
+## 11. Cây dự án thay canvas (2026-08-21)
+
+Canvas kéo dây (§10.4) bị **thay hẳn** bằng cây phân cấp. Lý do: cây khớp đúng
+quan hệ vật lý cha–con, nên (a) không phải vẽ dây, (b) mỗi quan hệ cho engine suy
+được thuộc tính của con → ít thông tin phải nhập hơn.
+
+### Ba quan hệ sửa lại — đo được, không phải quy ước
+
+| Prototype của người dùng | Thực tế | Bằng chứng |
+|---|---|---|
+| tiết lưu **ngang hàng** xy-lanh | **con của xy-lanh** | `AS2201F` air_in ren MALE R1/8 ↔ `CDM2L32` air_port FEMALE Rc1/8 |
+| **mỗi van một đế** `stations:1` | **1 manifold** nhiều station | 23-432: 11 van → 1×`SS5Y5-20-12` + 12 gasket + 4 end plate |
+| **mỗi van một giảm âm** | giảm âm ở **manifold** | BOM thật `AN15-02` ×2 cho 11 van |
+
+Giữ nguyên prototype thì BOM thừa ~9 đế + ~7 giảm âm mỗi máy, và thiếu
+gasket/end plate.
+
+`engine/tree.py` khai các quan hệ này thành **dữ liệu** (`PARENT_OF`, `SINGLETON`)
+kèm lý do, không rải if/else. UI đọc qua `/api/groups` nên không hard-code.
+`normalize()` dịch node đặt sai về đúng cha và **báo ra đã dịch gì** — sửa im lặng
+thì người dùng tưởng mình khai sai.
+
+### Ít thông tin nhất — đo được
+
+```
+CHỈ mã xy-lanh           → 5 dòng BOM · còn hỏi: tube_total_m, main_line_port_size
++ 5 giá trị mức DỰ ÁN    → 7 dòng · còn hỏi: KHÔNG
+```
+
+Còn 2 việc để về đúng "một thứ phải nhập": học `tube_color`/`tube_roll_length_m`
+từ BOM cũ, và số hoá đồ thị lưu lượng FRL (giống cách đã làm cho van ở §10.2).
+
+### Ba tầng quy tắc chọn thiết bị
+
+| Tầng | Ví dụ | Xử lý |
+|---|---|---|
+| Ràng buộc | ren tiết lưu = cửa xy-lanh · cỡ gasket = cỡ van | engine **quyết** |
+| Suy từ số | cỡ van từ lưu lượng · station từ số van | engine **tính**, nói ra |
+| Sở thích | `valve_piping` · `fitting_shape` · `exhaust_silencer` | hỏi **1 lần** mức dự án, học được |
+
+### Không chồng lấn — bảo đảm bằng cấu trúc
+
+Bố cục tidy-tree: cột theo **độ sâu**, rộng cột = box rộng nhất *trong cột đó*;
+mỗi **lá** một khe dọc riêng; cha nằm giữa các con. Hai điều đó ⇒ không cặp hộp
+nào giao nhau, không cần canh tay.
+
+Hai lỗi hình học của prototype đã tránh: `mainY = 380` **cố định** (box mọc lên
+nên trạm ≥10 thiết bị bị cắt mất phần trên), và hàng phụ kiện rộng `3×66+2×6 =
+210px` nhét trong cột `176px` → đè sang trạm kế bên.
+
+`tests/test_ui.js` **chứng minh** bằng máy: sinh cây 1/9/40 trạm, tên dài, cây
+lệch (1 trạm 12 con) rồi kiểm **mọi cặp hộp** — 0 cặp giao nhau, mọi hộp nằm trọn
+trong khung.
