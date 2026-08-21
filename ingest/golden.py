@@ -167,11 +167,27 @@ def compare(con, machine):
             continue
         want[c] += l["qty"] or 0
 
-    undet = {c: n for c, n in want.items() if undeterminable(c)}
+    # "KHÔNG ĐO ĐƯỢC" chỉ hợp lệ khi engine THẬT SỰ TỪ CHỐI đoán.
+    #
+    # Từ khi mục 6 của spec buộc engine tự đề xuất loại van, engine KHÔNG còn bỏ
+    # trống van nữa — nó đưa ra mã cụ thể. Giữ nguyên việc loại van khỏi mẫu số là
+    # tự lừa: engine đưa ra một khẳng định đo được mà phép đo lại giả vờ không thấy.
+    #
+    # Nên: một mã chỉ được xếp "không đo được" nếu engine KHÔNG đề xuất gì ở tầng
+    # đó. Engine đã đề xuất thì phải so, kể cả khi so ra sai.
+    got_layers = {l.get("layer") for l in res["lines"]}
+
+    def still_undet(c):
+        if not undeterminable(c):
+            return False
+        # engine có đề xuất dòng nào ở tầng 'valve' không?
+        return "valve" not in got_layers
+
+    undet = {c: n for c, n in want.items() if still_undet(c)}
     scope_want = {c: n for c, n in want.items()
-                  if in_scope(c) and not undeterminable(c)}
+                  if in_scope(c) and c not in undet}
     scope_got = {c: n for c, n in got.items()
-                 if in_scope(c) and not undeterminable(c)}
+                 if in_scope(c) and c not in undet}
 
     exact = {c: (scope_got[c], scope_want[c]) for c in scope_got if c in scope_want}
     right_qty = {c: v for c, v in exact.items() if v[0] == v[1]}

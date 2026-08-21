@@ -28,6 +28,7 @@ Thực tế có ba khoảng trống, tệp này lấp tường minh trong ports_
 import json
 
 from engine import materialize
+from engine import problem as PB
 
 # ── Nhóm thiết bị ────────────────────────────────────────────────────────────
 # layer phải là một trong LAYER_ORDER của index.html (actuator/valve/air_prep/
@@ -36,9 +37,17 @@ from engine import materialize
 # ports mặc định dùng khi node CHƯA có mã hàng (node "khái niệm", vd van chỉ có
 # nhãn "SV1" trong sơ đồ CAD). Khi đã có mã parse được, ports_for() thay bằng cổng
 # THẬT đọc từ interfaces.yaml.
-P = lambda i, kind, direction, label=None, conn=None: {
-    "id": i, "label": label or i, "kind": kind, "direction": direction,
-    "conn": conn}
+# side: cạnh node mà cổng nằm — 'l' trái · 'r' phải · 't' trên · 'b' dưới ·
+# 'e' hàng điện tách riêng dưới cùng. Canvas dùng để bố trí VÀ để biết hướng
+# thoát của dây khi định tuyến vuông góc (mục 1 + 3 của spec).
+# Bố trí lấy theo datasheet, không tự đặt: van 5/2 có 2/A·4/B ở trên, 3/R–1/P–5/S
+# ở dưới (P giữa), coil tách hàng riêng.
+def P(i, kind, direction, label=None, conn=None, side=None):
+    if side is None:
+        side = ("e" if kind == "electrical"
+                else "l" if direction == "in" else "r")
+    return {"id": i, "label": label or i, "kind": kind,
+            "direction": direction, "conn": conn, "side": side}
 
 GROUPS = {
     "cylinder": {
@@ -48,19 +57,23 @@ GROUPS = {
                   P("B", "pneumatic", "bidirectional")]},
     "valve": {
         "label": "Van điều khiển", "layer": "valve",
-        # Van 5/2: 1=P cấp, 2/4=A/B ra, 3/5=R/S xả, 12/14=coil.
-        "ports": [P("1", "pneumatic", "in", "1 / P"),
-                  P("2", "pneumatic", "out", "2 / A"),
-                  P("4", "pneumatic", "out", "4 / B"),
-                  P("3", "pneumatic", "out", "3 / R"),
-                  P("5", "pneumatic", "out", "5 / S"),
+        # Van 5/2 theo ISO 5599-1 / SMC (mục 3 của spec):
+        #   trên : 2/A · 4/B      (ra xy-lanh)
+        #   dưới : 3/R · 1/P · 5/S (P GIỮA, R/S hai bên)
+        #   hàng riêng dưới cùng : 12/coil a · 14/coil b
+        # Thứ tự trong danh sách QUYẾT ĐỊNH thứ tự trái→phải trên cạnh đó.
+        "ports": [P("2", "pneumatic", "out", "2 / A", side="t"),
+                  P("4", "pneumatic", "out", "4 / B", side="t"),
+                  P("3", "pneumatic", "out", "3 / R", side="b"),
+                  P("1", "pneumatic", "in", "1 / P", side="b"),
+                  P("5", "pneumatic", "out", "5 / S", side="b"),
                   P("12", "electrical", "in", "12 / coil a"),
                   P("14", "electrical", "in", "14 / coil b")]},
     "manifold": {
         "label": "Đế manifold", "layer": "valve",
-        "ports": [P("P", "pneumatic", "in", "P cấp"),
-                  P("R", "pneumatic", "out", "R xả"),
-                  P("st", "mechanical", "bidirectional", "station")]},
+        "ports": [P("P", "pneumatic", "in", "P cấp", side="l"),
+                  P("R", "pneumatic", "out", "R xả", side="r"),
+                  P("st", "mechanical", "bidirectional", "station", side="t")]},
     "frl": {
         "label": "Bộ xử lý khí F.R.L.", "layer": "air_prep",
         "is_supply": True,
@@ -167,10 +180,26 @@ def ports_for(con, code, group, templates=None):
             else:
                 shown = size or ""
             lab = f"{pid} ({shown})" if shown else pid
-            out.append({"id": pid, "label": lab,
-                        "kind": ROLE_DOMAIN.get(role, domain),
+            kind = ROLE_DOMAIN.get(role, domain)
+            # Hai cửa khí xy-lanh: A bên trái, B bên phải — dòng khí đọc từ trái
+            # sang phải, nhất quán toàn sơ đồ (mục 3).
+            if pid == "A":
+                side = "l"
+            elif pid == "B":
+                side = "r"
+            elif role == "air_in":
+                side = "l"
+            elif role == "air_out":
+                side = "r"
+            elif kind == "electrical":
+                side = "e"
+            elif kind == "mechanical":
+                side = "t"
+            else:
+                side = "r"
+            out.append({"id": pid, "label": lab, "kind": kind,
                         "direction": "bidirectional", "conn": conn,
-                        "size": size, "standard": std, "role": role})
+                        "side": side, "size": size, "standard": std, "role": role})
     # Cổng ĐIỆN không có trong interfaces.yaml — lấy từ template nhóm.
     have = {p["id"] for p in out}
     for p in GROUPS.get(group, {}).get("ports", []):
@@ -270,28 +299,26 @@ def resolve(con, graph, templates=None):
 
     # 1. cổng lệch miền tín hiệu
     for m in port_mismatches(nodes, edges):
-        warns.append({
-            "severity": "warn", "code": "PORT_KIND_MISMATCH",
-            "rule_code": "G-PORT-01",
-            "message": f"Nối sai loại cổng: {m['why']}",
-            "rationale": "Cổng điện và cổng khí không nối được với nhau. Engine "
-                         "không chặn (có thể bạn đang vẽ nháp) nhưng dòng BOM sinh "
-                         "từ cạnh này không đáng tin.",
-            "detail": m})
+        warns.append(PB.as_warning(PB.problem(
+            "G-PORT-01", "nối sai loại cổng", code="PORT_KIND_MISMATCH",
+            field="edge.kind",
+            subject=m.get("edge"),
+            fix="Xoá dây này rồi nối lại đúng loại cổng",
+            how="cổng khí ↔ cổng khí · cổng điện ↔ cổng điện",
+            severity="warn", detail=m["why"])))
 
     # 2. vùng khí
     zones = supply_zones(nodes, edges)
     info["supply_zones"] = len(zones)
     if len(zones) > 1:
-        warns.append({
-            "severity": "warn", "code": "MULTI_SUPPLY_ZONE",
-            "rule_code": "G-ZONE-01",
-            "message": f"Sơ đồ có {len(zones)} vùng khí độc lập, nhưng luật R-FRL-01 "
-                       f"có scope per_system nên engine chỉ sinh 1 bộ xử lý khí. "
-                       f"Bạn cần tự thêm {len(zones) - 1} bộ nữa.",
-            "rationale": "Đây là hạn chế đã biết của engine, không phải lỗi sơ đồ. "
-                         "Engine báo thiếu thay vì im lặng sinh sai số lượng.",
-            "detail": {"zones": [sorted(z) for z in zones]}})
+        warns.append(PB.as_warning(PB.problem(
+            "G-ZONE-01", f"sơ đồ có {len(zones)} vùng khí, engine chỉ sinh 1 bộ xử lý khí",
+            code="MULTI_SUPPLY_ZONE",
+            field="air_prep", severity="warn",
+            fix=f"Thêm tay {len(zones) - 1} bộ xử lý khí vào BOM",
+            detail="Luật R-FRL-01 có scope per_system nên chỉ ra 1 bộ. Engine báo "
+                   "thiếu thay vì im lặng sinh sai số lượng. Vùng: "
+                   + " | ".join(",".join(sorted(z)) for z in zones))))
 
     # 3. van ↔ xy-lanh
     cmap = control_map(nodes, edges)
@@ -355,12 +382,13 @@ def resolve(con, graph, templates=None):
         config_extra["voltage"] = pv.pop()
         info["voltage_from_plc"] = config_extra["voltage"]
     elif len(pv) > 1:
-        warns.append({
-            "severity": "warn", "code": "MIXED_PLC_VOLTAGE",
-            "rule_code": "G-PLC-01",
-            "message": f"Các van nhận điện áp khác nhau từ PLC ({', '.join(sorted(pv))}). "
-                       f"Engine chưa sinh van theo từng điện áp — hãy khai riêng.",
-            "rationale": "Luật chọn van hiện dùng một giá trị voltage cho cả hệ."})
+        warns.append(PB.as_warning(PB.problem(
+            "G-PLC-01", "các van nhận điện áp khác nhau từ PLC",
+            code="MIXED_PLC_VOLTAGE",
+            field="voltage", severity="warn",
+            fix="Chọn một điện áp ở Cấu hình, hoặc tách thành nhiều lần dựng BOM",
+            options=sorted(pv),
+            detail="Luật chọn van hiện dùng một giá trị voltage cho cả hệ.")))
 
     return {"inputs": inputs, "config_extra": config_extra,
             "manual_lines": manual_lines, "warnings": warns, "info": info}
@@ -391,3 +419,58 @@ def load(con, project_id):
     r = con.execute("select graph_json from project_graph where project_id=?",
                     (project_id,)).fetchone()
     return json.loads(r["graph_json"]) if r else None
+
+
+# ── Mục 5 của spec: sau khi dựng BOM, điền mã hàng ngược lại vào sơ đồ ───────
+
+def fill_codes(graph, lines):
+    """Trả {node_id: {code, qty, why}} cho các node CHƯA có mã.
+
+    Mục tiêu: sơ đồ sau BOM thành as-built — nhìn sơ đồ biết ngay lắp mã gì,
+    không phải tra chéo bảng BOM.
+
+    Gán theo `for_items` (dòng BOM sinh ra vì actuator nào) chứ không theo thứ tự:
+      · node van  → dòng tầng 'valve' phục vụ đúng xy-lanh mà node này điều khiển
+      · node khác → nếu tầng đó chỉ có DUY NHẤT một dòng thì gán, nhiều hơn thì
+        không đoán (thà để trống hơn điền sai mã vào sơ đồ).
+    """
+    nodes = graph.get("nodes") or []
+    edges = graph.get("edges") or []
+    idx = _by_id(nodes)
+    cmap = control_map(nodes, edges)
+
+    # xy-lanh nào do van nào điều khiển → đảo chiều thành van → [mã xy-lanh]
+    valve_serves = {}
+    for cyl_id, vs in cmap.items():
+        code = (idx.get(cyl_id) or {}).get("code")
+        if not code:
+            continue
+        for vid, _, _ in vs:
+            valve_serves.setdefault(vid, set()).add(code)
+
+    by_layer = {}
+    for l in lines:
+        if l.get("source") == "manual":
+            continue
+        by_layer.setdefault(l.get("layer"), []).append(l)
+
+    out = {}
+    for n in nodes:
+        if n.get("code") or n.get("manual"):
+            continue
+        layer = GROUPS.get(n.get("group") or "", {}).get("layer")
+        cands = by_layer.get(layer) or []
+        if not cands:
+            continue
+        served = valve_serves.get(n["id"])
+        if served:
+            hit = [l for l in cands
+                   if served & set(l.get("for_items") or [])]
+            if len(hit) == 1:
+                out[n["id"]] = {"code": hit[0]["part_number"], "qty": hit[0]["qty"],
+                                "why": f"điều khiển {', '.join(sorted(served))}"}
+                continue
+        if len(cands) == 1:
+            out[n["id"]] = {"code": cands[0]["part_number"], "qty": cands[0]["qty"],
+                            "why": f"dòng duy nhất ở tầng {layer}"}
+    return out

@@ -435,3 +435,72 @@ nhiều) · `pdftotext -layout` (có sẵn trên máy) · FastAPI · React + Vit
 6. Phần mềm chỉ dùng nội bộ, hay sau này phát hành/bán ra ngoài? — quyết định mức độ phải cẩn
    trọng với dữ liệu crawl (§4.5).
 7. Máy chạy crawler có IP tĩnh / mạng công ty không? Nếu bị chặn thì crawl từ đâu.
+
+
+---
+
+## 10. Báo lỗi 3 phần + engine tự quyết (2026-08-21)
+
+Hai spec: `Prompt sửa cách báo lỗi của PneuComplete.md` và
+`spec-cai-tien-so-do-khi-nen_1.md`.
+
+### 10.1 Báo lỗi 3 phần
+
+`engine/problem.py` chuẩn hoá mọi vấn đề thành: **sai ở đâu · cần sửa gì · sửa
+thế nào** (+ liệt kê lựa chọn). Mọi thứ dài — catalog, Cv, số trang, logic — vào
+`detail`, UI gập lại trong `<details>`.
+
+Trước: một gap FRL hiện 667 ký tự rationale, người dùng đọc 8 câu mới biết cần
+điền ô nào. Sau: 1 câu + tên field + danh sách nút bấm để chọn thẳng.
+
+`code` giữ là **định danh máy đọc** ổn định, KHÔNG suy từ `field` — suy như vậy
+sinh ra mã vô nghĩa kiểu `EDGE.KIND` và đổi theo nhãn.
+
+### 10.2 Engine tự chọn cỡ van từ lưu lượng
+
+`db/seed/charts/sy-flow.yaml` + `engine/chart.py`. Dẫn nạp âm C trích từ catalog
+SY trang 43; catalog tự ghi `S = 5.0 × C`. ISO 6358 định nghĩa ở chảy tắc
+`q[dm³/s ANR] = C × p1[bar abs]`, nên `Q_max = 60·C·(MPa·10 + 1,013)`.
+
+```
+SY3000 C=1,3 → 469 L/min      SY5000 C=3,1 → 1118      SY7000 C=4,4 → 1587
+```
+
+Kiểm chứng: 4× CDM2L32-500Z cần 1065 L/min → **SY5000**, đúng cỡ BOM máy 23-432
+dùng. Ngoài dải đã số hoá thì **báo gap, không ngoại suy**.
+
+Bảng đang `needs_review: true` vì bảng trong PDF **gộp hàng** — đã lấy C **nhỏ
+nhất** của mỗi cỡ, sai theo hướng đó chỉ chọn van to hơn cần.
+
+### 10.3 Cái giá của "engine tự quyết loại van" — đo được
+
+Spec yêu cầu engine tự đề xuất `valve_function` thay vì để trống. Đã làm. Nhưng
+phải nói rõ cái giá, vì nó ngược với bằng chứng đã đo trước đó:
+
+| | trước | sau |
+|---|---|---|
+| golden test | 36% (11 dòng trong mẫu số) | **18%** (22 dòng) |
+| van trong mẫu số | không — engine từ chối đoán | có — engine đoán nên phải đo |
+
+Máy 23-432: engine đề xuất `SY5220-5MZE-C6 ×17`, thực tế `×2`, và **bỏ sót**
+`SY5120` (single ×5) + `SY5420` (3-pos ×4).
+
+Điểm tụt KHÔNG phải vì engine tệ hơn, mà vì **trước đây van được loại khỏi phép
+đo**. Engine đã ngừng từ chối đoán thì che kết quả là tự lừa — nên
+`ingest/golden.py` chỉ còn xếp "không đo được" khi engine THẬT SỰ không đề xuất gì.
+
+Giảm thiểu: dòng van do engine suy bị **hạ tin cậy xuống 50%** ngay trên dòng, để
+người ký BOM thấy chỗ cần kiểm. Bạn khai tay thì 90%.
+
+### 10.4 Sơ đồ: 4 sửa đổi
+
+| Mục | Việc | Ghi chú |
+|---|---|---|
+| 4 | dây neo đúng tâm cổng | **lỗi thật**: `.pts` là `position:relative` đặt sau header nên gốc toạ độ lệch ~70px so với `portPos()`. Nay `absolute; inset:0` |
+| 1 | Manhattan routing thay spline | tối đa 3 đoạn vuông góc, bo góc r=6 bằng cung Q, tránh đè thân node, re-route khi kéo |
+| 2 | cổng chỉ hiện khi mã hợp lệ | chưa có mã → "chưa xác định cổng", không hiện cổng giả định |
+| 3 | bố trí theo datasheet | van 5/2: 2/A·4/B trên · 3/R–**1/P**–5/S dưới (P giữa) · coil hàng riêng |
+| 5 | điền mã ngược vào sơ đồ | gán theo `for_items` (dòng BOM sinh vì actuator nào), không theo thứ tự |
+
+`tests/test_ui.js` nay kiểm cả **CSS** `.node .pts`, vì bài học: bản trước test
+`portPos()` xanh mà UI vẫn sai — test chỉ kiểm một phía của hợp đồng.

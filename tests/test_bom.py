@@ -47,7 +47,7 @@ def test_khong_khai_chieu_dai_ong_thi_bao_gap():
     r = _build([("CDM2L32-500Z", 5)])
     assert not _line(r, "TU0604BU-20"), "không được tự sinh dòng ống khi chưa biết chiều dài"
     g = next((g for g in r["gaps"] if g.get("rule_code") == "R-TUBE-01"), None)
-    assert g and "tube_total_m" in g["reason"], f"gaps: {r['gaps']}"
+    assert g and g["field"] == "tube_total_m", f"gaps: {r['gaps']}"
 
 
 def test_duong_kinh_can_lay_tu_series_khong_hardcode():
@@ -178,7 +178,8 @@ def test_frl_can_khai_co_cua():
     r = _build([("CDM2L32-500Z", 5)], {"tube_total_m": 60})
     assert not any(l["layer"] == "air_prep" for l in r["lines"])
     g = next(g for g in r["gaps"] if g.get("rule_code") == "R-FRL-01")
-    assert "main_line_port_size" in g["reason"]
+    assert g["field"] == "main_line_port_size", g
+    assert g.get("options"), "phải liệt kê cỡ cửa hợp lệ, không bắt tra catalog"
 
 
 def test_frl_co_cua_mo_ho_thi_liet_ke_ung_vien():
@@ -222,17 +223,36 @@ def test_van_sinh_dung_ma_nhu_bom_that():
     assert v["qty"] == 5
 
 
-def test_van_can_khai_loai():
-    """LOẠI van phụ thuộc chức năng cơ cấu → engine đòi khai, không đoán.
+def test_van_tu_de_xuat_khong_de_trong():
+    """Mục 6 của spec ĐỔI hợp đồng: engine tự đề xuất loại van, không để trống.
 
-    Bản trước mặc định "mọi xy-lanh → 5/2 double"; golden test cho thấy một máy
-    dùng đồng thời single, double và 3-position nên sai 6/11 dòng van.
+    ⚠ ĐÁNH ĐỔI ĐÃ BIẾT — ghi lại để người sau không tưởng là miễn phí:
+    golden test trên máy 23-432 cho thấy MỘT máy dùng đồng thời SY5120 (single) ×5,
+    SY5220 (double) ×2, SY5420 (3-pos exhaust) ×4. Nghĩa là mặc định "mọi xy-lanh
+    → 5/2 double" SAI với thực tế ở nhiều cơ cấu. Bản trước vì vậy để trống và đòi
+    khai.
+
+    Spec yêu cầu tự đề xuất + cho override, nên nay engine đề xuất `double` cho
+    xy-lanh tác động kép. Bù lại BẮT BUỘC:
+      · phát cảnh báo AUTO_VALVE_FUNCTION để người dùng biết mà kiểm lại
+      · override ở từng node phải thắng
     """
-    r = _build([("CDM2L32-500Z", 5)], {"tube_total_m": 60})
-    g = next(g for g in r["gaps"] if g.get("rule_code") == "R-VLV-01")
-    assert "valve_function" in g["reason"], g["reason"]
-    assert not any(l["layer"] == "valve" for l in r["lines"])
+    r = _build([("CDM2L32-500Z", 5)],
+               {"tube_total_m": 60, "tube_roll_length_m": 20, "tube_color": "BU"})
+    assert not any(g.get("field") == "valve_function" for g in r["gaps"]), \
+        f"không còn để trống bắt khai: {r['gaps']}"
+    assert any(l["layer"] == "valve" for l in r["lines"]), "phải sinh được van"
+    w = next((w for w in r["warnings"] if w["code"] == "AUTO_VALVE_FUNCTION"), None)
+    assert w, "tự quyết mà im lặng là che mất chỗ cần kiểm lại"
+    assert "3pos" in (w.get("rationale") or ""), \
+        "cảnh báo phải nói rõ có lựa chọn dừng giữa hành trình"
 
+    # override ở từng cơ cấu vẫn thắng — đây là điều kiện để đánh đổi trên chấp nhận được
+    r2 = _build([("CDM2L32-500Z", 5, {"valve_function": "3pos_exhaust"})],
+                {"tube_total_m": 60, "tube_roll_length_m": 20, "tube_color": "BU",
+                 "valve_series_size": "SY5000"})
+    assert any("5420" in l["part_number"] for l in r2["lines"]), \
+        f"override phải thắng: {[l['part_number'] for l in r2['lines']]}"
 
 def test_van_base_mounted_khong_co_cua_rieng():
     """base_mounted → mã không có -C6 vì cửa nằm trên manifold."""
@@ -266,8 +286,10 @@ def test_endplate_can_khai_kieu_manifold():
     """Type 20 → SY5000-26-20A, Type 20P → SY5000-26-21A. Chưa khai → gap."""
     r = _build([("CDM2L32-500Z", 5)],
                {**MFD_CFG, "manifold_type": None})
+    # Gap dùng 3 phần: tên field nằm ở khoá `field`, KHÔNG nhét vào câu văn.
     g = next(g for g in r["gaps"] if g.get("rule_code") == "R-MFD-ENDPLATE-01")
-    assert "manifold_type" in g["reason"]
+    assert g["field"] == "manifold_type", g
+    assert g.get("options"), "phải liệt kê lựa chọn cho người dùng"
     r2 = _build([("CDM2L32-500Z", 5)], {**MFD_CFG, "manifold_type": "20P, 23P"})
     assert _line(r2, "SY5000-26-21A"), "Type 20P phải ra end plate khác"
 
@@ -311,8 +333,12 @@ def test_so_station_theo_so_van():
 
 def test_ma_khong_parse_duoc_thi_bao():
     r = _build([("CDM2X99-500Z", 1)])
-    assert any("CDM2X99" in (g.get("item") or "") for g in r["gaps"]), \
-        f"mã sai phải vào gap: {r['gaps']}"
+    # mã liên quan nằm ở khoá `subject` của vấn đề 3 phần
+    g = next((g for g in r["gaps"] if g.get("subject") == "CDM2X99-500Z"), None)
+    assert g, f"mã sai phải vào gap: {r['gaps']}"
+    assert g["rule_code"] == "R-PARSE-00", g
+    assert "Mã tự do" in (g.get("fix") or ""), \
+        "phải chỉ đúng cách sửa: sửa mã, hoặc bật Mã tự do"
 
 
 def test_tinh_toan():
@@ -383,6 +409,79 @@ def test_build_tu_dong_don():
     finally:
         bom.PROJECT_KEEP = old
         con.close()
+
+
+def test_engine_tu_chon_loai_van_khong_hoi():
+    """Mục 6 của spec: engine TỰ chọn loại van theo tác động, không bắt khai.
+
+    Trước đây để trống valve_function là gap. Nay tác động kép → van 5/2 (double),
+    tác động đơn → 3/2 (single). Người dùng override thì override thắng.
+    """
+    r = _build([("CDM2L32-500Z", 4)],
+               {"tube_total_m": 60, "tube_roll_length_m": 20, "tube_color": "BU",
+                "main_line_port_size": "3/8", "frl_size": "30"})
+    assert not any(g.get("field") == "valve_function" for g in r["gaps"]), \
+        f"không được hỏi loại van nữa: {r['gaps']}"
+    v = [l for l in r["lines"] if l["layer"] == "valve"]
+    assert v, "phải sinh được van"
+    auto = [w for w in r["warnings"] if w["code"] == "AUTO_VALVE_FUNCTION"]
+    assert auto, "tự quyết thì phải NÓI RA để người dùng kiểm lại"
+
+
+def test_engine_tu_chon_co_van_tu_luu_luong():
+    """Cỡ van suy từ lưu lượng qua bảng dẫn nạp âm, không hỏi người dùng.
+
+    Kiểm chứng bằng máy thật: 4× CDM2L32-500Z cần 1065 L/min ANR → SY5000, đúng
+    cỡ van BOM máy 23-432 dùng.
+    """
+    r = _build([("CDM2L32-500Z", 4)],
+               {"tube_total_m": 60, "tube_roll_length_m": 20, "tube_color": "BU",
+                "main_line_port_size": "3/8", "frl_size": "30"})
+    assert r["project"]["valve_series_size"] == "SY5000", r["project"]["valve_series_size"]
+    assert not any(g.get("field") == "valve_series_size" for g in r["gaps"])
+    w = next((w for w in r["warnings"] if w["code"] == "AUTO_VALVE_SIZE"), None)
+    assert w and "SY5000" in w["message"], w
+    # phải mang theo nguồn tra cứu
+    assert "trang" in (w.get("rationale") or ""), w
+
+
+def test_khai_tay_thi_thang_engine_tu_tinh():
+    """Người dùng khai cỡ van thì engine KHÔNG ghi đè."""
+    r = _build([("CDM2L32-500Z", 4)],
+               {"tube_total_m": 60, "tube_roll_length_m": 20, "tube_color": "BU",
+                "main_line_port_size": "3/8", "frl_size": "30",
+                "valve_series_size": "SY7000"})
+    assert r["project"]["valve_series_size"] == "SY7000"
+    assert not any(w["code"] == "AUTO_VALVE_SIZE" for w in r["warnings"])
+
+
+def test_gap_ngan_gon_chi_tiet_vao_detail():
+    """Phần chính phải NGẮN; catalog/số trang/logic đẩy hết vào detail."""
+    r = _build([("CDM2L32-500Z", 5)], {"tube_total_m": 60})
+    g = next(g for g in r["gaps"] if g.get("rule_code") == "R-FRL-01")
+    assert len(g["what"]) < 60, f"câu chính quá dài: {g['what']}"
+    assert g["field"] and g["fix"]
+    # rationale gốc của luật dài 600+ ký tự — phải nằm ở detail, không ở phần chính
+    assert len(g.get("detail") or "") > 200, "chi tiết dài phải được giữ ở detail"
+    assert "trang" not in g["what"], "số trang catalog không được vào câu chính"
+
+
+def test_van_suy_doan_thi_ha_tin_cay():
+    """Loại van do engine SUY → dòng van phải hạ tin cậy xuống ≤50%.
+
+    Đo được trên máy 23-432: engine suy ra 17 van `double`, thực tế 5 single +
+    2 double + 4 3-pos. Cảnh báo chung không sửa được số lượng sai, nên phải hiện
+    độ tin cậy thấp NGAY TRÊN DÒNG để người ký BOM thấy chỗ cần kiểm.
+    """
+    cfg = {"tube_total_m": 60, "tube_roll_length_m": 20, "tube_color": "BU",
+           "main_line_port_size": "3/8", "frl_size": "30"}
+    guessed = _build([("CDM2L32-500Z", 4)], cfg)
+    told = _build([("CDM2L32-500Z", 4, {"valve_function": "double"})], cfg)
+    gv = [l for l in guessed["lines"] if l["layer"] == "valve"]
+    tv = [l for l in told["lines"] if l["layer"] == "valve"]
+    assert gv and tv
+    assert gv[0]["confidence"] <= 0.5, f"suy đoán mà tin cậy {gv[0]['confidence']}"
+    assert tv[0]["confidence"] > 0.5, f"bạn khai mà tin cậy {tv[0]['confidence']}"
 
 
 if __name__ == "__main__":

@@ -364,3 +364,42 @@
     vì kiểu manifold do bạn quyết định (cách đi dây, cách gá), không suy được từ
     danh sách xy-lanh. BOM máy 23-432 dùng SY5000-26-20A ×4 (Type 20).
   source: DOCUMENT/MAINFOLD/7-1-2-p0723-0963-SY3000_en.pdf trang 73
+
+- code: R-VLV-02
+  name: Chọn cỡ van theo lưu lượng — engine tự tính
+  # Luật này thực thi trong engine/bom.py (lượt tính trước), không phải bằng
+  # when/then, vì nó cần TỔNG lưu lượng của mọi actuator — mà luật per_actuator
+  # chạy trước khi biết tổng. Dòng này tồn tại để: (1) rule_code hợp lệ với khoá
+  # ngoại project_output.rule_code, (2) lý do hiện ra trong UI như mọi dòng khác.
+  # Điều kiện không bao giờ đúng nên nó không tự kích hoạt.
+  scope: per_system
+  priority: 998
+  when:
+    all:
+      - {attr: __never__, eq: true}
+  then: {}
+  rationale: >
+    Cỡ van suy từ lưu lượng cần cấp, không hỏi người dùng. Dùng dẫn nạp âm C
+    trong db/seed/charts/sy-flow.yaml (trích từ catalog SY trang 43): ISO 6358
+    định nghĩa ở chế độ chảy tắc q[dm3/s ANR] = C × p1[bar abs], nên
+    Q_max = 60 × C × (áp_suất_MPa × 10 + 1,013). Engine chọn cỡ NHỎ NHẤT thoả
+    lưu lượng cần cấp (đã nhân hệ số đồng thời).
+    Bảng C đang ở trạng thái needs_review vì bảng trong PDF gộp hàng — đã lấy giá
+    trị NHỎ NHẤT của mỗi cỡ, sai theo hướng đó chỉ chọn van to hơn cần chứ không
+    bao giờ nhỏ hơn. Ngoài dải đã số hoá thì báo gap, KHÔNG ngoại suy.
+  source: DOCUMENT/MAINFOLD/7-1-2-p0387-0722-SY_en.pdf trang 43; ISO 6358
+
+- code: R-PARSE-00
+  name: Mã hàng không đọc được
+  # Không tự kích hoạt — engine gọi trực tiếp khi materialize() thất bại.
+  scope: per_system
+  priority: 999
+  when:
+    all:
+      - {attr: __never__, eq: true}
+  then: {}
+  rationale: >
+    Mã không khớp ngữ pháp nào đang có. Hai cách xử lý: sửa lại mã, hoặc bật
+    "Mã tự do" cho node đó để vẫn đưa vào BOM mà không qua kiểm tra kỹ thuật.
+    Engine không đoán ý mã sai vì đoán sai là mua sai hàng.
+  source: engine/bom.py — nhánh materialize() thất bại

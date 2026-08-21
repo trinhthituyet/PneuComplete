@@ -17,7 +17,8 @@ from collections import defaultdict
 from pathlib import Path
 
 from crawler import db
-from engine import calc, conf, generate, materialize
+from engine import calc, chart, conf, generate, materialize
+from engine import problem as PB
 from engine import parser as P
 
 RULES_YAML = db.ROOT / "db" / "seed" / "rules.yaml"
@@ -206,13 +207,48 @@ def _subst(spec, ctx, project):
 
 
 # ── resolve ─────────────────────────────────────────────────────────────────
+def _options_for(con, field, project):
+    """Các lựa chọn hợp lệ cho một field còn thiếu.
+
+    Có nhiều lựa chọn thì PHẢI liệt kê ra (yêu cầu của prompt báo lỗi) — bắt người
+    dùng tự mở catalog tra là đúng cái phần mềm này ra đời để tránh.
+    """
+    if field == "valve_function":
+        return list(VALVE_FUNCTION)
+    if field == "valve_series_size":
+        return chart.valve_sizes() or ["SY3000", "SY5000", "SY7000"]
+    if field == "manifold_type":
+        return ["20, 23, 20SA, 23SA", "20P, 23P"]
+    if field in ("main_line_port_size", "frl_size"):
+        # đọc thẳng từ ngữ pháp họ FRL đang chọn — không hard-code
+        slot = "port_size" if field == "main_line_port_size" else "size"
+        cid = project.get("frl_series") or "AC-D-E"
+        rows = con.execute(
+            """select o.code, o.label from code_option o
+               join code_slot cs on cs.id = o.slot_id
+               join series s on s.id = cs.series_id
+               where s.catalog_id = ? and cs.name = ? order by o.code""",
+            (cid, slot)).fetchall()
+        return [r["label"] or r["code"] for r in rows] or None
+    if field == "tube_color":
+        rows = con.execute(
+            """select o.code from code_option o join code_slot cs on cs.id=o.slot_id
+               join series s on s.id=cs.series_id
+               where s.catalog_id='TU-E' and cs.name='color' order by o.code""").fetchall()
+        return [r["code"] for r in rows][:10] or None
+    return None
+
+
 def _resolve_need(con, need, ctx, project, src_part_id, templates):
     """REQUIREMENT → dòng BOM cụ thể, hoặc gap kèm lý do."""
     # luật có thể khai thông tin BẮT BUỘC người dùng cấp. Không có thì gap —
     # tuyệt đối không lấy giá trị mặc định do engine tự nghĩ ra (A3-5).
     ri = need.get("requires_input")
     if ri and project.get(ri) in (None, ""):
-        return {"gap": f"cần bạn khai `{ri}` — engine không suy được giá trị này"}
+        # 3 phần ngắn (Prompt sửa cách báo lỗi): sai ở đâu · sửa gì · sửa thế nào.
+        # rationale dài của luật KHÔNG vào đây, nó đi vào detail.
+        return {"gap": f"thiếu {PB.field_vn(ri)}", "field": ri,
+                "options": _options_for(con, ri, project)}
     want = {k: v for k, v in (_subst(need.get("want", {}), ctx, project) or {}).items()
             if v is not None}
     qty = _subst(need.get("qty", 1), ctx, project)
@@ -225,7 +261,7 @@ def _resolve_need(con, need, ctx, project, src_part_id, templates):
         sid = con.execute("select id from series where catalog_id=?",
                           (need["from_parts"],)).fetchone()
         if not sid:
-            return {"gap": f"không có series {need['from_parts']}"}
+            return {"gap": f"chưa có dữ liệu họ {need['from_parts']}"}
         rows = con.execute("select * from part where series_id=?", (sid["id"],)).fetchall()
         cands = []
         for r in rows:
@@ -233,7 +269,8 @@ def _resolve_need(con, need, ctx, project, src_part_id, templates):
             if all(str(a.get(k)) == str(v) for k, v in want.items()):
                 cands.append((a.get(need.get("rank_by", ""), 0) or 0, r, a))
         if not cands:
-            return {"gap": f"không mã nào trong {need['from_parts']} thoả {want}"}
+            return {"gap": f"không mã nào trong họ {need['from_parts']} thoả yêu cầu",
+                    "detail": f"điều kiện: {want}"}
         cands.sort(key=lambda x: -x[0])
         best = cands[0]
         a = best[2]
@@ -382,17 +419,64 @@ def build(con, inputs, project=None, project_name="demo"):
     # gộp thành một số thì engine chỉ đề xuất được một loại ống.
     onetouch_by_od = defaultdict(float)
 
+    # ── LƯỢT TÍNH TRƯỚC: engine tự quyết thay vì hỏi (mục 6 của spec) ────────
+    #
+    # Cỡ van phụ thuộc TỔNG lưu lượng, mà tổng chỉ biết sau khi duyệt hết actuator
+    # — trong khi luật R-VLV-01 có scope per_actuator nên chạy TRONG lượt duyệt.
+    # Vì vậy phải tính lưu lượng một lượt trước rồi mới chọn cỡ van.
+    #
+    # Nguyên tắc: chỉ điền khi người dùng CHƯA khai. Suy luận không bao giờ ghi đè
+    # điều bạn khai tay.
+    auto = {}
+    if not project.get("valve_series_size"):
+        need_lpm = 0.0
+        for it in inputs:
+            mm = materialize.materialize(con, it[0], templates)
+            if not mm.get("ok"):
+                continue
+            aa = mm.get("attrs") or {}
+            cc = calc.summary(aa.get("bore_mm"), aa.get("stroke_mm"),
+                              project["pressure_mpa"], project["cycle_s"], it[1],
+                              safety=project["safety_factor"], rod_mm=aa.get("rod_dia_mm"))
+            need_lpm += cc.get("required_flow_lpm") or 0.0
+        size, why = chart.pick_valve_size(need_lpm, project["pressure_mpa"])
+        if size:
+            project["valve_series_size"] = size
+            auto["valve_series_size"] = (size, why)
+        else:
+            auto["_valve_size_failed"] = why
+
     for item in inputs:
         code, count = item[0], item[1]
         over = item[2] if len(item) > 2 else {}
         con.execute("""insert into project_input (project_id, raw_code, qty, overrides)
                        values (?,?,?,?)""",
                     (pid, code, count, json.dumps(over, ensure_ascii=False)))
-        item_project = _expand_valve_function({**project, **over})
         m = materialize.materialize(con, code, templates)
         if not m["ok"]:
-            gaps.append({"item": code, "reason": m["error"]})
+            gaps.append(PB.as_gap(PB.problem(
+                "R-PARSE-00", "không đọc được mã hàng", field="code",
+                subject=code,
+                fix=f"Sửa mã {code}, hoặc bật 'Mã tự do' cho node này",
+                detail=m["error"])))
             continue
+
+        # Loại van suy theo TỪNG CƠ CẤU — phải đặt SAU materialize() vì cần attrs:
+        # xy-lanh tác động đơn → van 3/2, tác động kép → van 5/2. Chỉ đề xuất khi
+        # bạn chưa khai; bạn override thì thắng.
+        merged_over = dict(over)
+        if not merged_over.get("valve_function") and not project.get("valve_function"):
+            acting = (m.get("attrs") or {}).get("acting")
+            merged_over["valve_function"] = "single" if acting == "single" else "double"
+            auto.setdefault("valve_function", {})[code] = merged_over["valve_function"]
+            # HẠ TIN CẬY của dòng van khi loại van là do engine SUY, không do bạn khai.
+            # Đo được trên máy 23-432: engine suy ra 17 van `double`, thực tế là
+            # 5 single + 2 double + 4 3-pos. Một cảnh báo chung không sửa được số
+            # lượng sai — phải hiện ngay trên từng dòng để người ký BOM thấy.
+            vf_guessed = True
+        else:
+            vf_guessed = False
+        item_project = _expand_valve_function({**project, **merged_over})
 
         a = m["attrs"]
         ports = con.execute(
@@ -448,13 +532,22 @@ def build(con, inputs, project=None, project_name="demo"):
                 continue
             res = _resolve_need(con, need, ctx, item_project, m["part_id"], templates)
             if "gap" in res:
-                gaps.append({"item": code, "rule_code": r["code"],
-                             "reason": res["gap"], "rationale": r["rationale"]})
+                gaps.append(PB.as_gap(PB.problem(
+                    r["code"], res["gap"], subject=code,
+                    field=res.get("field"), options=res.get("options"),
+                    detail=f"{res.get('detail') or ''} {r['rationale'] or ''}".strip())))
                 continue
+            conf_line = res["confidence"]
+            if vf_guessed and need.get("layer") == "valve" and conf_line:
+                conf_line = min(conf_line, 0.5)
             lines.append({"layer": need["layer"], "part_number": res["part_number"],
                           "qty": res["qty"] * count, "rule_code": r["code"],
-                          "rationale": r["rationale"], "confidence": res["confidence"],
+                          "rationale": r["rationale"], "confidence": conf_line,
                           "note": res.get("note"),
+                          # for_items: dòng này sinh RA VÌ actuator nào. Cần cho
+                          # mục 5 của spec sơ đồ — điền mã ngược lại vào node van
+                          # đang điều khiển đúng xy-lanh đó.
+                          "for_items": [code],
                           "alternatives": res.get("alternatives")})
             # Đếm đầu one-touch còn hở bằng cách xem GIAO DIỆN THẬT của mã vừa
             # chọn, không so tên series. Bản trước hardcode `== "AS-E-E"` nên khi
@@ -468,6 +561,31 @@ def build(con, inputs, project=None, project_name="demo"):
                         onetouch_by_od[float(r_ot["od"])] += \
                             r_ot["n"] * res["qty"] * count
                         onetouch_open += r_ot["n"] * res["qty"] * count
+
+    # ── NÓI RA những gì engine tự quyết ─────────────────────────────────────
+    # Tự quyết mà im lặng thì người dùng không biết có gì cần kiểm lại. Dùng
+    # severity='info' để phân biệt với cảnh báo kỹ thuật thật.
+    if auto.get("valve_series_size"):
+        size, why = auto["valve_series_size"]
+        warns.append({"severity": "info", "code": "AUTO_VALVE_SIZE",
+                      "rule_code": "R-VLV-02",
+                      "message": f"Cỡ van: {size} (engine tự tính từ lưu lượng)",
+                      "rationale": why, "detail": why})
+    if auto.get("_valve_size_failed"):
+        gaps.append(PB.as_gap(PB.problem(
+            "R-VLV-02", "chưa chọn được cỡ van từ lưu lượng",
+            field="valve_series_size", options=chart.valve_sizes() or None,
+            detail=auto["_valve_size_failed"])))
+    if auto.get("valve_function"):
+        vf = auto["valve_function"]
+        warns.append({"severity": "info", "code": "AUTO_VALVE_FUNCTION",
+                      "rule_code": "R-VLV-01",
+                      "message": "Loại van: "
+                                 + ", ".join(f"{k} → {v}" for k, v in vf.items()),
+                      "rationale": "Tác động kép → 5/2 (double), tác động đơn → 3/2 "
+                                   "(single). Cần dừng giữa hành trình thì đổi sang "
+                                   "3pos_closed / 3pos_exhaust / 3pos_pressure ở node.",
+                      "detail": vf})
 
     # ── CONSOLIDATE toàn hệ ─────────────────────────────────────────────────
     roll = project["tube_roll_length_m"]
@@ -498,9 +616,11 @@ def build(con, inputs, project=None, project_name="demo"):
             continue
         if "gap" in r["then"]:
             g = r["then"]["gap"]
-            gaps.append({"rule_code": r["code"],
-                         "reason": f"{g['what']} — {' '.join(g['reason'].split())}",
-                         "rationale": r["rationale"]})
+            gaps.append(PB.as_gap(PB.problem(
+                r["code"], g["what"], field=g.get("field"),
+                options=g.get("options"),
+                detail=f"{' '.join((g.get('reason') or '').split())} "
+                       f"{r['rationale'] or ''}".strip())))
             continue
         need = r["then"].get("need")
         if not need:
@@ -524,8 +644,10 @@ def build(con, inputs, project=None, project_name="demo"):
                 ctx_v["tube_od_mm"] = od
             res = _resolve_need(con, need, ctx_v, proj_v, None, templates)
             if "gap" in res:
-                gaps.append({"rule_code": r["code"], "reason": res["gap"],
-                             "rationale": r["rationale"]})
+                gaps.append(PB.as_gap(PB.problem(
+                    r["code"], res["gap"], field=res.get("field"),
+                    options=res.get("options"),
+                    detail=f"{res.get('detail') or ''} {r['rationale'] or ''}".strip())))
                 continue
             note = res.get("note")
             if od:
@@ -551,6 +673,9 @@ def build(con, inputs, project=None, project_name="demo"):
         k = (l["layer"], l["part_number"])
         if k in merged:
             merged[k]["qty"] += l["qty"]
+            # hợp nhất chứ không ghi đè: một mã van có thể phục vụ nhiều xy-lanh
+            merged[k]["for_items"] = sorted(set(merged[k].get("for_items") or [])
+                                           | set(l.get("for_items") or []))
         else:
             merged[k] = dict(l)
     lines = list(merged.values())

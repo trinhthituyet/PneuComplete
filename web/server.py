@@ -156,13 +156,23 @@ def api_bom_graph(con, payload, gr):
 
     lines = list(res["lines"]) + res_g["manual_lines"]
     warnings = list(res["warnings"]) + res_g["warnings"]
+
+    # Mục 5 của spec: điền mã hàng ngược lại vào sơ đồ → as-built diagram.
+    # Ghi luôn mã đã điền vào graph rồi mới lưu, để mở lại project cũ là thấy sơ đồ
+    # đã có mã, không phải dựng lại BOM.
+    fill = G.fill_codes(gr, lines)
+    for n in gr.get("nodes") or []:
+        f = fill.get(n.get("id"))
+        if f:
+            n["code"] = f["code"]
+            n["filled_by_bom"] = True
     G.save(con, res["project_id"], gr)
     return {
         "project_id": res["project_id"],
         "project": {k: v for k, v in res["project"].items()},
         "calc": res["calc"], "system": res["system"],
         "lines": lines, "warnings": warnings, "gaps": res["gaps"],
-        "graph_info": res_g["info"],
+        "graph_info": res_g["info"], "fill": fill,
     }
 
 

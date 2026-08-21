@@ -68,16 +68,27 @@ def test_bom_day_du():
 
 
 def test_bom_thieu_khai_thi_bao_gap():
-    """Không khai gì → engine phải báo gap, KHÔNG tự đoán."""
+    """Không khai gì → engine báo gap cho thứ nó KHÔNG suy được.
+
+    ĐÃ ĐỔI theo mục 6 của spec: `valve_function` và `valve_series_size` giờ engine
+    TỰ QUYẾT (theo tác động và theo lưu lượng) nên KHÔNG còn nằm trong gap. Còn
+    tube_total_m (phụ thuộc layout) và main_line_port_size (phụ thuộc đồ thị FRL
+    chưa số hoá) thì vẫn phải hỏi.
+    """
     con = db.connect()
     r = W.api_bom(con, {"inputs": [{"code": "CDM2L32-500Z", "qty": 5}], "config": {}})
     rules = {g.get("rule_code") for g in r["gaps"]}
-    for want in ("R-VLV-01", "R-TUBE-01", "R-FRL-01"):
+    for want in ("R-TUBE-01", "R-FRL-01"):
         assert want in rules, f"{want} phải báo gap khi chưa khai. gaps={rules}"
-    assert not any(l["layer"] == "valve" for l in r["lines"]), \
-        "chưa khai loại van thì không được sinh van"
+    assert "R-VLV-01" not in rules, \
+        f"loại van giờ engine tự quyết, không được hỏi nữa. gaps={rules}"
+    assert any(l["layer"] == "valve" for l in r["lines"]), \
+        "engine tự quyết được thì phải sinh van, không để trống"
+    # mọi gap phải đủ 3 phần để UI hiển thị được
+    for g in r["gaps"]:
+        assert g.get("what"), g
+        assert g.get("field") or g.get("fix"), g
     con.close()
-
 
 def test_bom_khong_co_input():
     con = db.connect()

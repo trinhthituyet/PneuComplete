@@ -135,12 +135,26 @@ quyết định"* thay vì đoán.
 
 ### Bước 5 — Bấm "Dựng BOM"
 
+Phần mềm **tự quyết** những gì nó tính được, không hỏi bạn nữa:
+
+- **Cỡ van** — tính từ lưu lượng khí của các xy-lanh bạn nhập
+- **Loại van** — tác động kép → van 5/2, tác động đơn → van 3/2
+
+> **Nhưng loại van thì hãy kiểm lại.** Máy thật thường dùng lẫn nhiều loại: cơ cấu
+> kẹp dùng 5/2 một cuộn, cơ cấu cần dừng giữa hành trình dùng 5/3. Phần mềm không
+> biết chức năng từng cơ cấu nên nó đoán là 5/2 hai cuộn và **hiện độ tin cậy 50%**
+> trên dòng đó. Sửa ở từng khối để lên 90%.
+
+
 Thẻ **BOM** hiện:
 
 - **Đọc được từ sơ đồ** — mấy vùng khí, xy-lanh nào đã có van, điện áp lấy từ PLC
 - **Tính toán** — lực đẩy/kéo, khí tiêu thụ
 - **BOM** theo 6 tầng, dòng nhập tay có nhãn *"nhập tay"*
-- **Cảnh báo** và **Cần bạn quyết định**
+- **Engine đã tự quyết** — những gì phần mềm tự tính, để bạn kiểm lại
+- **Cảnh báo** và **Cần bạn quyết định** — mỗi mục chỉ 3 dòng ngắn:
+  *sai ở đâu · cần sửa gì · bấm chọn giá trị*. Muốn xem lý do dài, số trang
+  catalog thì mở **Chi tiết / Debug**.
 
 Bấm **CSV** để mở bằng Excel.
 
@@ -176,7 +190,12 @@ dưới 100%. Độ tin cậy thấp nghĩa là bạn nên kiểm lại dòng đ
 
 ### Đây là bản đề xuất, không phải bản chốt
 
-Phần mềm đang đúng khoảng **60% số dòng** khi so với BOM máy thật (máy 23-432).
+Phần mềm đang đúng khoảng **18% số dòng** khi so với BOM hai máy thật.
+
+> Con số này **tụt từ 36%** không phải vì phần mềm tệ hơn, mà vì trước đây các
+> dòng van bị **loại khỏi phép đo** (phần mềm từ chối đoán nên không có gì để so).
+> Nay phần mềm tự đề xuất van, nên van được đưa vào đo — và nó đang sai nhiều ở
+> **số lượng từng loại van**. Đó là chỗ cần bạn sửa nhất.
 Nó giúp bạn **không bỏ sót** và **không phải tra catalog**, nhưng **người ký BOM
 vẫn là bạn**. Luôn xem qua toàn bộ, đặc biệt các dòng có cảnh báo hoặc độ tin
 cậy thấp.
