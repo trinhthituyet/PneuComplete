@@ -1,25 +1,72 @@
-(5) Phụ kiện còn thiếu — chưa làm, và đây là lý do
+Chưa xong. Tôi dừng để báo cáo vì kết quả không đạt yêu cầu "số hoá tất cả".
 
-  Bạn đúng. Đo được: 16/1.300 series có ngữ pháp (1,2%). Thiếu hẳn silencer (AN), van 3 cổng (VT307),
-  pad chân không (ZP), ejector (ZK2), cảm biến áp (ISE), gá xy-lanh, khớp nối.
+  Phát hiện tốt: không cần click tay
 
-  Vấn đề: mỗi họ cần đọc trang How-to-Order từ catalog PDF rồi nhập tay — đó là cách 16 họ hiện có ra
-  đời, và là việc tốn công nhất của project.
+  Đồ thị SMC là vector, không phải ảnh. pdftocairo -svg cho đường cong, pdftotext -bbox-layout
+  cho nhãn trục kèm toạ độ. Nên số hoá tự động được — spec §7 đề xuất công cụ click từng điểm,
+  cách này chính xác hơn và chạy được trên cả trăm đồ thị.
 
-  Ba cách lấy, tôi cần bạn chọn:
+  Bóc được bốn lớp, mỗi lớp tôi đoán sai một lần trước khi đo:
 
-  ┌─────────────────────┬──────────────────────────────────────────┬────────────────────────────────┐
-  │        Cách         │                   Được                   │              Mất               │
-  ├─────────────────────┼──────────────────────────────────────────┼────────────────────────────────┤
-  │ A. Crawl lại rộng   │ cache/ đã có 974 MB HTML/PDF, parse thêm │ Bộ parse tự động chỉ đúng ~60% │
-  │ hơn                 │  được nhiều họ mà 0 request              │  ô mã, phải duyệt tay          │
-  ├─────────────────────┼──────────────────────────────────────────┼────────────────────────────────┤
-  │ B. Bạn chỉ định     │ Nhập tay chất lượng cao, đúng thứ máy    │ ~1 giờ/họ                      │
-  │ 5–10 họ ưu tiên     │ bạn hay dùng                             │                                │
-  ├─────────────────────┼──────────────────────────────────────────┼────────────────────────────────┤
-  │ C. Cho nhập mã tự   │ Không chặn ai, mã lạ vẫn vào BOM         │ Không kiểm được, không suy     │
-  │ do + học dần        │                                          │ được phụ kiện con              │
-  └─────────────────────┴──────────────────────────────────────────┴────────────────────────────────┘
+  ┌────────────┬────────────────────┬─────────────────────────────────────────┐
+  │    Lớp     │     Tôi tưởng      │                 Thực tế                 │
+  ├────────────┼────────────────────┼─────────────────────────────────────────┤
+  │ transform  │ trên <g> bao ngoài │ trên chính thẻ <path>                   │
+  ├────────────┼────────────────────┼─────────────────────────────────────────┤
+  │ đường cong │ polyline M…L…      │ bezier — lọc bỏ C là bỏ luôn đường cong │
+  ├────────────┼────────────────────┼─────────────────────────────────────────┤
+  │ glyph chữ  │ phân biệt bằng C   │ phân biệt bằng fill="none" + stroke=    │
+  ├────────────┼────────────────────┼─────────────────────────────────────────┤
+  │ điểm       │ lấy mọi số         │ lấy điểm neo, bỏ điểm điều khiển        │
+  └────────────┴────────────────────┴─────────────────────────────────────────┘
 
-  C đã có sẵn (nút Mã tự do). Tôi đề nghị B trước — 27 mã "ngoài phạm vi" trong golden test tập trung ở
-  KQ2, AR, AN, VT307. Bạn cho biết 5 họ nào hay dùng nhất thì tôi làm trước.
+  Cộng một lỗi regex: nhóm transform tuỳ chọn sau [^>]*? lười luôn khớp rỗng nên transform bị bỏ
+  im lặng.
+
+  Nhưng chỉ 1/5 trang chạy
+
+  es40-69-AC-D.pdf  tr22   6/6 ô hiệu chuẩn · 0/6 có tiêu đề
+  es40-69-AC-D.pdf  tr61   0/1
+  es40-72-AR_M-D    tr20   0/0
+  SY3000            tr45   0/4
+  ES13-12-VHS-D     tr8    0/2
+
+  Số liệu trang 22 hợp lý về vật lý: áp ra 0,602 → 0,494 MPa khi lưu lượng 15 → 1012 L/min, đúng
+  dạng đường đặc trưng.
+
+  Nguyên nhân không tổng quát: tôi hardcode vùng tìm nhãn theo số đo của đúng trang đó (nhãn Y ở 
+  x0+30, nhãn X ở y1−18). Đây chính là lớp lỗi tôi đã phê phán ở prototype của bạn — "mainY=380 
+  cứng". Canh theo một trang thì trang khác lệch.
+
+  Cách sửa đúng, tôi thấy rồi nhưng chưa làm
+
+  Tôi đang loại các đường thẳng vì cho là "lưới" — nhưng chính chúng là khung trục. Dùng khung để
+  xác định hình chữ nhật vùng vẽ, rồi tìm nhãn ngay cạnh khung. Đó là mốc neo tự nhiên, không
+  cần offset hardcode nào và sẽ tổng quát.
+
+  Tôi không ghi số ra YAML
+
+  Hai lý do:
+
+  1. Tiêu đề chưa gán được (0/6) — số liệu không thuộc model nào thì vô nghĩa
+  2. Không có nguồn đối chiếu độc lập cho đồ thị AC. Bảng số duy nhất trong catalog là dẫn nạp âm
+  của van (đã số hoá ở sy-flow.yaml); đồ thị AC là nguồn duy nhất nên không kiểm chéo được
+
+  Sai cỡ FRL là sụt áp khi nhiều xy-lanh chạy cùng lúc — tôi không đưa số chưa kiểm chứng vào chỗ
+  engine tin.
+
+  165 test Python + 36 node, không regression (tệp này độc lập).
+
+  Ước lượng thật cho phần còn lại
+
+  Tôi đã ước sai một lần rồi nên nói thẳng: sửa neo theo khung trục + gán tiêu đề là một vòng làm
+  việc nữa cỡ bằng vòng vừa rồi. Sau đó mới đến việc chạy trên ~10 trang AC + ~60 trang
+  SY/VHS/AR và duyệt tay kết quả — vì không có nguồn đối chiếu.
+
+  Ba hướng, bạn chọn:
+
+  - A. Tôi làm tiếp vòng sửa neo — có cơ sở rõ ràng, nhưng chưa chắc là lớp cuối
+  - B. Dừng ở đây. Giữ sy-flow.yaml (đã số hoá, đang dùng để chọn cỡ van), tiếp tục hỏi người
+  dùng 2 khoá frl_size và main_line_port_size
+  - C. Bạn tự đọc 4 đồ thị AC quan trọng nhất rồi cho tôi số — nhanh nhất và chắc chắn nhất, vì
+  bạn có nguồn đối chiếu là kinh nghiệm
