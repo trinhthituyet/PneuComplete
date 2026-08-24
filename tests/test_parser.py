@@ -112,6 +112,58 @@ def test_grammar_cm2_day_du():
     con.close()
 
 
+def test_bang_tra_doc_duoc_ma_engine_tu_sinh():
+    """Mã nằm trong BẢNG TRA (gasket, end plate) phải đọc ngược được.
+
+    LỖI THẬT: engine SINH được SY5000-26-20A và SY5000-GS-1 (bảng tra đọc tay từ
+    PDF trang 45/73) nhưng KHÔNG ĐỌC NGƯỢC được chính mã mình sinh ra — parser chỉ
+    đi qua ngữ pháp, mà các mã đó gắn vào series SY-5-E có ngữ pháp VAN
+    (SY5220-5MZE-C6). Nó thử đọc như mã van rồi báo dư "0-26-20A".
+    """
+    con = db.connect()
+    for code, role in (("SY5000-GS-1", "gasket"),
+                       ("SY5000-26-20A", "end_plate"),
+                       ("SY5000-26-21A", "end_plate")):
+        r = parser.parse(con, code)
+        assert r.get("ok"), f"{code}: {r}"
+        assert (r.get("attrs") or {}).get("role") == role, r
+    con.close()
+
+
+def test_bang_tra_khong_lan_at_ngu_phap():
+    """Chỉ mã có `role` mới qua bảng tra — còn lại vẫn dùng ngữ pháp.
+
+    Bảng `part` chứa CẢ mã do engine tự ghi lúc materialize. Nhận hết là parser
+    đọc lại kết quả của chính mình thay vì đọc catalog: sai lệch nào của engine
+    sẽ tự khẳng định là đúng.
+    """
+    con = db.connect()
+    for code in ("CDM2L32-500Z", "SY5220-5MZE-C6", "AS2201F-01-06SA"):
+        r = parser.parse(con, code)
+        assert r.get("ok"), f"{code}: {r}"
+        assert r.get("source") != "bảng tra trong catalog", \
+            f"{code} phải parse bằng NGỮ PHÁP, không phải bảng tra: {r.get('source')}"
+    con.close()
+
+
+def test_hau_to_don_hang_NA():
+    """Hậu tố '-NA' là của ĐƠN HÀNG, không phải ô mã — tách ra và GHI LẠI.
+
+    Đo trên BOM thật: máy 24-236 có 5/6 mã SMC kết thúc '-NA', máy 23-432 thì
+    0/6. Tìm khắp catalog SY plug-in không thấy bảng nào giải nghĩa '-NA'.
+    Bỏ im lặng thì người dùng không biết engine đã lược cái gì.
+    """
+    con = db.connect()
+    r = parser.parse(con, "SY50M-26-1A-NA")
+    assert r.get("ok"), r
+    assert r.get("order_suffix") == "NA", r
+    assert (r.get("attrs") or {}).get("order_suffix") == "NA", r
+    # mã không có hậu tố thì không được bịa ra
+    r2 = parser.parse(con, "SY5000-26-20A")
+    assert r2.get("order_suffix") is None, r2
+    con.close()
+
+
 if __name__ == "__main__":
     ok = fail = 0
     for name, fn in sorted(globals().items()):

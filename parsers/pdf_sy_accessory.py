@@ -59,6 +59,24 @@ END_PLATES = [
     ("SY5000-26-3A-Q",  "SY5000", "20P, 23P", "CE/UKCA"),
     ("SY7000-26-3A-Q",  "SY7000", "20P, 23P", "CE/UKCA"),
     ("SY9000-26-3A-Q",  "SY9000", "20P, 23P", "CE/UKCA"),
+
+    # ── Thế hệ SY PLUG-IN mới (SY_M) ────────────────────────────────────────
+    # Nguồn: DOCUMENT/MAINFOLD/7-1-2-p0387-0722-SY_en.pdf.
+    # BOM máy 24-236 dùng SY50M-26-1A-NA ×4 — máy đó dùng manifold
+    # SS5Y5-10SVA-13B-C6A-NA, tức thế hệ plug-in mới, không phải Type 20 cũ.
+    #
+    # ⚠ CHƯA XÁC ĐỊNH: catalog ghi "SY50M-26-1A(-B)" — hậu tố trong ngoặc là một
+    # BIẾN THỂ, còn mã BOM dùng là "-NA". Chưa tìm được bảng giải nghĩa -NA/-B
+    # nên KHÔNG khai kiểu manifold (để None) thay vì đoán. Engine vẫn đọc được mã,
+    # chỉ chưa tự chọn được giữa các biến thể.
+    ("SY30M-26-1A",     "SY3000", None, None),
+    ("SY50M-26-1A",     "SY5000", None, None),
+    ("SY70M-26-1A",     "SY7000", None, None),
+    # -26-2A = blanking plate: bịt chỗ trống trên manifold, dùng khi chừa station
+    # để lắp thêm van sau. Khác end plate (bịt hai đầu đế).
+    ("SY30M-26-2A",     "SY3000", None, None),
+    ("SY50M-26-2A",     "SY5000", None, None),
+    ("SY70M-26-2A",     "SY7000", None, None),
 ]
 
 

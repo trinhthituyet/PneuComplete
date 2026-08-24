@@ -100,6 +100,58 @@ def parse(con, part_number: str):
     đầu tiên là chọn sai ngữ pháp và báo dư ký tự.
     """
     pn = part_number.strip().upper().replace(" ", "")
+
+    # ── Hậu tố NGOÀI CATALOG ─────────────────────────────────────────────────
+    # Một số đơn hàng mang hậu tố riêng không có trong catalog. Đo được trên BOM
+    # thật: máy 24-236 có 5/6 mã SMC kết thúc "-NA" (SY5100-5UE1-NA,
+    # SS5Y5-10SVA-13B-C6A-NA, SY50M-26-1A-NA…), máy 23-432 thì 0/6. Tìm khắp
+    # catalog SY plug-in không có bảng nào giải nghĩa "-NA".
+    #
+    # → Đây là hậu tố áp cho CẢ ĐƠN HÀNG, không phải một ô mã. Tách ra để đọc
+    # được phần thân, và GHI LẠI trong attrs thay vì bỏ im lặng — người dùng phải
+    # biết engine đã lược bỏ cái gì.
+    order_suffix = None
+    m_sfx = re.match(r"^(.*?)-(NA)$", pn)
+    if m_sfx and len(m_sfx.group(1)) >= 4:
+        pn, order_suffix = m_sfx.group(1), m_sfx.group(2)
+
+    # ── BẢNG TRA trước ngữ pháp ──────────────────────────────────────────────
+    # Một số mã KHÔNG sinh từ ngữ pháp mà nằm sẵn trong bảng `part` dưới dạng
+    # bảng tra đọc tay từ catalog: gasket, end plate manifold (SY5000-26-20A,
+    # SY5000-GS-1 — trang 45/73 của PDF SY3000).
+    #
+    # LỖI CŨ: parser chỉ đi qua ngữ pháp. Các mã đó gắn vào series SY-5-E, mà
+    # ngữ pháp series đó là NGỮ PHÁP VAN (SY5220-5MZE-C6) — nên nó thử đọc
+    # "SY5000-26-20A" như một mã van và báo dư "0-26-20A". Kết quả: engine SINH
+    # được mã nhưng không ĐỌC ngược được chính mã mình sinh ra.
+    #
+    # Tra bảng đi TRƯỚC vì nó là dữ kiện đã đọc từ catalog, chắc chắn hơn suy
+    # luận từ ngữ pháp.
+    # CHỈ nhận mã có `role` trong attrs — đó là dấu của bảng tra ĐỌC TAY TỪ
+    # CATALOG (gasket, end_plate). Nhận mọi dòng `part` là sai: bảng đó còn chứa
+    # mã do chính engine ghi vào lúc materialize, và lấy chúng làm nguồn sự thật
+    # thì parser đọc lại kết quả của chính mình thay vì đọc catalog — sai lệch
+    # nào của engine sẽ tự khẳng định là đúng.
+    row = con.execute(
+        """select p.part_number, p.attrs, s.code, s.catalog_id, s.name
+           from part p join series s on s.id = p.series_id
+           where p.part_number = ?
+             and json_valid(p.attrs)
+             and json_extract(p.attrs, '$.role') is not null""", (pn,)).fetchone()
+    if row:
+        attrs = json.loads(row["attrs"] or "{}")
+        clean = {k: v for k, v in attrs.items() if not k.startswith("_")}
+        if order_suffix:
+            clean["order_suffix"] = order_suffix
+        return {"ok": True, "series": row["code"], "series_name": row["name"],
+                "catalog_id": row["catalog_id"],
+                "order_suffix": order_suffix,
+                "attrs": clean,
+                "trace": [(k, str(v), k) for k, v in attrs.items()
+                          if not k.startswith("_")],
+                "unparsed": None, "missing": None,
+                "source": "bảng tra trong catalog", "input": part_number}
+
     attempts = []
     for cand in series_candidates(con):
         if not pn.startswith(cand["prefix"]):
