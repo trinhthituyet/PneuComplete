@@ -614,6 +614,64 @@ def test_luu_luong_lon_thi_bao_vuot_dai_chu_khong_ngoai_suy():
     assert "vượt cả cỡ lớn nhất" in why, why
 
 
+# ── VÒNG B: sụt áp của phụ kiện FRL cộng vào bài toán chọn cỡ ───────────────
+def test_sut_ap_phu_kien_lam_len_co():
+    """Tra dầu nối SAU điều áp → sụt thêm áp → có lúc phải lên cỡ."""
+    from engine import chart
+    a, _ = chart.pick_frl_size(3000, 0.5, 1.0, "AC")
+    b, why = chart.pick_frl_size(3000, 0.5, 1.0, "AC", lubricator=True)
+    assert a and b, (a, b)
+    assert int(b) > int(a), f"có tra dầu phải cần cỡ ≥: {a} → {b}"
+    assert "AL" in why and "sụt" in why, why
+
+
+def test_thieu_so_sut_ap_thi_bao_dung_nguyen_nhan():
+    """Không được báo 'vượt cỡ lớn nhất' khi nguyên nhân là thiếu số phụ kiện."""
+    from engine import chart
+    size, why = chart.pick_frl_size(1000, 0.5, 1.0, "AC", mist_separator=True)
+    assert size is None
+    assert "PHỤ KIỆN" in why and "không phải vì bộ điều áp" in why, why
+
+
+def test_sut_ap_khong_ngoai_suy():
+    from engine import chart
+    y, why = chart.frl_drop("50", 9000, "AF")
+    assert y is None, f"9000 L/min ngoài dải AF50 đã số hoá: {y}"
+    assert "NGOÀI khoảng" in why or "VƯỢT dải" in why, why
+
+
+def test_sut_ap_bao_tren_tang_don_dieu():
+    """Bao trên phải tăng — số giảm là ước sụt áp thấp hơn thực tế."""
+    from engine import chart
+    bad = []
+    for cid, ch in chart.load_all().items():
+        if not cid.startswith("frl_drop_"):
+            continue
+        pts = ch["series"][0]["points"]
+        if any(b[1] < a[1] for a, b in zip(pts, pts[1:])):
+            bad.append(ch["model_label"])
+    assert not bad, f"bao trên GIẢM ở: {bad}"
+
+
+def test_khong_lan_series_AR_voi_AR_M():
+    """'AR20M(K)-D' là series AR…M, KHÁC 'AR20(K)-D' — không được gộp một họ."""
+    from engine import chart
+    ar = [l for _, _, l in chart.frl_charts("AR")]
+    assert ar and all("M(" not in l for l in ar), ar
+    assert any("AR20M" in (ch.get("model_label") or "")
+               for ch in chart.load_all().values()), "phải có bảng AR…M trong DB"
+
+
+def test_bang_do_thi_nao_cung_mang_theo_nguon():
+    """Mỗi bảng phải tự mang catalog + số trang — nhiều catalog trong một tệp."""
+    from engine import chart
+    for cid, ch in chart.load_all().items():
+        if not cid.startswith("frl_"):
+            continue
+        assert ch.get("pdf_page"), cid
+        assert ch.get("catalog") or (ch.get("source") or {}).get("catalog"), cid
+
+
 if __name__ == "__main__":
     ok = fail = 0
     for name, fn in sorted(globals().items()):

@@ -26,8 +26,8 @@
 # hiệu nào để phát hiện.
 #
 #   flow_outlet    lưu lượng → áp ra    bộ điều áp AC/AR/AW   ← VÒNG A số hoá
+#   flow_drop      lưu lượng → sụt áp   lọc AF/AL/AFM/AFD     ← VÒNG B số hoá
 #   pressure_char  áp vào   → áp ra     "Pressure Char."      ← nhận dạng, TỪ CHỐI
-#   flow_drop      lưu lượng → sụt áp   lọc AFM/AFD/AFF       ← chưa hỗ trợ
 #
 # Phân biệt bằng CHÚ THÍCH TRỤC đọc từ text — nguồn độc lập:
 #   tr22 X="Flow rate [L/min (ANR)]" Y="Outlet pressure [MPa]"
@@ -96,9 +96,76 @@ pages:
   - {page: 23,  kind: pressure_char}
   - {page: 104, kind: pressure_char}
   - {page: 129, kind: pressure_char}
-  - {page: 79,  kind: flow_drop}
-  - {page: 92,  kind: flow_drop}
-  - {page: 119, kind: flow_drop}
+  - page: 79
+    kind: flow_drop
+    n_panels: 6
+    titles: [AF20-D, AF30-D, AF40-D, AF40-06-D, AF50-D, AF60-D]
+    x_max: [1500, 4000, 6000, 6000, 15000, 15000]
+    y_max: 0.1
+    curves_per_panel: 5
+  - page: 92
+    kind: flow_drop
+    n_panels: 6
+    titles: [AFM20-D, AFD20-D, AFM30-D, AFD30-D, AFM40-D, AFD40-D]
+    x_max: [200, 100, 600, 200, 1000, 600]
+    y_max: 0.02
+    curves_per_panel: 3
+  - page: 119
+    kind: flow_drop
+    n_panels: 6
+    titles: [AL20-D, AL30-D, AL40-D, AL40-06-D, AL50-D, AL60-D]
+    x_max: [4000, 6000, 8000, 8000, 15000, 15000]
+    y_max: 0.1
+    curves_per_panel: 5
+
+  # ── VÒNG B: các catalog ĐIỀU ÁP khác. `pdf` khác thì khai rõ ở đây. ───────
+  # titles đối chiếu độc lập bằng grep trên text trang. inlets đọc từ câu điều
+  # kiện ("Condition: Inlet pressure of 0.7 MPa") hoặc chú giải nét — text, nên
+  # độc lập với việc trích đường cong. Mọi áp đặt ≤ áp vào: kiểm bằng vật lý.
+  - pdf: DOCUMENT/FRL/ES30-25-AFG-D.pdf
+    page: 4
+    kind: flow_drop
+    n_panels: 4
+    titles: [AFG20-D, AFG30-D, AFG40-D, AFG40-06-D]
+    x_max: [1200, 1800, 4000, 4000]
+    y_max: 0.1
+    curves_per_panel: 4
+  - pdf: DOCUMENT/FRL/es40-70-ARG-B.pdf
+    page: 4
+    kind: flow_outlet
+    n_panels: 3
+    titles: ["ARG20(K)-B", "ARG30(K)-B", "ARG40(K)-B"]
+    x_max: [800, 1500, 3000]
+    # MỘT điều kiện áp vào, ghi bằng chữ — trang này không có chú giải nét.
+    families:
+      "0.7": [0.6, 0.5, 0.4, 0.3, 0.2, 0.1]
+  - pdf: DOCUMENT/FRL/es40-72-AR_M-D.pdf
+    page: 11
+    kind: flow_outlet
+    n_panels: 3
+    titles: ["AR20M(K)-D", "AR30M(K)-D", "AR40M(K)-D"]
+    x_max: [2000, 3000, 6000]
+    families:
+      "0.7": [0.5, 0.4, 0.3, 0.2, 0.1]
+      "1.0": [0.8, 0.7, 0.6, 0.5]
+
+# Họ nào ĐƯỢC số hoá. Họ ngoài danh sách này phải trả về 0 đường (C9).
+in_scope_kinds: [flow_outlet, flow_drop]
+
+# ── VÒNG B: HỌ SỤT ÁP, KHÔNG CÓ NHÃN ĐỌC ĐƯỢC ───────────────────────────────
+# Mỗi ô vẽ 5 đường (tr92: 3) ứng với các ÁP VÀO P1 khác nhau. Nhãn viết XOAY bên
+# trong ô và pdftotext tách thành ký tự rời — 'P','1','=','0','.3','MP','a' — nên
+# KHÔNG có nguồn text nào đọc lại được cho chắc. Không gán nhãn theo phỏng đoán.
+#
+# Thay vào đó ghi ĐƯỜNG BAO TRÊN (sụt áp lớn nhất trong các P1 đã vẽ). Bảo thủ
+# đúng hướng, giống cách đã làm với dẫn nạp âm SY: thừa sụt áp → engine chọn cỡ
+# TO HƠN mức cần, chứ không bao giờ nhỏ hơn.
+#
+# Mốc neo vật lý thay cho C4: sụt áp = 0 khi lưu lượng = 0. Mọi đường phải bắt
+# đầu ở gốc. Sai hiệu chuẩn hay lẫn khung/lưới là lệch mốc này ngay.
+drop_family_note: >
+  đường bao trên của các áp vào P1 đã vẽ; nhãn P1 là text xoay, pdftotext tách
+  rời nên không đọc lại được — không gán nhãn theo phỏng đoán
 
 # ── DUNG SAI VƯỢT KHUNG — ĐO ĐƯỢC, KHÔNG CHỌN CHO VỪA ───────────────────────
 # Nét vẽ tràn qua trục một ít ở CẢ HAI đầu. Đo trên CẢ BA trang flow_outlet
@@ -169,8 +236,44 @@ criteria:
       engine sẽ đọc áp suất thành lưu lượng.
 
   - id: C9-an-toàn
-    rule: "trang KHÔNG thuộc flow_outlet phải trả về 0 đường (từ chối tường minh)"
-    fail_means: "số của họ khác lọt vào YAML lưu lượng"
+    rule: >
+      trang có kind KHÔNG nằm trong `in_scope_kinds` phải trả về 0 đường
+      (từ chối tường minh)
+    fail_means: "số của họ chưa có ground truth lọt vào YAML"
+
+  - id: C13-sụt-áp-đủ-ô
+    rule: >
+      cả 3 trang họ flow_drop (79, 92, 119) phải đủ n_panels, đủ titles đúng thứ
+      tự, đúng x_max mỗi ô (≤2%), và MỖI ô có đúng curves_per_panel đường.
+    fail_means: >
+      thiếu đường thì đường bao trên bị hụt → engine ước sụt áp THẤP hơn thực tế
+      → chọn cỡ nhỏ quá. Sai theo hướng nguy hiểm.
+
+  - id: C14-neo-gốc
+    rule: "mọi đường sụt áp bắt đầu ở gốc: lưu lượng ≤2% dải, sụt áp ≤5% dải"
+    fail_means: >
+      sai hiệu chuẩn, hoặc còn lẫn khung/lưới. Đây là mốc neo VẬT LÝ của họ này,
+      thay cho C4 của họ áp ra.
+
+  - id: C15-sụt-áp-tăng
+    rule: "sụt áp KHÔNG giảm khi lưu lượng tăng"
+    fail_means: "nối sai đoạn, hoặc lẫn đường của họ đồ thị khác"
+
+  - id: C17-bao-trên-đơn-điệu
+    rule: >
+      ĐƯỜNG BAO TRÊN sẽ ghi ra YAML (pdf_chart.envelope) phải tăng đơn điệu, bắt
+      đầu ở gốc, và chỉ tới x_common — chỗ MỌI đường còn định nghĩa.
+    fail_means: >
+      ngoài x_common, "max" chỉ còn max của MỘT SỐ điều kiện nên nó GIẢM khi lưu
+      lượng tăng — đo được AF20-D từ 0,1 MPa ở 736 L/min xuống 0,079 ở 1500. Số
+      đó vào engine là ước sụt áp THẤP hơn thực tế, sai theo hướng nguy hiểm.
+      Tiêu chí này kiểm ĐÚNG hàm mà bộ sinh YAML dùng, không phải bản nhân đôi.
+
+  - id: C16-đơn-điệu-liên-model-sụt-áp
+    rule: >
+      trong cùng họ mã (AF/AL/AFM/AFD), cỡ lớn hơn phải có sụt áp ≤ cỡ nhỏ hơn
+      tại cùng lưu lượng (dung sai 0,005 MPa).
+    fail_means: "gán tiêu đề lẫn giữa các ô, hoặc trộn số giữa ô"
 
   - id: C10-đủ-hai-họ
     rule: >
@@ -194,13 +297,16 @@ criteria:
 
 # ── VÒNG A KHÔNG BAO GỒM — nói rõ để không ai tưởng đã xong ─────────────────
 gaps:
-  - "flow_drop (lọc AFM/AFD/AFF, tr79/92/119): bộ tìm ô hiện trả 0 ô. Chưa số
-     hoá được, và cũng chưa có ground truth cho họ này."
+  - "Đồ thị của es40-74-AWM-AWD-D.pdf trang 8 là ẢNH RASTER nhúng (1842×557,
+     250 dpi), không phải vector — phương pháp này không đọc được. 9 ô. Đo được:
+     68/77 ô đồ thị FRL là vector nên đây là ngoại lệ duy nhất."
   - "pressure_char (tr23/104/129): nhận dạng được nhưng TỪ CHỐI số hoá — engine
      chưa cần, và chưa có ground truth riêng."
+  - "ES40-60-AR10-A.pdf tr2 (AR10-A, 1 ô): tìm được ô và trục nhưng KHÔNG gán
+     được đường cong nào. Một model nhỏ duy nhất, chưa truy nguyên nhân."
   - "Chưa có người mở catalog đối chiếu bằng mắt. Cổng chứng minh phép trích
      TỰ NHẤT QUÁN với nhãn trục trong PDF, không chứng minh catalog in đúng.
      Nên confidence để 0.9, không phải 0.95."
 
 # Chưa đạt C1..C9 thì KHÔNG sinh db/seed/charts/ac-flow.yaml.
-gate: "C1..C9 phải PASS trước khi ghi bất kỳ YAML nào cho engine"
+gate: "C1..C16 phải PASS trước khi ghi bất kỳ YAML nào cho engine"

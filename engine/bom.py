@@ -469,8 +469,13 @@ def build(con, inputs, project=None, project_name="demo"):
     # engine tự tra. Thiếu áp nguồn thì pick_frl_size trả gap nói rõ, không đoán.
     if not project.get("frl_size"):
         fam = (project.get("frl_series") or "AC-A-E").split("-")[0]
-        size, why = chart.pick_frl_size(need_lpm, project["pressure_mpa"],
-                                        project.get("supply_pressure_mpa"), fam)
+        size, why = chart.pick_frl_size(
+            need_lpm, project["pressure_mpa"],
+            project.get("supply_pressure_mpa"), fam,
+            # Phụ kiện nối SAU bộ điều áp làm sụt thêm áp trước khi khí tới máy —
+            # phải cộng vào yêu cầu, không được bỏ qua.
+            lubricator=bool(project.get("frl_lubricator")),
+            mist_separator=bool(project.get("frl_mist_separator")))
         if size:
             project["frl_size"] = size
             auto["frl_size"] = (size, why)
@@ -482,7 +487,9 @@ def build(con, inputs, project=None, project_name="demo"):
         # giờ có số nên kiểm luôn: chọn thiếu cỡ là sụt áp khi nhiều xy-lanh chạy.
         need_size, why = chart.pick_frl_size(
             need_lpm, project["pressure_mpa"], project["supply_pressure_mpa"],
-            (project.get("frl_series") or "AC-A-E").split("-")[0])
+            (project.get("frl_series") or "AC-A-E").split("-")[0],
+            lubricator=bool(project.get("frl_lubricator")),
+            mist_separator=bool(project.get("frl_mist_separator")))
         auto["frl_size_checked"] = (need_size, why)
         try:
             too_small = need_size and int(need_size) > int(project["frl_size"])

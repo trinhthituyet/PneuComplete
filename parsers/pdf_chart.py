@@ -15,10 +15,17 @@ hơn (không lệ thuộc tay người) và chạy được trên cả trăm đ�
     python3 tests/test_chart.py                    # CỔNG 12 tiêu chí + 7 đối chứng âm
     python3 -m parsers.chart_yaml --write          # sinh YAML (tự gọi cổng)
 
-TRẠNG THÁI: họ đồ thị "lưu lượng → áp ra" của FRL đã qua cổng và đã sinh
-db/seed/charts/ac-flow.yaml (17 model, 153 đường, 3 trang). engine.chart dùng nó
-để tự chọn cỡ AC. Hai họ đồ thị khác (áp vào→áp ra; lưu lượng→sụt áp) NHẬN DẠNG
-được nhưng TỪ CHỐI số hoá — chưa có ground truth riêng.
+TRẠNG THÁI (đo được, 11 trang / 5 catalog trong ground truth):
+
+    họ đồ thị            ô vector   đã số hoá   ghi ra YAML
+    lưu lượng → áp ra          24          23   ac-flow.yaml   23 model/198 đường
+    lưu lượng → sụt áp         23          22   frl-drop.yaml  22 model/94 đk
+    áp vào   → áp ra           24           0   TỪ CHỐI (chưa có ground truth)
+    chưa nhận dạng được         4           0
+    ─ trang ẢNH RASTER          9           0   phương pháp này không đọc được
+
+engine.chart dùng chúng để tự chọn cỡ AC và cộng sụt áp của phụ kiện nối sau bộ
+điều áp. Cổng: tests/test_chart.py — 17 tiêu chí + 11 đối chứng âm.
 
 ── Ý CHÍNH VỀ THIẾT KẾ: NHÃN TRỤC ĐỊNH NGHĨA Ô, KHÔNG PHẢI ĐƯỜNG CONG ────────
 Bản đầu suy ô từ CỤM ĐƯỜNG CONG rồi cộng offset đo trên đúng một trang để tìm
@@ -113,8 +120,22 @@ def svg_paths(pdf, page):
                 if pts:
                     subs.append(pts)
                 pts = []
-            if op == "C" and len(nums) >= 6:
-                pts.append((nums[4], nums[5]))     # điểm NEO, bỏ 2 điểm điều khiển
+            if op == "C" and len(nums) >= 6 and pts:
+                # LẤY MẪU BEZIER, không chỉ lấy điểm neo. Bản trước chỉ giữ neo
+                # cuối mỗi đoạn C nên hình dạng giữa hai neo bị thay bằng đoạn
+                # thẳng — và nếu cả đường chỉ vẽ bằng MỘT đoạn C thì còn đúng 2
+                # điểm, bị ngưỡng ≥3 loại sạch (đo được: 9/18 đường của trang 92
+                # mất theo cách đó). Điểm điều khiển KHÔNG nằm trên đường cong nên
+                # không dùng trực tiếp; phải nội suy bậc ba.
+                x0, y0 = pts[-1]
+                x1, y1, x2, y2, x3, y3 = nums[:6]
+                for k in (1, 2, 3, 4):
+                    t = k / 4.0
+                    u = 1.0 - t
+                    pts.append((u**3 * x0 + 3 * u * u * t * x1
+                                + 3 * u * t * t * x2 + t**3 * x3,
+                                u**3 * y0 + 3 * u * u * t * y1
+                                + 3 * u * t * t * y2 + t**3 * y3))
             elif len(nums) >= 2:
                 pts.append((nums[0], nums[1]))
         if pts:
@@ -224,6 +245,29 @@ def _axis_caption(ws, box, axis):
 #   flow_outlet   lưu lượng → áp ra      bộ điều áp AC/AR   giảm dần từ áp đặt
 #   flow_drop     lưu lượng → sụt áp     lọc AFM/AFD/AFF    tăng dần từ 0
 #   pressure_char áp vào   → áp ra       "Pressure Char."   tăng dần
+def _single_inlet(ws):
+    """Áp vào DUY NHẤT ghi bằng chữ trên trang, ví dụ 'Condition: Inlet pressure
+    of 0.7 MPa'. Trả float, hoặc None nếu không có/không rõ.
+
+    Có trang chỉ vẽ MỘT điều kiện áp vào nên không cần chú giải nét — es40-70-ARG-B
+    tr4 và ES40-60-AR10-A tr2. Câu điều kiện là text nên vẫn là nguồn ĐỘC LẬP với
+    việc trích đường cong. Nhiều giá trị khác nhau thì TRẢ None: thà báo không
+    biết hơn là chọn một cái.
+    """
+    rows = {}
+    for wx0, wy0, wx1, wy1, t in ws:
+        rows.setdefault(round((wy0 + wy1) / 2 / 2.5), []).append(((wx0 + wx1) / 2, t))
+    vals = set()
+    for _, items in rows.items():
+        line = " ".join(t for _, t in sorted(items))
+        for m in re.finditer(r"(?i)inlet\s+pressure\s+of\s+([\d.]+)\s*MPa", line):
+            try:
+                vals.add(float(m.group(1)))
+            except ValueError:
+                pass
+    return vals.pop() if len(vals) == 1 else None
+
+
 def _kind(x_cap, y_cap):
     x, y = x_cap.lower(), y_cap.lower()
     x_flow = "l/min" in x or "m3/min" in x or "dm3" in x
@@ -252,11 +296,29 @@ def _legend(ws, lines):
     Kết quả còn được KIỂM CHỨNG BẰNG VẬT LÝ ở digitize(): họ nào chứa áp đặt cao
     nhất phải là họ có áp vào cao hơn — không điều áp lên được.
     """
+    # ── TÌM VẠCH MẪU TRƯỚC, RỒI MỚI TÌM DÒNG CHỮ ────────────────────────────
+    # Bản trước lấy MỌI từ 'Inlet' trên trang rồi đòi số vạch = số dòng. Trang
+    # es40-72-AR_M-D tr11 có thêm hai ghi chú 'Inlet pressure' NGAY TRONG ô (cy
+    # 456 và 623) nên 2 vạch ≠ 4 dòng và cả trang bị bỏ. Vạch mẫu là thứ đặc
+    # trưng của chú giải, nên nó phải là mốc.
+    marks = []
+    for lx0, ly0, lx1, ly1, dash in lines:
+        if (ly1 - ly0) >= 3 or not (6 <= lx1 - lx0 <= 40):
+            continue
+        marks.append(((ly0 + ly1) / 2, lx1, dash))
+    if len(marks) < 2:
+        return None
+    marks.sort()
+    m_lo, m_hi = marks[0][0], marks[-1][0]
+    m_right = max(m[1] for m in marks)
+
     rows = []
     for wx0, wy0, wx1, wy1, t in ws:
         if not t.lower().startswith("inlet"):
             continue
         cy, cx = (wy0 + wy1) / 2, (wx0 + wx1) / 2
+        if not (m_lo - 12 <= cy <= m_hi + 12 and cx >= m_right - 4):
+            continue                      # ghi chú ở nơi khác, không phải chú giải
         vals = [float(u) for ux0, uy0, ux1, uy1, u in ws
                 if NUM.match(u) and abs((uy0 + uy1) / 2 - cy) <= 2.0
                 and (ux0 + ux1) / 2 > cx]
@@ -265,16 +327,8 @@ def _legend(ws, lines):
     if len(rows) < 2:
         return None
     rows.sort()
-
-    marks = []
-    for lx0, ly0, lx1, ly1, dash in lines:
-        if (ly1 - ly0) >= 3 or not (6 <= lx1 - lx0 <= 40):
-            continue
-        cy = (ly0 + ly1) / 2
-        near = [r for r in rows if abs(r[0] - cy) <= 12 and lx1 <= r[1] + 2]
-        if near:
-            marks.append((cy, dash))
-    marks.sort()
+    marks = [m for m in marks if m_lo - 12 <= m[0] <= m_hi + 12]
+    marks = [(m[0], m[2]) for m in marks]
     if len(marks) != len(rows):
         return None
     out = {}
@@ -303,7 +357,12 @@ def _axes(ws):
 
     Đường cong sau đó được GÁN vào ô theo vị trí, không ngược lại.
     """
-    nums = [((wx0 + wx1) / 2, (wy0 + wy1) / 2, float(t))
+    # Mỗi nhãn số: (tâm_x, tâm_y, giá_trị, mép_phải).
+    # MÉP PHẢI cần cho trục Y: nhãn trục Y CANH PHẢI theo trục nên mép phải bằng
+    # nhau còn tâm thì lệch theo số chữ số — đo trên tr22: '0.8'…'0.1' có tâm
+    # 69,7 nhưng '0' có tâm 72,2, mép phải cả hai đều 73,9. Gộp theo tâm với dung
+    # sai 3px thì trang tr92 (nhãn 0,02/0,01/0) bị tách cột và mất sạch 6 ô.
+    nums = [((wx0 + wx1) / 2, (wy0 + wy1) / 2, float(t), wx1)
             for wx0, wy0, wx1, wy1, t in ws if NUM.match(t)]
 
     def group(items, key, tol=3.0):
@@ -334,17 +393,17 @@ def _axes(ws):
             cur.append(it)
         if cur:
             out.append(cur)
-        return [r for r in out if len({v for _, _, v in r}) >= 3]
+        return [r for r in out if len({p[2] for p in r}) >= 3]
 
     ycols, xrows = [], []
-    for g in group(nums, lambda p: p[0]):
-        ycols += runs(g, lambda p: p[1], rising=False)     # trục Y GIẢM xuống dưới
-    for g in group(nums, lambda p: p[1]):
-        xrows += runs(g, lambda p: p[0], rising=True)      # trục X TĂNG sang phải
+    for g in group(nums, lambda p: p[3]):                  # trục Y: gộp theo MÉP PHẢI
+        ycols += runs(g, lambda p: p[1], rising=False)     # và GIẢM xuống dưới
+    for g in group(nums, lambda p: p[1]):                  # trục X: gộp theo hàng
+        xrows += runs(g, lambda p: p[0], rising=True)      # và TĂNG sang phải
 
     panels = []
     for yc in ycols:
-        xc, ytop, ybot = yc[0][0], yc[0][1], yc[-1][1]
+        xc, ytop, ybot = max(p[3] for p in yc), yc[0][1], yc[-1][1]
         best = None
         for xr in xrows:
             cy = xr[0][1]
@@ -459,6 +518,56 @@ def _title_for(ws, box, used=()):
     return best
 
 
+def interp(pts, x):
+    """Nội suy tuyến tính, KHÔNG ngoại suy. Trả None nếu x ngoài dải."""
+    if not pts or x < pts[0][0] or x > pts[-1][0]:
+        return None
+    for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
+        if x1 <= x <= x2:
+            return y1 if x2 == x1 else y1 + (y2 - y1) * (x - x1) / (x2 - x1)
+    return None
+
+
+def envelope(curves, thin=0.001):
+    """Đường bao TRÊN của nhiều đường sụt áp. Trả [[x, y]…].
+
+    DÙNG KHI KHÔNG ĐỌC ĐƯỢC NHÃN: mỗi ô sụt áp vẽ 5 đường (tr92: 3) ứng với các
+    áp vào P1 khác nhau, nhưng nhãn P1 là text XOAY mà pdftotext tách thành ký tự
+    rời — không đọc lại được cho chắc. Bao trên bảo thủ đúng hướng: thừa sụt áp
+    thì engine chọn cỡ TO hơn, không nhỏ hơn.
+
+    CẮT TẠI x_common — chỗ MỌI đường còn định nghĩa. Ngoài đó, "max" chỉ còn là
+    max của MỘT SỐ điều kiện, nên nó GIẢM khi lưu lượng tăng: đo được AF20-D đi
+    từ 0,1 MPa ở 736 L/min xuống 0,079 ở 1500 L/min. Sụt áp giảm khi lưu lượng
+    tăng là vô nghĩa vật lý, và số đó vào engine thì ước THẤP hơn thực tế — sai
+    theo hướng nguy hiểm. Ngoài x_common là gap, không phải số.
+
+    ĐÂY LÀ HÀM DUY NHẤT tính bao trên: cả bộ sinh YAML và cổng kiểm đều gọi nó.
+    Nhân bản hai bản thì cổng kiểm một thứ mà YAML ghi thứ khác.
+    """
+    if not curves:
+        return []
+    x_common = min(max(x for x, _ in c) for c in curves)
+    xs = sorted({round(x, 1) for c in curves for x, _ in c if x <= x_common})
+    out = []
+    run = 0.0
+    for x in xs:
+        ys = [v for c in curves for v in [interp(c, x)] if v is not None]
+        if not ys:
+            continue
+        run = max(run, max(ys))          # max lũy tiến: nhiễu không được làm giảm
+        out.append([x, round(run, 4)])
+    if not out:
+        return []
+    keep = [out[0]]
+    for q in out[1:-1]:
+        if q[1] - keep[-1][1] >= thin:
+            keep.append(q)
+    if len(out) > 1:
+        keep.append(out[-1])
+    return keep
+
+
 def digitize(pdf, page, samples=10):
     """Trích MỌI ô đồ thị trên một trang, mỗi ô hiệu chuẩn riêng.
 
@@ -469,6 +578,12 @@ def digitize(pdf, page, samples=10):
     ws = words(pdf, page)
     curves, lines = svg_paths(pdf, page)
     legend = _legend(ws, lines)
+    if legend is None:
+        # Không có chú giải nét → có thể trang chỉ vẽ MỘT điều kiện áp vào, ghi
+        # bằng chữ. Cả hai kiểu nét khi đó cùng một áp vào.
+        one = _single_inlet(ws)
+        if one is not None:
+            legend = {True: one, False: one}
     if not ws:
         return {"ok": False, "error": "trang không có text — có thể là ảnh scan"}
     if not curves:
@@ -477,9 +592,9 @@ def digitize(pdf, page, samples=10):
     panels, used_titles = [], set()
     for ax in _axes(ws):
         L, T, R, B = ax["L"], ax["T"], ax["R"], ax["B"]
-        yt = [(cy, v) for _, cy, v in ax["yc"]]
+        yt = [(cy, v) for _, cy, v, _ in ax["yc"]]
         yt_vals = [v for _, v in yt]
-        xt = [(cx, v) for cx, _, v in ax["xr"]]
+        xt = [(cx, v) for cx, _, v, _ in ax["xr"]]
         fx, fy = _fit(xt), _fit(yt)
         x_cap = _axis_caption(ws, (L, T, R, B), "x")
         y_cap = _axis_caption(ws, (ax["xc"], T, R, B), "y")
@@ -496,13 +611,14 @@ def digitize(pdf, page, samples=10):
                             f"Y:{len(yt)} nhãn — cần ≥3 mỗi trục, thẳng hàng)")
             panels.append(pan)
             continue
-        if kind != "flow_outlet":
+        if kind not in ("flow_outlet", "flow_drop"):
             # KHÔNG số hoá họ chưa có ground truth. Trang 23 từng báo "6/6 ô đạt"
             # trong khi trục X là ÁP VÀO [MPa] — ghi ra YAML là engine đọc áp
             # suất thành lưu lượng. Từ chối thì an toàn; lọc bằng luật tự nghĩ
             # mà không kiểm chứng được thì không.
-            pan["error"] = (f"họ đồ thị '{kind or 'không nhận dạng được'}' ngoài "
-                            "phạm vi vòng A (chỉ số hoá lưu lượng→áp ra)")
+            pan["error"] = (f"họ đồ thị '{kind or 'không nhận dạng được'}' chưa có "
+                            "ground truth — chỉ số hoá lưu lượng→áp ra và "
+                            "lưu lượng→sụt áp")
             panels.append(pan)
             continue
 
@@ -578,14 +694,27 @@ def digitize(pdf, page, samples=10):
             if cut:
                 trimmed[0] += cut
             data = kept
-            # áp ra KHÔNG tăng khi lưu lượng tăng
-            if any(y2 - y1 > tol for (_, y1), (_, y2) in zip(data, data[1:])):
-                dropped.append("áp ra tăng")
-                continue
-            # mỗi đường BẮT ĐẦU đúng áp đặt của nó — tức một nhãn trục Y
-            if not any(abs(data[0][1] - v) <= 0.025 for _, v in yt):
-                dropped.append("điểm đầu không trùng nhãn Y")
-                continue
+            if kind == "flow_drop":
+                # SỤT ÁP: tăng theo lưu lượng, và BẰNG 0 khi lưu lượng bằng 0.
+                # Mốc neo (0,0) là vật lý — không lọc gì thì khung và vạch lưới
+                # lọt vào, mà ở đây engine lấy ĐƯỜNG BAO TRÊN nên một đường lạ
+                # nằm trên là làm sai toàn bộ.
+                if any(y1 - y2 > tol for (_, y1), (_, y2) in zip(data, data[1:])):
+                    dropped.append("sụt áp giảm khi lưu lượng tăng")
+                    continue
+                if (data[0][0] > xlo + 0.02 * xspan
+                        or data[0][1] > ylo + 0.05 * yspan):
+                    dropped.append("điểm đầu không ở gốc (0 lưu lượng, 0 sụt áp)")
+                    continue
+            else:
+                # áp ra KHÔNG tăng khi lưu lượng tăng
+                if any(y2 - y1 > tol for (_, y1), (_, y2) in zip(data, data[1:])):
+                    dropped.append("áp ra tăng")
+                    continue
+                # mỗi đường BẮT ĐẦU đúng áp đặt của nó — tức một nhãn trục Y
+                if not any(abs(data[0][1] - v) <= 0.025 for _, v in yt):
+                    dropped.append("điểm đầu không trùng nhãn Y")
+                    continue
             # ÁP VÀO của đường này, đọc từ chú giải cấp trang qua kiểu nét.
             # Thiếu chú giải thì KHÔNG gán bừa: để None và báo, vì hai họ đường
             # cùng nhãn áp đặt mà không phân biệt được thì số vô nghĩa.
@@ -593,6 +722,15 @@ def digitize(pdf, page, samples=10):
                                   "dashed": dash, "points": data})
         pan["dropped"] = dropped
         pan["trimmed_points"] = trimmed[0]
+        if kind == "flow_drop":
+            # KHÔNG GÁN NHÃN CHO HỌ NÀY. Nhãn mỗi đường là áp vào P1, viết XOAY
+            # bên trong ô, và pdftotext tách nó thành ký tự rời ('P','1','=','0',
+            # '.3','MP','a') — không có nguồn text nào đọc lại được cho chắc. Nên
+            # để nhãn None và nói rõ; bên ghi YAML sẽ lấy ĐƯỜNG BAO TRÊN (sụt áp
+            # lớn nhất), bảo thủ đúng hướng: thừa sụt áp thì chọn cỡ to hơn.
+            pan["unlabelled"] = True
+            panels.append(pan)
+            continue
         if legend is None and pan["series"]:
             pan["error"] = ("trang có HAI họ đường theo áp vào nhưng không đọc "
                             "được chú giải → không phân biệt được, bỏ toàn bộ ô")
@@ -615,8 +753,13 @@ def digitize(pdf, page, samples=10):
 
     good = [p for p in panels if p.get("series")]
     kinds = [p["kind"] for p in panels if p.get("kind")]
+    # `kind` chỉ đặt khi TOÀN TRANG một họ. Trước đây lấy họ ĐA SỐ, nhưng trang
+    # es40-70-ARG-B tr4 và es40-72-AR_M-D tr11 trộn 3 ô lưu lượng→áp ra với 3 ô
+    # áp vào→áp ra, nên "đa số" là một con số vô nghĩa và làm tiêu chí phân loại
+    # báo sai. Trang trộn họ thì phải xét theo TỪNG Ô.
     return {"ok": bool(good), "page": page, "n_curves": len(curves),
-            "kind": max(set(kinds), key=kinds.count) if kinds else None,
+            "kind": kinds[0] if kinds and len(set(kinds)) == 1 else None,
+            "kinds": {k: kinds.count(k) for k in sorted(set(kinds))},
             "panels": panels, "n_ok": len(good),
             "error": None if good else "không ô nào hiệu chuẩn được"}
 

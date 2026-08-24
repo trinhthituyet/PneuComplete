@@ -1,0 +1,337 @@
+# SỤT ÁP theo lưu lượng của lọc AF · tách ẩm AFM/AFD · tra dầu AL.
+#
+# ⚠ TỆP NÀY DO MÁY SINH — sửa tay sẽ bị ghi đè.
+#     python3 -m parsers.chart_yaml --write
+#
+# ── ĐÂY LÀ ĐƯỜNG BAO TRÊN, KHÔNG PHẢI TỪNG ĐIỀU KIỆN ────────────────────────
+# Mỗi ô trong catalog vẽ 3 hoặc 4 hoặc 5 đường ứng với các ÁP VÀO P1 khác nhau. Nhãn P1 viết
+# XOAY bên trong ô, và pdftotext tách nó thành ký tự rời — 'P','1','=','0','.3',
+# 'MP','a' — nên KHÔNG có nguồn text nào đọc lại được cho chắc. Đã chọn KHÔNG gán
+# nhãn theo phỏng đoán, mà ghi ĐƯỜNG BAO TRÊN: sụt áp lớn nhất trong các P1 đã vẽ.
+#
+# Bảo thủ đúng hướng, giống cách đã làm với dẫn nạp âm SY: thừa sụt áp thì engine
+# chọn cỡ TO HƠN mức cần, chứ không bao giờ nhỏ hơn. Sai theo hướng còn lại là
+# sụt áp khi nhiều xy-lanh chạy cùng lúc.
+#
+# ── VÌ SAO TIN ĐƯỢC ─────────────────────────────────────────────────────────
+# Mốc neo VẬT LÝ của họ này: sụt áp = 0 khi lưu lượng = 0. Đo được 94 đường
+# đều bắt đầu ở gốc. Cộng với: mọi đường tăng đơn điệu, và cỡ thân lớn hơn sụt áp
+# ít hơn ở cùng lưu lượng — kiểm chứng ĐỘC LẬP với từng ô (tiêu chí C13–C16).
+# Cổng đầy đủ: tests/test_chart.py (17 tiêu chí + 11 đối chứng âm).
+#
+# ── ĐỌC THẾ NÀO ─────────────────────────────────────────────────────────────
+#   điểm = [lưu lượng L/min (ANR), sụt áp MPa]
+#   n_conditions = số đường P1 mà bao trên này gộp lại
+#   engine.chart.frl_drop(model, lưu_lượng) — nội suy, KHÔNG ngoại suy
+#   ends_at_y_max=true: đuôi bao trên CHẠM đỉnh trục, nên ngoài dải thì sụt áp
+#     thật > y_max. Khác với false (catalog thôi không vẽ nữa → hoàn toàn chưa biết).
+#
+# ── DẢI PHỦ CÓ HẠN — nói rõ ─────────────────────────────────────────────────
+# Bao trên chỉ định nghĩa tới x_common, chỗ MỌI điều kiện còn được vẽ. Với AF50-D
+# đó là 3.910 trong dải trục 15.000 L/min (26%). Ngoài đó engine báo GAP chứ không
+# giữ phẳng giá trị cuối: giữ phẳng là ước sụt áp THẤP hơn thực tế, mà sai theo
+# hướng đó thì chọn cỡ nhỏ quá — đúng thứ phần mềm này phải tránh.
+
+source:
+  catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+  pdf_page: "es40-69-AC-D: 79 (AF), 92 (AFM/AFD), 119 (AL) · ES30-25-AFG-D: 4
+    (AFG). Mỗi bảng mang theo `catalog` + `pdf_page` riêng."
+  table: "Flow Rate Characteristics — Pressure drop"
+  note: >
+    Đường bao trên của các áp vào P1 đã vẽ. Trích tự động từ vector PDF, qua cổng
+    17 tiêu chí + 11 đối chứng âm. Chi tiết: db/seed/charts/_groundtruth-ac.yaml
+confidence: 0.85
+digitized_by: >
+  parsers/chart_yaml.py — tự động từ vector PDF. Confidence thấp hơn bảng lưu
+  lượng (0.9) vì đây là ĐƯỜNG BAO, không phải số của một điều kiện xác định.
+axis:
+  x: {name: flow_lpm_anr, unit: "L/min (ANR)"}
+  y: {name: pressure_drop, unit: MPa}
+
+charts:
+  - chart_id: frl_drop_af20_d
+    model_label: "AF20-D"
+    applies_to: [AF20-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 79
+    x_max: 1500
+    n_conditions: 5
+    ends_at_y_max: true
+    y_max: 0.1
+    kind: continuous
+    series:
+      - label: "max"   # bao trên của 5 điều kiện áp vào
+        points: [[1.2, 0.002], [139.9, 0.003], [199.1, 0.004], [228.4, 0.0061], [242.7, 0.0071], [268.9, 0.009], [294.1, 0.0114], [312.1, 0.0131], [343.8, 0.0161], [362.4, 0.0182], [408.2, 0.0241], [434.8, 0.0275], [473, 0.0338], [490.3, 0.0367], [498.4, 0.038], [510.3, 0.04], [526.7, 0.0431], [560, 0.0494], [602.5, 0.059], [614.8, 0.062], [624.8, 0.0644], [631.3, 0.066], [637, 0.0676], [653.1, 0.072], [668.9, 0.0766], [676.9, 0.079], [704, 0.088], [726.3, 0.096], [732.9, 0.0988], [735.6, 0.1]]
+  - chart_id: frl_drop_af30_d
+    model_label: "AF30-D"
+    applies_to: [AF30-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 79
+    x_max: 4000
+    n_conditions: 5
+    ends_at_y_max: false
+    y_max: 0.1
+    kind: continuous
+    series:
+      - label: "max"   # bao trên của 5 điều kiện áp vào
+        points: [[0, 0.002], [152.3, 0.003], [273, 0.004], [370.8, 0.005], [451.6, 0.007], [513.9, 0.0087], [564.2, 0.01], [659.2, 0.0123], [727.3, 0.0146], [806.9, 0.018], [846.7, 0.0197], [876.9, 0.0211], [921.6, 0.023], [1036.7, 0.029], [1097.8, 0.0333], [1135.5, 0.036], [1187.3, 0.0399], [1201.6, 0.041], [1255.6, 0.046], [1317.1, 0.052], [1359.2, 0.0553], [1374.9, 0.0567], [1388.5, 0.058]]
+  - chart_id: frl_drop_af40_d
+    model_label: "AF40-D"
+    applies_to: [AF40-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 79
+    x_max: 6000
+    n_conditions: 5
+    ends_at_y_max: false
+    y_max: 0.1
+    kind: continuous
+    series:
+      - label: "max"   # bao trên của 5 điều kiện áp vào
+        points: [[9, 0.002], [169.8, 0.003], [303, 0.004], [411, 0.005], [506.2, 0.0065], [569.9, 0.0075], [726.6, 0.01], [834.5, 0.0117], [912.3, 0.013], [957.7, 0.0141], [1038.3, 0.016], [1134.7, 0.0195], [1223.2, 0.0229], [1299.8, 0.0259], [1327.7, 0.027], [1464.1, 0.032], [1499.3, 0.0338], [1601.1, 0.039], [1686.9, 0.0432], [1720.4, 0.0449], [1750.6, 0.0465], [1848.4, 0.052], [1875.2, 0.0535], [1954.7, 0.058], [1997.8, 0.0607], [2019.2, 0.062], [2059.7, 0.065], [2099.6, 0.0679], [2134.6, 0.071], [2147.9, 0.072]]
+  - chart_id: frl_drop_af40_06_d
+    model_label: "AF40-06-D"
+    applies_to: [AF40-06-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 79
+    x_max: 6000
+    n_conditions: 5
+    ends_at_y_max: false
+    y_max: 0.1
+    kind: continuous
+    series:
+      - label: "max"   # bao trên của 5 điều kiện áp vào
+        points: [[0, 0.002], [55.6, 0.003], [181.6, 0.004], [383.2, 0.006], [534.4, 0.0081], [666.8, 0.01], [786.5, 0.0119], [988.1, 0.015], [1246.4, 0.021], [1359, 0.0247], [1492.1, 0.029], [1605.5, 0.0341], [1715.8, 0.0391], [1744.2, 0.0404], [1895.3, 0.0485], [1996.2, 0.054], [2160, 0.064], [2212.8, 0.0678], [2298.6, 0.074]]
+  - chart_id: frl_drop_af50_d
+    model_label: "AF50-D"
+    applies_to: [AF50-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 79
+    x_max: 15000
+    n_conditions: 5
+    ends_at_y_max: false
+    y_max: 0.1
+    kind: continuous
+    series:
+      - label: "max"   # bao trên của 5 điều kiện áp vào
+        points: [[0, 0.002], [95.2, 0.003], [349.8, 0.004], [459.1, 0.005], [646.7, 0.006], [846.1, 0.007], [970.8, 0.008], [1181.4, 0.01], [1378.3, 0.0115], [1716.5, 0.015], [1984.1, 0.018], [2239.9, 0.022], [2497.2, 0.026], [2751.4, 0.031], [2820, 0.0324], [2934.4, 0.0347], [2997.7, 0.036], [3232.9, 0.041], [3460.2, 0.046], [3684.3, 0.051], [3909.8, 0.057]]
+  - chart_id: frl_drop_af60_d
+    model_label: "AF60-D"
+    applies_to: [AF60-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 79
+    x_max: 15000
+    n_conditions: 5
+    ends_at_y_max: false
+    y_max: 0.1
+    kind: continuous
+    series:
+      - label: "max"   # bao trên của 5 điều kiện áp vào
+        points: [[0, 0.002], [70.2, 0.003], [325.1, 0.004], [540.5, 0.005], [820, 0.006], [1156.5, 0.008], [1352.8, 0.0095], [1691.8, 0.012], [1959.4, 0.014], [2203.3, 0.016], [2440.9, 0.019], [2691.1, 0.022], [2790.4, 0.0234], [2909.6, 0.0251], [3299.2, 0.031], [3657, 0.037], [3986.6, 0.0432], [4391.9, 0.051]]
+  - chart_id: frl_drop_afm20_d
+    model_label: "AFM20-D"
+    applies_to: [AFM20-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 92
+    x_max: 200
+    n_conditions: 3
+    ends_at_y_max: false
+    y_max: 0.02
+    kind: continuous
+    series:
+      - label: "max"   # bao trên của 3 điều kiện áp vào
+        points: [[0, 0.001], [18.5, 0.002], [30.2, 0.0033], [53.8, 0.006], [70.8, 0.008], [86.2, 0.0109], [99.6, 0.013], [106.6, 0.014]]
+  - chart_id: frl_drop_afd20_d
+    model_label: "AFD20-D"
+    applies_to: [AFD20-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 92
+    x_max: 100
+    n_conditions: 3
+    ends_at_y_max: false
+    y_max: 0.02
+    kind: continuous
+    series:
+      - label: "max"   # bao trên của 3 điều kiện áp vào
+        points: [[0, 0], [4.8, 0.001], [12.7, 0.0022], [28.9, 0.0046], [38.2, 0.006], [44.4, 0.0073], [58.1, 0.0102], [61.7, 0.011]]
+  - chart_id: frl_drop_afm30_d
+    model_label: "AFM30-D"
+    applies_to: [AFM30-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 92
+    x_max: 600
+    n_conditions: 3
+    ends_at_y_max: false
+    y_max: 0.02
+    kind: continuous
+    series:
+      - label: "max"   # bao trên của 3 điều kiện áp vào
+        points: [[0.9, 0], [21.9, 0.001], [76.6, 0.002], [116.1, 0.0041], [152.6, 0.006], [227.9, 0.0105], [237.2, 0.011]]
+  - chart_id: frl_drop_afd30_d
+    model_label: "AFD30-D"
+    applies_to: [AFD30-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 92
+    x_max: 200
+    n_conditions: 3
+    ends_at_y_max: false
+    y_max: 0.02
+    kind: continuous
+    series:
+      - label: "max"   # bao trên của 3 điều kiện áp vào
+        points: [[1.7, 0.001], [37.3, 0.003], [53.6, 0.0043], [75.8, 0.006], [109.9, 0.0096], [122.6, 0.011]]
+  - chart_id: frl_drop_afm40_d
+    model_label: "AFM40-D"
+    applies_to: [AFM40-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 92
+    x_max: 1000
+    n_conditions: 3
+    ends_at_y_max: false
+    y_max: 0.02
+    kind: continuous
+    series:
+      - label: "max"   # bao trên của 3 điều kiện áp vào
+        points: [[0.1, 0], [58.8, 0.001], [111.7, 0.0021], [204.5, 0.004], [286.3, 0.0057], [381.8, 0.0078], [550, 0.0115], [574.8, 0.012]]
+  - chart_id: frl_drop_afd40_d
+    model_label: "AFD40-D"
+    applies_to: [AFD40-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 92
+    x_max: 600
+    n_conditions: 3
+    ends_at_y_max: false
+    y_max: 0.02
+    kind: continuous
+    series:
+      - label: "max"   # bao trên của 3 điều kiện áp vào
+        points: [[0, 0], [32.1, 0.001], [112.6, 0.004], [176.4, 0.0059], [211.3, 0.007], [268.6, 0.0096], [300.4, 0.011]]
+  - chart_id: frl_drop_al20_d
+    model_label: "AL20-D"
+    applies_to: [AL20-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 119
+    x_max: 4000
+    n_conditions: 5
+    ends_at_y_max: false
+    y_max: 0.1
+    kind: continuous
+    series:
+      - label: "max"   # bao trên của 5 điều kiện áp vào
+        points: [[0, 0.002], [7, 0.003], [31.9, 0.005], [42.6, 0.006], [56.8, 0.0072], [74.8, 0.0088], [101.2, 0.0101], [127.9, 0.0113], [153.8, 0.0123], [194.1, 0.0136], [225.4, 0.0146], [269.8, 0.016], [318.9, 0.0176], [455.3, 0.022], [522.5, 0.0241], [562.5, 0.0254], [646.6, 0.028], [746, 0.0315], [790.4, 0.033], [842.5, 0.0351], [883.9, 0.0368], [979.4, 0.041], [1009.7, 0.043], [1054.5, 0.046], [1109.4, 0.05], [1144.7, 0.0533], [1161.6, 0.055], [1219.5, 0.062], [1266.1, 0.067], [1285.3, 0.069]]
+  - chart_id: frl_drop_al30_d
+    model_label: "AL30-D"
+    applies_to: [AL30-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 119
+    x_max: 6000
+    n_conditions: 5
+    ends_at_y_max: false
+    y_max: 0.1
+    kind: continuous
+    series:
+      - label: "max"   # bao trên của 5 điều kiện áp vào
+        points: [[0.7, 0.002], [17.4, 0.0031], [44.3, 0.0043], [112.4, 0.0062], [172.6, 0.008], [229, 0.0091], [329.2, 0.011], [508.2, 0.0129], [688.6, 0.0158], [809.8, 0.0174], [900.7, 0.0189], [994.1, 0.021], [1130.9, 0.024], [1190.3, 0.0258], [1266.3, 0.0282], [1300.9, 0.0293], [1449.7, 0.035], [1540.8, 0.0395], [1570.8, 0.041], [1590.8, 0.0421], [1616.4, 0.0436], [1676.9, 0.047], [1792.6, 0.053], [1821.6, 0.0547], [1862.5, 0.0572], [1893.2, 0.059], [1954.4, 0.062], [1992.1, 0.065], [2033.5, 0.068], [2069.5, 0.071], [2091.6, 0.074]]
+  - chart_id: frl_drop_al40_d
+    model_label: "AL40-D"
+    applies_to: [AL40-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 119
+    x_max: 8000
+    n_conditions: 5
+    ends_at_y_max: false
+    y_max: 0.1
+    kind: continuous
+    series:
+      - label: "max"   # bao trên của 5 điều kiện áp vào
+        points: [[6.7, 0.002], [56.5, 0.0033], [106.3, 0.0047], [149.8, 0.006], [205.8, 0.007], [299.1, 0.008], [404.9, 0.01], [784.3, 0.012], [1002, 0.014], [1244.6, 0.016], [1474.8, 0.0178], [1610.6, 0.0202], [1748.5, 0.023], [1997.4, 0.029], [2246.2, 0.0385], [2495, 0.051], [2656.7, 0.062], [2732.2, 0.0681], [2793.6, 0.073]]
+  - chart_id: frl_drop_al40_06_d
+    model_label: "AL40-06-D"
+    applies_to: [AL40-06-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 119
+    x_max: 8000
+    n_conditions: 5
+    ends_at_y_max: false
+    y_max: 0.1
+    kind: continuous
+    series:
+      - label: "max"   # bao trên của 5 điều kiện áp vào
+        points: [[0, 0.002], [43.8, 0.004], [68.7, 0.005], [93.6, 0.006], [137.2, 0.007], [193.2, 0.008], [392.7, 0.01], [673.1, 0.013], [990.9, 0.015], [1246.5, 0.018], [1403.5, 0.0206], [1489.5, 0.022], [1707.2, 0.0264], [1988, 0.035], [2237.2, 0.051], [2271.6, 0.0538], [2416.4, 0.0654], [2486.5, 0.071]]
+  - chart_id: frl_drop_al50_d
+    model_label: "AL50-D"
+    applies_to: [AL50-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 119
+    x_max: 15000
+    n_conditions: 5
+    ends_at_y_max: false
+    y_max: 0.1
+    kind: continuous
+    series:
+      - label: "max"   # bao trên của 5 điều kiện áp vào
+        points: [[0, 0.002], [6.7, 0.003], [49.4, 0.005], [98.6, 0.007], [163.6, 0.009], [250.9, 0.01], [353.9, 0.012], [569.3, 0.014], [738.5, 0.016], [841.8, 0.017], [1186, 0.02], [1381, 0.0215], [1721.8, 0.025], [1989.8, 0.027], [2231.5, 0.029], [2465.2, 0.031], [2714.9, 0.033], [2814, 0.034], [2940.7, 0.0353], [3348.9, 0.039], [3733.2, 0.043], [4018.4, 0.0459], [4133.4, 0.047], [4525.7, 0.051]]
+  - chart_id: frl_drop_al60_d
+    model_label: "AL60-D"
+    applies_to: [AL60-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 119
+    x_max: 15000
+    n_conditions: 5
+    ends_at_y_max: false
+    y_max: 0.1
+    kind: continuous
+    series:
+      - label: "max"   # bao trên của 5 điều kiện áp vào
+        points: [[0, 0.002], [24.7, 0.005], [73.9, 0.007], [138.9, 0.009], [226.1, 0.01], [329.2, 0.012], [544.6, 0.015], [629.6, 0.016], [712.9, 0.017], [950.5, 0.019], [1161.2, 0.02], [1356.2, 0.0215], [1696.8, 0.024], [1964.7, 0.027], [2206.4, 0.028], [2440.3, 0.03], [2689.9, 0.032], [2789, 0.033], [2915.9, 0.0343], [3324, 0.038], [3708.3, 0.042], [3993.6, 0.0449], [4108.5, 0.046], [4500.8, 0.05]]
+  - chart_id: frl_drop_afg20_d
+    model_label: "AFG20-D"
+    applies_to: [AFG20-D]
+    catalog: DOCUMENT/FRL/ES30-25-AFG-D.pdf
+    pdf_page: 4
+    x_max: 1200
+    n_conditions: 4
+    ends_at_y_max: false
+    y_max: 0.1
+    kind: continuous
+    series:
+      - label: "max"   # bao trên của 4 điều kiện áp vào
+        points: [[0, 0], [22.4, 0.001], [98, 0.002], [120.5, 0.003], [167.3, 0.004], [198.8, 0.006], [244.5, 0.009], [293.3, 0.0117], [324.8, 0.0143], [354.8, 0.017], [400.4, 0.021], [432.7, 0.024], [457.1, 0.028], [478.4, 0.031], [501.2, 0.035], [526.4, 0.039], [551.6, 0.044], [576.8, 0.048], [602, 0.054], [629.6, 0.061], [658.7, 0.07], [684.7, 0.078], [702.8, 0.084]]
+  - chart_id: frl_drop_afg30_d
+    model_label: "AFG30-D"
+    applies_to: [AFG30-D]
+    catalog: DOCUMENT/FRL/ES30-25-AFG-D.pdf
+    pdf_page: 4
+    x_max: 1800
+    n_conditions: 4
+    ends_at_y_max: false
+    y_max: 0.1
+    kind: continuous
+    series:
+      - label: "max"   # bao trên của 4 điều kiện áp vào
+        points: [[0, 0], [43.3, 0.001], [194.5, 0.002], [289, 0.003], [396.1, 0.004], [484.3, 0.006], [597.7, 0.009], [681.9, 0.0115], [799.3, 0.015], [1000.9, 0.022], [1114.3, 0.027], [1202.5, 0.031], [1303.3, 0.038], [1376.5, 0.0438], [1404.1, 0.046], [1504.9, 0.0553]]
+  - chart_id: frl_drop_afg40_d
+    model_label: "AFG40-D"
+    applies_to: [AFG40-D]
+    catalog: DOCUMENT/FRL/ES30-25-AFG-D.pdf
+    pdf_page: 4
+    x_max: 4000
+    n_conditions: 4
+    ends_at_y_max: false
+    y_max: 0.1
+    kind: continuous
+    series:
+      - label: "max"   # bao trên của 4 điều kiện áp vào
+        points: [[4.2, 0], [54, 0.001], [203.5, 0.002], [297, 0.003], [402.9, 0.004], [602.1, 0.006], [739.2, 0.0088], [801.5, 0.01], [1000.8, 0.013], [1106.7, 0.016], [1200.2, 0.019], [1329.3, 0.023], [1499.2, 0.031], [1816.9, 0.051], [1872.9, 0.0548], [1997.5, 0.0632], [2097.2, 0.07]]
+  - chart_id: frl_drop_afg40_06_d
+    model_label: "AFG40-06-D"
+    applies_to: [AFG40-06-D]
+    catalog: DOCUMENT/FRL/ES30-25-AFG-D.pdf
+    pdf_page: 4
+    x_max: 4000
+    n_conditions: 4
+    ends_at_y_max: false
+    y_max: 0.1
+    kind: continuous
+    series:
+      - label: "max"   # bao trên của 4 điều kiện áp vào
+        points: [[0, 0], [68.5, 0.001], [320.8, 0.002], [495.2, 0.003], [731.9, 0.006], [993.5, 0.01], [1242.7, 0.015], [1491.9, 0.023], [1616.5, 0.0284], [1747.3, 0.034], [1990.2, 0.046], [2220.7, 0.061], [2239.4, 0.0622], [2388.9, 0.072]]

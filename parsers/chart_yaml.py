@@ -8,8 +8,8 @@ ghi YAML". Cách chắc chắn nhất để giữ điều đó không phải là
 trước — mà là làm cho việc ghi KHÔNG THỂ xảy ra khi kiểm chưa đạt. Nên hàm
 build() gọi tests/test_chart.py trước, thất bại thì raise.
 
-Cổng gồm 12 tiêu chí đối chiếu ground truth (đọc từ TEXT của PDF, độc lập với việc
-trích đường cong) + 7 đối chứng âm. Xem db/seed/charts/_groundtruth-ac.yaml.
+Cổng gồm 17 tiêu chí đối chiếu ground truth (đọc từ TEXT của PDF, độc lập với việc
+trích đường cong) + 11 đối chứng âm. Xem db/seed/charts/_groundtruth-ac.yaml.
 """
 import re
 import sys
@@ -22,8 +22,18 @@ from parsers import pdf_chart                      # noqa: E402
 
 OUT = ROOT / "db/seed/charts/ac-flow.yaml"
 PDF = "DOCUMENT/FRL/es40-69-AC-D.pdf"
-PAGES = [22, 103, 128]                             # ba trang họ lưu lượng→áp ra
 SAMPLES = 12
+
+# Trang họ "lưu lượng → áp ra". Danh sách này PHẢI khớp `pages` trong
+# db/seed/charts/_groundtruth-ac.yaml — cổng chỉ kiểm những trang khai ở đó, nên
+# thêm trang vào đây mà không thêm vào ground truth là ghi số CHƯA QUA CỔNG.
+FLOW_PAGES = [
+    (PDF, 22),                                     # AC20-D … AC60-D
+    (PDF, 103),                                    # AR20(K)-D … AR60(K)-D
+    (PDF, 128),                                    # AW20(K)-D … AW60(K)-D
+    ("DOCUMENT/FRL/es40-70-ARG-B.pdf", 4),         # ARG20(K)-B … ARG40(K)-B
+    ("DOCUMENT/FRL/es40-72-AR_M-D.pdf", 11),       # AR20M(K)-D … AR40M(K)-D
+]
 
 
 def expand(title):
@@ -46,12 +56,12 @@ def slug(title):
 
 
 def collect():
-    """Trích ba trang, trả (danh sách bảng, ghi chú kẹp biên)."""
+    """Trích các trang lưu lượng→áp ra, trả (danh sách bảng, số điểm bị cắt)."""
     charts, clamped = [], 0
-    for pg in PAGES:
-        r = pdf_chart.digitize(PDF, pg, samples=SAMPLES)
+    for pdf, pg in FLOW_PAGES:
+        r = pdf_chart.digitize(pdf, pg, samples=SAMPLES)
         for p in r.get("panels") or []:
-            if not p.get("series"):
+            if p.get("kind") != "flow_outlet" or not p.get("series"):
                 continue
             x_max = max(p["x_ticks"])
             yt = p["y_ticks"]
@@ -85,12 +95,109 @@ def collect():
                 "chart_id": f"frl_flow_{slug(expand(p['title'])[0])}",
                 "model_label": p["title"],
                 "applies_to": expand(p["title"]),
+                "pdf": pdf,
                 "pdf_page": pg,
                 "x_max": x_max,
                 "kind": "continuous",
                 "series": series,
             })
     return charts, clamped
+
+
+# Trang họ "lưu lượng → sụt áp". Cũng phải khớp `pages` trong ground truth.
+DROP_PAGES = [
+    (PDF, 79),                                     # AF20-D … AF60-D (lọc)
+    (PDF, 92),                                     # AFM/AFD (tách ẩm)
+    (PDF, 119),                                    # AL20-D … AL60-D (tra dầu)
+    ("DOCUMENT/FRL/ES30-25-AFG-D.pdf", 4),         # AFG20-D … AFG40-06-D
+]
+DROP_OUT = ROOT / "db/seed/charts/frl-drop.yaml"
+
+
+def collect_drop():
+    """Trích ba trang sụt áp, trả danh sách bảng (mỗi model một bảng)."""
+    charts = []
+    for pdf, pg in DROP_PAGES:
+        r = pdf_chart.digitize(pdf, pg, samples=14)
+        for p in r.get("panels") or []:
+            if p.get("kind") != "flow_drop" or not p.get("series"):
+                continue
+            env = pdf_chart.envelope([sr["points"] for sr in p["series"]])
+            if len(env) < 3:
+                continue
+            # ĐUÔI BAO TRÊN CHẠM ĐỈNH TRỤC nghĩa là điều kiện xấu nhất bị KHUNG
+            # cắt, tức sụt áp thật còn LỚN HƠN dải đồ thị. Khác hẳn với "catalog
+            # thôi không vẽ nữa" — engine phải nói được hai điều đó khác nhau.
+            y_max = max(p["y_ticks"])
+            charts.append({
+                "chart_id": f"frl_drop_{slug(expand(p['title'])[0])}",
+                "model_label": p["title"],
+                "applies_to": expand(p["title"]),
+                "pdf": pdf,
+                "pdf_page": pg,
+                "x_max": max(p["x_ticks"]),
+                "n_conditions": len(p["series"]),
+                "ends_at_y_max": bool(env and env[-1][1] >= y_max - 0.002),
+                "y_max": y_max,
+                "kind": "continuous",
+                "series": [{"label": "max", "points": env}],
+            })
+    return charts
+
+
+DROP_HEAD = """\
+# SỤT ÁP theo lưu lượng của lọc AF · tách ẩm AFM/AFD · tra dầu AL.
+#
+# ⚠ TỆP NÀY DO MÁY SINH — sửa tay sẽ bị ghi đè.
+#     python3 -m parsers.chart_yaml --write
+#
+# ── ĐÂY LÀ ĐƯỜNG BAO TRÊN, KHÔNG PHẢI TỪNG ĐIỀU KIỆN ────────────────────────
+# Mỗi ô trong catalog vẽ {NC} đường ứng với các ÁP VÀO P1 khác nhau. Nhãn P1 viết
+# XOAY bên trong ô, và pdftotext tách nó thành ký tự rời — 'P','1','=','0','.3',
+# 'MP','a' — nên KHÔNG có nguồn text nào đọc lại được cho chắc. Đã chọn KHÔNG gán
+# nhãn theo phỏng đoán, mà ghi ĐƯỜNG BAO TRÊN: sụt áp lớn nhất trong các P1 đã vẽ.
+#
+# Bảo thủ đúng hướng, giống cách đã làm với dẫn nạp âm SY: thừa sụt áp thì engine
+# chọn cỡ TO HƠN mức cần, chứ không bao giờ nhỏ hơn. Sai theo hướng còn lại là
+# sụt áp khi nhiều xy-lanh chạy cùng lúc.
+#
+# ── VÌ SAO TIN ĐƯỢC ─────────────────────────────────────────────────────────
+# Mốc neo VẬT LÝ của họ này: sụt áp = 0 khi lưu lượng = 0. Đo được {NANCHOR} đường
+# đều bắt đầu ở gốc. Cộng với: mọi đường tăng đơn điệu, và cỡ thân lớn hơn sụt áp
+# ít hơn ở cùng lưu lượng — kiểm chứng ĐỘC LẬP với từng ô (tiêu chí C13–C16).
+# Cổng đầy đủ: tests/test_chart.py ({NCRIT} tiêu chí + {NNEG} đối chứng âm).
+#
+# ── ĐỌC THẾ NÀO ─────────────────────────────────────────────────────────────
+#   điểm = [lưu lượng L/min (ANR), sụt áp MPa]
+#   n_conditions = số đường P1 mà bao trên này gộp lại
+#   engine.chart.frl_drop(model, lưu_lượng) — nội suy, KHÔNG ngoại suy
+#   ends_at_y_max=true: đuôi bao trên CHẠM đỉnh trục, nên ngoài dải thì sụt áp
+#     thật > y_max. Khác với false (catalog thôi không vẽ nữa → hoàn toàn chưa biết).
+#
+# ── DẢI PHỦ CÓ HẠN — nói rõ ─────────────────────────────────────────────────
+# Bao trên chỉ định nghĩa tới x_common, chỗ MỌI điều kiện còn được vẽ. Với AF50-D
+# đó là 3.910 trong dải trục 15.000 L/min (26%). Ngoài đó engine báo GAP chứ không
+# giữ phẳng giá trị cuối: giữ phẳng là ước sụt áp THẤP hơn thực tế, mà sai theo
+# hướng đó thì chọn cỡ nhỏ quá — đúng thứ phần mềm này phải tránh.
+
+source:
+  catalog: {PDF}
+  pdf_page: "es40-69-AC-D: 79 (AF), 92 (AFM/AFD), 119 (AL) · ES30-25-AFG-D: 4
+    (AFG). Mỗi bảng mang theo `catalog` + `pdf_page` riêng."
+  table: "Flow Rate Characteristics — Pressure drop"
+  note: >
+    Đường bao trên của các áp vào P1 đã vẽ. Trích tự động từ vector PDF, qua cổng
+    {NCRIT} tiêu chí + {NNEG} đối chứng âm. Chi tiết: db/seed/charts/_groundtruth-ac.yaml
+confidence: 0.85
+digitized_by: >
+  parsers/chart_yaml.py — tự động từ vector PDF. Confidence thấp hơn bảng lưu
+  lượng (0.9) vì đây là ĐƯỜNG BAO, không phải số của một điều kiện xác định.
+axis:
+  x: {{name: flow_lpm_anr, unit: "L/min (ANR)"}}
+  y: {{name: pressure_drop, unit: MPa}}
+
+charts:
+"""
 
 
 HEAD = """\
@@ -148,7 +255,8 @@ HEAD = """\
 
 source:
   catalog: {PDF}
-  pdf_page: "22 (AC), 103 (AR), 128 (AW)"
+  pdf_page: "es40-69-AC-D: 22 (AC), 103 (AR), 128 (AW) · es40-70-ARG-B: 4 (ARG)
+    · es40-72-AR_M-D: 11 (AR…M). Mỗi bảng mang theo `catalog` + `pdf_page` riêng."
   table: "Flow Rate Characteristics (Representative values)"
   note: >
     Trích tự động từ vector PDF, đã qua cổng {NC} tiêu chí + {NN} đối chứng âm.
@@ -173,6 +281,7 @@ def render(charts, clamped, n_crit, n_neg):
         out.append(f"  - chart_id: {c['chart_id']}\n")
         out.append(f"    model_label: \"{c['model_label']}\"\n")
         out.append(f"    applies_to: [{', '.join(c['applies_to'])}]\n")
+        out.append(f"    catalog: {c['pdf']}\n")
         out.append(f"    pdf_page: {c['pdf_page']}\n")
         out.append(f"    x_max: {c['x_max']:g}\n")
         out.append(f"    kind: {c['kind']}\n")
@@ -188,26 +297,61 @@ def render(charts, clamped, n_crit, n_neg):
     return "".join(out)
 
 
+def render_drop(charts, n_crit, n_neg):
+    nanchor = sum(c["n_conditions"] for c in charts)
+    ncs = sorted({c["n_conditions"] for c in charts})
+    out = [DROP_HEAD.replace("{PDF}", PDF)
+           .replace("{NC}", " hoặc ".join(str(n) for n in ncs))
+           .replace("{NANCHOR}", str(nanchor))
+           .replace("{NCRIT}", str(n_crit)).replace("{NNEG}", str(n_neg))
+           .replace("{{", "{").replace("}}", "}")]
+    for c in charts:
+        out.append(f"  - chart_id: {c['chart_id']}\n")
+        out.append(f"    model_label: \"{c['model_label']}\"\n")
+        out.append(f"    applies_to: [{', '.join(c['applies_to'])}]\n")
+        out.append(f"    catalog: {c['pdf']}\n")
+        out.append(f"    pdf_page: {c['pdf_page']}\n")
+        out.append(f"    x_max: {c['x_max']:g}\n")
+        out.append(f"    n_conditions: {c['n_conditions']}\n")
+        out.append(f"    ends_at_y_max: {str(c['ends_at_y_max']).lower()}\n")
+        out.append(f"    y_max: {c['y_max']:g}\n")
+        out.append(f"    kind: {c['kind']}\n")
+        out.append("    series:\n")
+        for sr in c["series"]:
+            out.append(f"      - label: \"{sr['label']}\"   "
+                       f"# bao trên của {c['n_conditions']} điều kiện áp vào\n")
+            out.append("        points: ["
+                       + ", ".join(f"[{x:g}, {y:g}]" for x, y in sr["points"])
+                       + "]\n")
+    return "".join(out)
+
+
 def build(write=False):
     """Trích + ghi. RAISE nếu cổng chưa đạt — đó là điểm chính của hàm này."""
     from tests import test_chart
-    n_crit = 12
-    n_neg = 7
+    n_crit = 17
+    n_neg = 11
     if test_chart.main() != 0:
         raise SystemExit(
             "CỔNG CHƯA ĐẠT → không ghi YAML. Số chưa kiểm chứng vào engine là "
             "sai cỡ FRL, mà sai cỡ FRL là sụt áp khi nhiều xy-lanh chạy.")
     charts, clamped = collect()
     text = render(charts, clamped, n_crit, n_neg)
+    drops = collect_drop()
+    dtext = render_drop(drops, n_crit, n_neg)
     if write:
         OUT.write_text(text)
+        DROP_OUT.write_text(dtext)
         print(f"\n✓ ghi {OUT.relative_to(ROOT)} — {len(charts)} model, "
               f"{sum(len(c['series']) for c in charts)} đường")
+        print(f"✓ ghi {DROP_OUT.relative_to(ROOT)} — {len(drops)} model, "
+              f"{sum(c['n_conditions'] for c in drops)} điều kiện gộp thành bao trên")
     else:
-        print(f"\n(chưa ghi) {len(charts)} model, "
+        print(f"\n(chưa ghi) lưu lượng→áp ra: {len(charts)} model, "
               f"{sum(len(c['series']) for c in charts)} đường, {len(text)} byte")
+        print(f"           lưu lượng→sụt áp: {len(drops)} model, {len(dtext)} byte")
         print("  thêm --write để ghi")
-    return charts
+    return charts, drops
 
 
 if __name__ == "__main__":

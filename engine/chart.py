@@ -172,10 +172,13 @@ def frl_charts(family=None):
         if not cid.startswith("frl_flow_"):
             continue
         lab = ch.get("model_label") or ""
-        m = re.match(r"([A-Z]+)(\d+)", lab)
+        # Chữ SAU cỡ phải RỖNG: 'AR20M(K)-D' là series AR…M, KHÁC 'AR20(K)-D'.
+        # Không tách thì tra cỡ AR có thể trả về đồ thị của AR…M — cùng cỡ thân
+        # nhưng lưu lượng khác, và note sẽ dẫn sai model.
+        m = re.match(r"([A-Z]+)(\d+)([A-Z]*)", lab)
         if not m:
             continue
-        if family and m.group(1) != family:
+        if family and (m.group(1) != family or m.group(3)):
             continue
         # AC40-06-D là AC40 thân lớn cửa Rc3/4 — cùng cỡ 40 nhưng lưu lượng khác.
         # Xếp sau AC40-D để "cỡ nhỏ nhất thoả" không nhảy qua bản thường.
@@ -210,7 +213,47 @@ def frl_chart_generation(family="AC"):
     return sorted(gens)[0] if len(gens) == 1 else None
 
 
-def pick_frl_size(required_lpm, need_mpa, supply_mpa=None, family="AC"):
+def frl_drop_chart(model_or_size, family):
+    """Bảng sụt áp của một phụ kiện FRL. family: AF/AL/AFM/AFD. Trả chart_id|None."""
+    want = f"{family}{model_or_size}"
+    for cid, ch in load_all().items():
+        if not cid.startswith("frl_drop_"):
+            continue
+        for m in ch.get("applies_to") or []:
+            if m.upper().startswith(want.upper()):
+                return cid
+    return None
+
+
+def frl_drop(size, flow_lpm, family="AF"):
+    """Sụt áp (MPa) của phụ kiện FRL cỡ `size` ở lưu lượng cho trước.
+
+    Trả (mpa, note) — mpa=None nghĩa là KHÔNG tra được, note nói rõ vì sao.
+
+    Số tra ra là ĐƯỜNG BAO TRÊN của các áp vào P1 catalog vẽ (xem
+    db/seed/charts/frl-drop.yaml): nhãn P1 là text xoay, không đọc lại được, nên
+    lấy sụt áp lớn nhất. Bảo thủ đúng hướng — thừa sụt áp thì chọn cỡ to hơn.
+    """
+    cid = frl_drop_chart(size, family)
+    if not cid:
+        return None, f"chưa số hoá đồ thị sụt áp của {family}{size}"
+    y, note = lookup(cid, float(flow_lpm), "max")
+    if y is not None:
+        return y, note
+    ch = get(cid) or {}
+    pts = (ch.get("series") or [{}])[0].get("points") or []
+    top = pts[-1][0] if pts else 0
+    if float(flow_lpm) > top and ch.get("ends_at_y_max"):
+        # Đuôi bao trên chạm đỉnh trục → sụt áp thật VƯỢT dải đồ thị. Đây là kết
+        # luận dùng được: sụt quá nhiều, phải lên cỡ.
+        return None, (f"{ch.get('model_label')} ở {round(float(flow_lpm))} L/min: sụt áp "
+                      f"VƯỢT dải đồ thị (>{ch.get('y_max')} MPa tại >{top:.0f} L/min) "
+                      f"→ cỡ này quá nhỏ")
+    return None, note
+
+
+def pick_frl_size(required_lpm, need_mpa, supply_mpa=None, family="AC",
+                  lubricator=False, mist_separator=False):
     """Cỡ FRL nhỏ nhất giữ được áp ra ≥ need_mpa tại required_lpm.
 
     Trả (cỡ dạng chuỗi '20'/'30'…, note) — cỡ=None nghĩa là KHÔNG kết luận được,
@@ -259,12 +302,37 @@ def pick_frl_size(required_lpm, need_mpa, supply_mpa=None, family="AC"):
     set_mpa = sets[0]
     label = f"{inlet:g}/{set_mpa:g}"
 
-    tried = []
+    # PHỤ KIỆN NỐI SAU BỘ ĐIỀU ÁP làm sụt thêm áp trước khi khí tới máy, nên phải
+    # CỘNG vào yêu cầu. Tra theo ĐÚNG cỡ đang xét (AL30 cho AC30…), vì thế phải
+    # tra trong vòng lặp chứ không tính trước một lần.
+    addons = [(f, True) for f, on in (("AL", lubricator), ("AFM", mist_separator))
+              if on]
+
+    tried, addon_fail = [], []
     for _, cid, lab in cands:
         y, note = lookup(cid, float(required_lpm), label)
         tried.append((lab, None if y is None else round(y, 3)))
         if y is None:
             continue                    # ngoài dải đã số hoá → cỡ này nhỏ quá
+        size_now = re.match(r"[A-Z]+(\d+)", lab).group(1)
+        drop, dnote = 0.0, []
+        blocked = None
+        for fam, _ in addons:
+            d, dn = frl_drop(size_now, required_lpm, fam)
+            if d is None:
+                blocked = dn
+                break
+            drop += d
+            dnote.append(f"{fam}{size_now} sụt {d:.4f}")
+        if blocked:
+            # KHÔNG bỏ qua phụ kiện. Bỏ qua là ước áp ra CAO hơn thực tế → chọn
+            # cỡ nhỏ quá, đúng hướng sai nguy hiểm nhất.
+            tried[-1] = (lab, "thiếu số sụt áp phụ kiện")
+            addon_fail.append(blocked)
+            continue
+        if drop:
+            note += " · " + " + ".join(dnote) + f" → còn {y - drop:.3f} MPa"
+        y -= drop
         if y >= need:
             size = re.match(r"[A-Z]+(\d+)", lab).group(1)
             smaller = ("Cỡ nhỏ hơn không đủ: "
@@ -276,6 +344,12 @@ def pick_frl_size(required_lpm, need_mpa, supply_mpa=None, family="AC"):
                 f"Áp nguồn {float(supply_mpa):g} MPa → dùng đường áp vào {inlet:g}, "
                 f"đặt {set_mpa:g} MPa (bậc kế tiếp trên mức cần). {lab} còn "
                 f"{y:.3f} MPa ở lưu lượng đó → đủ. {smaller} · {note}")
+    if addon_fail and len(addon_fail) == len(tried):
+        # MỌI cỡ đều tắc vì phụ kiện, không phải vì bộ điều áp — nói đúng nguyên
+        # nhân, nếu không người dùng đi tìm sai chỗ.
+        return None, (
+            f"không kết luận được vì thiếu số SỤT ÁP PHỤ KIỆN ở {round(float(required_lpm))}"
+            f" L/min, không phải vì bộ điều áp. Lý do đầu tiên: {addon_fail[0]}")
     return None, (
         f"cần {round(float(required_lpm))} L/min ANR ở {need:g} MPa, vượt cả cỡ lớn "
         f"nhất đã số hoá (áp vào {inlet:g}, đặt {set_mpa:g}). Đã thử: "

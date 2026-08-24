@@ -7,8 +7,8 @@ LẬP với việc trích đường cong vector. Nhờ vậy nó bắt đúng nh
 transform sai, tỉ lệ trục sai, gán ô sai, gán model sai, TRỘN HỌ ĐỒ THỊ.
 
 Hai phần:
-  · C1..C12 trên dữ liệu THẬT — phải PASS hết.
-  · ĐỐI CHỨNG ÂM: cố tình làm sai bảy kiểu, cổng phải BẮT ĐƯỢC. Không có phần
+  · C1..C17 trên dữ liệu THẬT — phải PASS hết.
+  · ĐỐI CHỨNG ÂM: cố tình làm sai 11 kiểu, cộng một phép kiểm hàm, cổng phải BẮT ĐƯỢC. Không có phần
     này thì '9/9 PASS' không chứng minh gì — có thể chỉ là tiêu chí quá lỏng.
 
 QUY TẮC: cả hai phần đạt mới được ghi db/seed/charts/ac-flow.yaml cho engine.
@@ -27,8 +27,13 @@ GT_PATH = Path(__file__).resolve().parent.parent / "db/seed/charts/_groundtruth-
 AC_PDF = "DOCUMENT/FRL/es40-69-AC-D.pdf"
 
 
+def _pg(got, gt, w):
+    """Kết quả digitize của một trang trong ground truth."""
+    return got.get((w.get("pdf", AC_PDF), w["page"]), {})
+
+
 def _criteria(got, gt):
-    """Tính C1..C12 trên một tập kết quả digitize(). Trả [(id, ok, detail)].
+    """Tính C1..C17 trên một tập kết quả digitize(). Trả [(id, ok, detail)].
 
     Là HÀM THUẦN trên `got` để chạy được cả trên dữ liệu cố tình làm sai — xem
     negative_controls(). Cổng nào không bao giờ FAIL được thì không phải cổng.
@@ -43,7 +48,7 @@ def _criteria(got, gt):
     tol = gt["tolerance"]
     pages = gt["pages"]
 
-    panels = got[gt["source"]["page"]].get("panels") or []
+    panels = _pg(got, gt, {"page": gt["source"]["page"]}).get("panels") or []
     good = [p for p in panels if p.get("series")]
 
     # ── C1: số ô ───────────────────────────────────────────────────────────
@@ -118,67 +123,82 @@ def _criteria(got, gt):
     flow_pages = [p for p in pages if p["kind"] == "flow_outlet"]
     det, ok7 = [], True
     for w in flow_pages:
-        ps = got[w["page"]].get("panels") or []
+        # CHỈ ô đúng họ: trang ARG/AR_M còn có ô 'áp vào→áp ra' trên cùng trang,
+        # đếm cả vào thì n_panels không bao giờ khớp.
+        ps = [p for p in (_pg(got, gt, w).get("panels") or [])
+              if p.get("kind") == w["kind"]]
         ts = [p.get("title") for p in ps]
         n_ser = sum(1 for p in ps if p.get("series"))
+        xm_ok = (all(abs(max(p["x_ticks"]) - x) <= x * 0.02
+                     for p, x in zip(ps, w["x_max"]))
+                 if w.get("x_max") and len(ps) == len(w["x_max"]) else True)
         ok7 &= (len(ps) == w["n_panels"] and ts == w["titles"]
-                and n_ser == w["n_panels"])
+                and n_ser == w["n_panels"] and xm_ok)
         det.append(f"tr{w['page']}:{n_ser}/{w['n_panels']}ô"
-                   + ("" if ts == w["titles"] else " TIÊU-ĐỀ-SAI"))
+                   + ("" if ts == w["titles"] else " TIÊU-ĐỀ-SAI")
+                   + ("" if xm_ok else " X-SAI"))
     rec("C7-tổng-quát", ok7,
         f"{len(flow_pages)} trang họ flow_outlet · " + " ".join(det))
 
     # ── C8: phân loại họ đồ thị ────────────────────────────────────────────
-    ok8, det8 = True, []
+    scope = set(gt.get("in_scope_kinds") or ["flow_outlet"])
+    # Xét theo TỪNG Ô, không theo họ đa số của trang: trang ARG/AR_M trộn hai họ
+    # nên "họ đa số" là con số vô nghĩa (đã làm tiêu chí này báo sai một lần).
+    ok8, det8, n_ok8 = True, [], 0
     for w in pages:
-        k = got[w["page"]].get("kind")
-        if k is None:
-            det8.append(f"tr{w['page']}:0ô")       # C9 lo phần an toàn
-        elif k != w["kind"]:
-            ok8 = False
-            det8.append(f"tr{w['page']}:{k}≠{w['kind']}")
-    n_kind = sum(1 for w in pages if got[w["page"]].get("kind") == w["kind"])
+        kinds = _pg(got, gt, w).get("kinds") or {}
+        n_want = kinds.get(w["kind"], 0)
+        if w["kind"] in scope:
+            need = w.get("n_panels")
+            good_pg = n_want == need if need else n_want > 0
+        else:
+            # trang họ ngoài phạm vi: KHÔNG ô nào được nhận thành họ trong phạm vi
+            good_pg = not any(kinds.get(k) for k in scope)
+        ok8 &= good_pg
+        n_ok8 += good_pg
+        det8.append(f"tr{w['page']}:{kinds or '0ô'}" if not good_pg else "")
     rec("C8-phân-loại-họ", ok8,
-        f"{n_kind}/{len(pages)} trang đúng họ"
-        + (" · " + " ".join(det8) if det8 else ""))
+        f"{n_ok8}/{len(pages)} trang đúng họ theo từng ô"
+        + (" · SAI " + " ".join(x for x in det8 if x) if not ok8 else ""))
 
     # ── C9: an toàn — họ khác KHÔNG được sinh số ───────────────────────────
     leaked = []
     for w in pages:
-        if w["kind"] == "flow_outlet":
+        if w["kind"] in scope:
             continue
         n = sum(len(p.get("series") or [])
-                for p in (got[w["page"]].get("panels") or []))
+                for p in (_pg(got, gt, w).get("panels") or []))
         if n:
             leaked.append(f"tr{w['page']}:{n} đường")
     rec("C9-an-toàn", not leaked,
-        "0 đường lọt từ họ khác" if not leaked else "LỌT " + " ".join(leaked))
+        f"0 đường lọt từ họ ngoài {sorted(scope)}" if not leaked
+        else "LỌT " + " ".join(leaked))
 
     # ── C10: đủ hai họ áp vào, không trùng nhãn ────────────────────────────
-    fams = {float(k): sorted(v, reverse=True)
-            for k, v in (gt.get("inlet_families") or {}).items()}
+    # Kỳ vọng theo TỪNG trang: trang ARG chỉ vẽ MỘT điều kiện áp vào (0,7 MPa,
+    # ghi bằng chữ), nên áp bảng hai họ của AC lên nó là sai.
     bad10, n_panel = [], 0
     for w in flow_pages:
-        for p in got[w["page"]].get("panels") or []:
-            if not p.get("series"):
+        fams = {float(k): sorted(v, reverse=True) for k, v in
+                (w.get("families") or gt.get("inlet_families") or {}).items()}
+        for p in _pg(got, gt, w).get("panels") or []:
+            if p.get("kind") != w["kind"] or not p.get("series"):
                 continue
             n_panel += 1
             byin = {}
             for sr in p["series"]:
-                setp = _setp(sr, p)
-                byin.setdefault(sr.get("inlet_mpa"), []).append(setp)
+                byin.setdefault(sr.get("inlet_mpa"), []).append(_setp(sr, p))
             norm = {k: sorted(v, reverse=True) for k, v in byin.items()}
             if norm != fams:
                 bad10.append(f"tr{w['page']}/{p.get('title')}={norm}")
-    rec("C10-đủ-hai-họ", n_panel > 0 and not bad10,
-        f"{n_panel - len(bad10)}/{n_panel} ô đủ "
-        + " + ".join(f"vào {k:g}:{len(v)} đường" for k, v in sorted(fams.items()))
+    rec("C10-đủ-đúng-họ-áp-vào", n_panel > 0 and not bad10,
+        f"{n_panel - len(bad10)}/{n_panel} ô kh��p bảng áp vào/áp đặt của trang"
         + (" · SAI " + "; ".join(bad10[:2]) if bad10 else ""))
 
     # ── C11: áp đặt ≤ áp vào (không điều áp lên được) ──────────────────────
     bad11 = []
     for w in flow_pages:
-        for p in got[w["page"]].get("panels") or []:
+        for p in _pg(got, gt, w).get("panels") or []:
             for sr in p.get("series") or []:
                 inl = sr.get("inlet_mpa")
                 if inl is None or _setp(sr, p) > inl + 1e-9:
@@ -194,7 +214,7 @@ def _criteria(got, gt):
     import re as _re
     by_fam = {}
     for w in flow_pages:
-        for p in got[w["page"]].get("panels") or []:
+        for p in _pg(got, gt, w).get("panels") or []:
             m = _re.match(r"([A-Z]+)(\d+)", p.get("title") or "")
             if not m or not p.get("series"):
                 continue
@@ -203,22 +223,133 @@ def _criteria(got, gt):
                        and s.get("inlet_mpa") == 1.0), None)
             if not sr:
                 continue
-            y = _interp(sr["points"], 1000.0)
+            y = C.interp(sr["points"], 1000.0)
             if y is not None:
-                key = m.group(1)
-                by_fam.setdefault(key, []).append(
-                    (int(m.group(2)) + (0.5 if "-06" in p["title"] else 0),
-                     p["title"], y))
+                # GỘP THEO CỠ THÂN. 'AC40-06-D' là AC40 thân giống bản thường,
+                # chỉ khác cỡ cửa — nên xếp nó thành 'cỡ 40,5' rồi đòi đơn điệu
+                # là đòi sai: phát biểu vật lý ở đây là "THÂN lớn hơn giữ áp tốt
+                # hơn", không nói gì về hai bản cùng thân. Mỗi cỡ lấy giá trị
+                # BẢO THỦ nhất (áp ra thấp nhất) trong các bản.
+                by_fam.setdefault(m.group(1), {}).setdefault(
+                    int(m.group(2)), []).append((p["title"], y))
     bad12, det12 = [], []
-    for fam, items in sorted(by_fam.items()):
-        items.sort()
-        for a, b in zip(items, items[1:]):
-            if b[2] < a[2] - 0.02:
-                bad12.append(f"{fam}: {a[1]}={a[2]:.3f} > {b[1]}={b[2]:.3f}")
-        det12.append(f"{fam}:{len(items)} cỡ")
+    for fam, sizes in sorted(by_fam.items()):
+        worst = [(sz, min(v, key=lambda t: t[1])) for sz, v in sorted(sizes.items())]
+        for (sa, (la, va)), (sb, (lb, vb)) in zip(worst, worst[1:]):
+            if vb < va - 0.02:
+                bad12.append(f"{fam}: {la}={va:.3f} > {lb}={vb:.3f}")
+        det12.append(f"{fam}:{len(worst)} cỡ thân")
     rec("C12-đơn-điệu-liên-model", bool(by_fam) and not bad12,
         f"tại 1000 L/min, đặt 0,5 MPa / vào 1,0 MPa · " + " ".join(det12)
         + (" · SAI " + "; ".join(bad12[:2]) if bad12 else ""))
+
+    # ── C13: họ sụt áp — đủ ô, đủ tiêu đề, đủ đường ────────────────────────
+    drop_pages = [p for p in pages if p["kind"] == "flow_drop"]
+    det13, ok13 = [], bool(drop_pages)
+    for w in drop_pages:
+        ps = [p for p in (_pg(got, gt, w).get("panels") or [])
+              if p.get("kind") == "flow_drop"]
+        ts = [p.get("title") for p in ps]
+        nser = [len(p.get("series") or []) for p in ps]
+        xm_ok = all(abs(max(p["x_ticks"]) - x) <= x * 0.02
+                    for p, x in zip(ps, w["x_max"])) if len(ps) == len(w["x_max"]) else False
+        good_pg = (len(ps) == w["n_panels"] and ts == w["titles"] and xm_ok
+                   and all(n == w["curves_per_panel"] for n in nser))
+        ok13 &= good_pg
+        det13.append(f"tr{w['page']}:{len(ps)}ô×{set(nser) or '-'}"
+                     + ("" if ts == w["titles"] else " TIÊU-ĐỀ-SAI")
+                     + ("" if xm_ok else " X-SAI"))
+    rec("C13-sụt-áp-đủ-ô", ok13, " ".join(det13))
+
+    # ── C14: neo gốc — sụt áp = 0 khi lưu lượng = 0 ────────────────────────
+    # Mốc neo VẬT LÝ của họ này, thay cho C4 của họ áp ra.
+    bad14, tot14 = [], 0
+    for w in drop_pages:
+        for p in _pg(got, gt, w).get("panels") or []:
+            if p.get("kind") != "flow_drop":
+                continue
+            xm, ym = max(p["x_ticks"]), max(p["y_ticks"])
+            for sr in p.get("series") or []:
+                tot14 += 1
+                x0, y0 = sr["points"][0]
+                if x0 > 0.02 * xm or y0 > 0.05 * ym:
+                    bad14.append(f"tr{w['page']}/{p.get('title')}({x0:.0f},{y0:.4f})")
+    rec("C14-neo-gốc", tot14 > 0 and not bad14,
+        f"{tot14 - len(bad14)}/{tot14} đường bắt đầu ở gốc"
+        + (" · SAI " + " ".join(bad14[:2]) if bad14 else ""))
+
+    # ── C15: sụt áp KHÔNG giảm khi lưu lượng tăng ─────────────────────────
+    bad15 = 0
+    for w in drop_pages:
+        for p in _pg(got, gt, w).get("panels") or []:
+            for sr in p.get("series") or []:
+                pts = sr["points"]
+                if any(y1 - y2 > 0.02 * max(p["y_ticks"])
+                       for (_, y1), (_, y2) in zip(pts, pts[1:])):
+                    bad15 += 1
+    rec("C15-sụt-áp-tăng", tot14 > 0 and bad15 == 0,
+        f"{bad15}/{tot14} đường có sụt áp GIẢM khi lưu lượng tăng")
+
+    # ── C16: đơn điệu liên-model cho họ sụt áp ────────────────────────────
+    import re as _re2
+    fams16 = {}
+    for w in drop_pages:
+        for p in _pg(got, gt, w).get("panels") or []:
+            if p.get("kind") != "flow_drop" or not p.get("series"):
+                continue
+            m = _re2.match(r"([A-Z]+)(\d+)", p.get("title") or "")
+            if not m:
+                continue
+            curves = [sr["points"] for sr in p["series"]]
+            # x_common: nơi MỌI đường của ô còn định nghĩa. Ngoài đó, đường bao
+            # là max trên MỘT SỐ điều kiện P1 chứ không phải tất cả — so hai ô ở
+            # đó là so nhầm. (Bản trước so ở 0,5·x_max và báo AL40-06-D sụt áp
+            # nhiều hơn AL40-D; hai đường bao thực ra CẮT nhau vì miền khác nhau.)
+            x_common = min(max(x for x, _ in c) for c in curves)
+            fams16.setdefault(m.group(1), {}).setdefault(
+                int(m.group(2)), []).append((p["title"], x_common, C.envelope(curves)))
+    bad16, det16 = [], []
+    for fam, sizes in sorted(fams16.items()):
+        probe = 0.5 * min(xc for v in sizes.values() for _, xc, _ in v)
+        worst = []
+        for sz, v in sorted(sizes.items()):
+            vals = [(lab, C.interp(env, probe)) for lab, _, env in v]
+            vals = [(l, y) for l, y in vals if y is not None]
+            if vals:
+                worst.append((sz, max(vals, key=lambda t: t[1])))   # bảo thủ: sụt nhiều nhất
+        for (_, (la, va)), (_, (lb, vb)) in zip(worst, worst[1:]):
+            if vb > va + 0.005:
+                bad16.append(f"{fam}@{probe:.0f}: {la}={va:.4f} < {lb}={vb:.4f}")
+        det16.append(f"{fam}:{len(worst)}cỡ@{probe:.0f}")
+    rec("C16-đơn-điệu-liên-model-sụt-áp", bool(fams16) and not bad16,
+        "cỡ lớn hơn sụt áp ít hơn · " + " ".join(det16)
+        + (" · SAI " + "; ".join(bad16[:2]) if bad16 else ""))
+
+    # ── C17: đường bao TRÊN — đúng thứ sẽ ghi ra YAML ──────────────────────
+    # Gọi C.envelope, tức HÀM MÀ BỘ SINH DÙNG. Bản trước tôi viết một _envelope
+    # riêng trong test — cổng kiểm một thứ còn YAML ghi thứ khác, nên lỗi "bao
+    # trên giảm ở đuôi" lọt qua.
+    bad17, n17 = [], 0
+    for w in drop_pages:
+        for p in _pg(got, gt, w).get("panels") or []:
+            if p.get("kind") != "flow_drop" or not p.get("series"):
+                continue
+            env = C.envelope([sr["points"] for sr in p["series"]])
+            n17 += 1
+            tag = f"tr{w['page']}/{p.get('title')}"
+            if len(env) < 3:
+                bad17.append(f"{tag} chỉ {len(env)} điểm")
+                continue
+            if any(b[1] < a[1] for a, b in zip(env, env[1:])):
+                bad17.append(f"{tag} bao trên GIẢM")
+            if env[0][1] > 0.05 * max(p["y_ticks"]):
+                bad17.append(f"{tag} không bắt đầu ở gốc")
+            xc = min(max(x for x, _ in sr["points"]) for sr in p["series"])
+            if env[-1][0] > xc + 1:
+                bad17.append(f"{tag} vượt x_common {xc:.0f}")
+    rec("C17-bao-trên-đơn-điệu", n17 > 0 and not bad17,
+        f"{n17 - len(bad17)}/{n17} ô có bao trên tăng đơn điệu, neo gốc, ≤x_common"
+        + (" · SAI " + "; ".join(bad17[:2]) if bad17 else ""))
 
     return out
 
@@ -229,15 +360,6 @@ def _setp(sr, panel):
     y0 = sr["points"][0][1]
     return min(yt, key=lambda v: abs(v - y0)) if yt else y0
 
-
-def _interp(pts, x):
-    """Nội suy tuyến tính, KHÔNG ngoại suy. Trả None nếu x ngoài dải."""
-    if not pts or x < pts[0][0] or x > pts[-1][0]:
-        return None
-    for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
-        if x1 <= x <= x2:
-            return y1 if x2 == x1 else y1 + (y2 - y1) * (x - x1) / (x2 - x1)
-    return None
 
 
 def negative_controls(got, gt):
@@ -250,48 +372,72 @@ def negative_controls(got, gt):
     cases = []
 
     g = copy.deepcopy(got)                                # 1. sai hiệu chuẩn Y
-    for p in g[22]["panels"]:
+    for p in g[(AC_PDF, 22)]["panels"]:
         for sr in p.get("series") or []:
             for pt in sr["points"]:
                 pt[1] = round(pt[1] * 1.05, 3)
     cases.append(("sai tỉ lệ trục Y 5%", g, "C4-neo-áp-đặt"))
 
     g = copy.deepcopy(got)                                # 2. gán model sai
-    ts = [p["title"] for p in g[22]["panels"]]
-    for p, t in zip(g[22]["panels"], ts[1:] + ts[:1]):
+    ts = [p["title"] for p in g[(AC_PDF, 22)]["panels"]]
+    for p, t in zip(g[(AC_PDF, 22)]["panels"], ts[1:] + ts[:1]):
         p["title"] = t
     cases.append(("xoay thứ tự tiêu đề", g, "C2-tiêu-đề"))
 
     g = copy.deepcopy(got)                                # 3. sai hiệu chuẩn X
-    for p in g[22]["panels"]:
+    for p in g[(AC_PDF, 22)]["panels"]:
         for sr in p.get("series") or []:
             for pt in sr["points"]:
                 pt[0] = round(pt[0] * 1.10, 1)
     cases.append(("sai tỉ lệ trục X 10%", g, "C6-trong-khung"))
 
     g = copy.deepcopy(got)                                # 4. trộn họ đồ thị
-    for p in g[23]["panels"]:
+    for p in g[(AC_PDF, 23)]["panels"]:
         p["kind"] = "flow_outlet"
         p["series"] = [{"inlet_mpa": 1.0, "dashed": False,
                         "points": [[0.0, 0.8], [100.0, 0.7], [200.0, 0.6]]}]
-    g[23]["kind"] = "flow_outlet"
+    g[(AC_PDF, 23)]["kind"] = "flow_outlet"
     cases.append(("coi trang áp-vào là lưu-lượng", g, "C9-an-toàn"))
 
     g = copy.deepcopy(got)                                # 5. mất một họ áp vào
-    ps = g[22]["panels"]
+    ps = g[(AC_PDF, 22)]["panels"]
     ps[0]["series"] = [s for s in ps[0]["series"] if s.get("inlet_mpa") != 1.0]
-    cases.append(("bỏ họ áp vào 1,0 của một ô", g, "C10-đủ-hai-họ"))
+    cases.append(("bỏ họ áp vào 1,0 của một ô", g, "C10-đủ-đúng-họ-áp-vào"))
 
     g = copy.deepcopy(got)                                # 6. ghép nét ↔ áp vào NGƯỢC
-    for p in g[22]["panels"]:
+    for p in g[(AC_PDF, 22)]["panels"]:
         for sr in p.get("series") or []:
             sr["inlet_mpa"] = 0.7 if sr["inlet_mpa"] == 1.0 else 1.0
     cases.append(("ghép nét ↔ áp vào ngược", g, "C11-áp-đặt-dưới-áp-vào"))
 
     g = copy.deepcopy(got)                                # 7. đổi tiêu đề hai ô
-    ps = g[22]["panels"]
+    ps = g[(AC_PDF, 22)]["panels"]
     ps[0]["title"], ps[5]["title"] = ps[5]["title"], ps[0]["title"]
     cases.append(("đổi tiêu đề ô nhỏ nhất ↔ lớn nhất", g, "C12-đơn-điệu-liên-model"))
+
+    g = copy.deepcopy(got)                                # 8. thiếu một đường sụt áp
+    g[(AC_PDF, 79)]["panels"][0]["series"] = g[(AC_PDF, 79)]["panels"][0]["series"][:-1]
+    cases.append(("bỏ 1 đường của ô sụt áp", g, "C13-sụt-áp-đủ-ô"))
+
+    g = copy.deepcopy(got)                                # 9. mất mốc gốc
+    for sr in g[(AC_PDF, 79)]["panels"][0]["series"]:
+        for pt in sr["points"]:
+            pt[1] = round(pt[1] + 0.03, 4)
+    cases.append(("dịch đường sụt áp lên 0,03 MPa", g, "C14-neo-gốc"))
+
+    g = copy.deepcopy(got)                                # 10. đảo chiều sụt áp
+    for sr in g[(AC_PDF, 79)]["panels"][0]["series"]:
+        ys = [y for _, y in sr["points"]][::-1]
+        for pt, y in zip(sr["points"], ys):
+            pt[1] = y
+    cases.append(("đảo chiều đường sụt áp", g, "C15-sụt-áp-tăng"))
+
+    g = copy.deepcopy(got)                                # 11. đổi tiêu đề ô sụt áp
+    ps = [p for p in g[(AC_PDF, 79)]["panels"] if p.get("kind") == "flow_drop"]
+    ps[0]["title"], ps[-1]["title"] = ps[-1]["title"], ps[0]["title"]
+    cases.append(("đổi tiêu đề ô sụt áp nhỏ ↔ lớn", g, "C16-đơn-điệu-liên-model-sụt-áp"))
+
+
 
     print("\nĐỐI CHỨNG ÂM — cổng phải BẮT ĐƯỢC từng lỗi cố tình gieo")
     print("-" * 70)
@@ -301,6 +447,22 @@ def negative_controls(got, gt):
         caught = not rs.get(must_fail, True)
         ok_all &= caught
         print(f"  {'BẮT ĐƯỢC ' if caught else 'KHÔNG BẮT'}  {name:32} → {must_fail}")
+
+    # ── kiểm HÀM bao trên bằng đầu vào tổng hợp ────────────────────────────
+    # Không gieo được lỗi này qua dữ liệu: phép cắt tại x_common làm bao trên
+    # KHÔNG THỂ giảm. Bảo vệ bằng cấu trúc thì phải kiểm chính cấu trúc đó —
+    # nếu không, C17 chỉ là một tiêu chí luôn đúng.
+    #   c1 dừng sớm nhưng sụt áp CAO · c2 dài hơn nhưng sụt áp THẤP
+    #   không cắt → bao trên đi 0,05 (x=100) xuống 0,04 (x=500): vô nghĩa vật lý
+    c1 = [[0, 0.0], [50, 0.03], [100, 0.05]]
+    c2 = [[0, 0.0], [100, 0.02], [500, 0.04]]
+    env = C.envelope([c1, c2])
+    trunc = bool(env) and env[-1][0] <= 101
+    mono = all(b[1] >= a[1] for a, b in zip(env, env[1:]))
+    ok_all &= trunc and mono
+    print(f"  {'ĐÚNG    ' if trunc and mono else 'SAI     '}  "
+          f"{'hàm bao trên cắt tại x_common':32} → "
+          f"tới x={env[-1][0] if env else '—'}, tăng đơn điệu={mono}")
     return ok_all
 
 
@@ -316,12 +478,15 @@ def main():
 
     # Trích MỘT LẦN cho mọi trang trong ground truth — dùng lại cho C1..C9.
     got = {}
-    for pg in [p["page"] for p in gt["pages"]]:
+    for w in gt["pages"]:
+        # `pdf` khai riêng cho trang thuộc catalog khác (vòng B). Khoá theo CẢ HAI
+        # để số trang trùng nhau giữa các catalog không lẫn.
+        pdf = w.get("pdf", AC_PDF)
         try:
-            got[pg] = C.digitize(AC_PDF, pg)
+            got[(pdf, w["page"])] = C.digitize(pdf, w["page"])
         except Exception as e:                            # noqa: BLE001
-            got[pg] = {"panels": [], "n_ok": 0, "kind": None,
-                       "error": f"{type(e).__name__}: {e}"}
+            got[(pdf, w["page"])] = {"panels": [], "n_ok": 0, "kind": None,
+                                     "error": f"{type(e).__name__}: {e}"}
 
     rows = _criteria(got, gt)
     for cid, ok, detail in rows:
