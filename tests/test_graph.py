@@ -383,8 +383,10 @@ def test_khoa_engine_tu_tinh_khong_con_bat_khai():
           "valve_series_size" in comp and "valve_series_size" not in keys)
     check("valve_function chuyển sang nhóm engine tự tính",
           "valve_function" in comp and "valve_function" not in keys)
-    check("frl_size VẪN hỏi — chưa số hoá đồ thị lưu lượng AC",
-          "frl_size" in keys)
+    check("frl_size chuyển sang nhóm engine tự tính — đã số hoá đồ thị AC",
+          "frl_size" in comp and "frl_size" not in keys)
+    check("áp nguồn xưởng VẪN hỏi — catalog không có thông số này",
+          "supply_pressure_mpa" in keys)
 
 
 if __name__ == "__main__":

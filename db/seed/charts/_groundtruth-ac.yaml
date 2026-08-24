@@ -1,0 +1,206 @@
+# GROUND TRUTH cho bộ số hoá đồ thị — dùng làm chuẩn PASS/FAIL.
+#
+# ĐÂY KHÔNG PHẢI SỐ TÔI ĐOÁN. Mọi giá trị dưới đây lấy từ TEXT của PDF
+# (pdftotext -bbox-layout), hoàn toàn ĐỘC LẬP với việc trích đường cong vector.
+# Nhờ vậy nó kiểm được phần dễ sai nhất: transform, tỉ lệ trục, gán ô, gán model.
+#
+# Nguồn: DOCUMENT/FRL/es40-69-AC-D.pdf
+#        (hai bản PDF trong DOCUMENT/FRL/ có md5 GIỐNG NHAU
+#         9995ec9ad66474813b8497a70e5632b8 → kiểm tái lập được)
+#
+# ── VÌ SAO TIN ĐƯỢC BỘ TIÊU CHÍ NÀY ─────────────────────────────────────────
+# Đồ thị đặc trưng lưu lượng của SMC vẽ MỘT ĐƯỜNG CHO MỖI ÁP ĐẶT TRƯỚC. Mỗi
+# đường bắt đầu (lưu lượng ≈ 0) đúng tại áp đặt của nó, và áp đặt là một trong
+# các nhãn trục Y. Nên:
+#   · nếu hiệu chuẩn SAI TỈ LỆ  → điểm đầu các đường KHÔNG trùng nhãn Y
+#   · nếu SAI TRANSFORM         → điểm đầu lệch hàng loạt
+#   · nếu GÁN Ô SAI             → dải trục X không khớp cỡ AC
+#   · nếu GÁN MODEL SAI         → tiêu đề ô sai thứ tự
+# Không cần ai đọc đồ thị bằng mắt.
+#
+# ── BA HỌ ĐỒ THỊ, KHÔNG MỘT ─────────────────────────────────────────────────
+# Phát hiện khi dựng ground truth này, và đây là lỗi nghiêm trọng nhất tránh
+# được: catalog FRL có BA họ đồ thị khác nhau. Bản trích trước báo "trang 23:
+# 6/6 ô đạt" — trong khi trục X của trang 23 là ÁP VÀO [MPa], không phải lưu
+# lượng. Ghi ra YAML thì engine đọc áp suất thành lưu lượng, và không có dấu
+# hiệu nào để phát hiện.
+#
+#   flow_outlet    lưu lượng → áp ra    bộ điều áp AC/AR/AW   ← VÒNG A số hoá
+#   pressure_char  áp vào   → áp ra     "Pressure Char."      ← nhận dạng, TỪ CHỐI
+#   flow_drop      lưu lượng → sụt áp   lọc AFM/AFD/AFF       ← chưa hỗ trợ
+#
+# Phân biệt bằng CHÚ THÍCH TRỤC đọc từ text — nguồn độc lập:
+#   tr22 X="Flow rate [L/min (ANR)]" Y="Outlet pressure [MPa]"
+#   tr23 X="Inlet pressure [MPa]"    Y="Outlet pressure [MPa]"
+#   tr92 X="Flow rate [L/min (ANR)]" Y="Pressure drop [MPa]"
+
+source:
+  pdf: DOCUMENT/FRL/es40-69-AC-D.pdf
+  page: 22
+  extracted_from: "nhãn text + toạ độ, KHÔNG từ đường cong vector"
+
+# 6 ô trên trang 22, thứ tự trên→dưới, trái→phải.
+# title/port đọc từ text; x_max đọc từ nhãn trục X phải nhất.
+panels:
+  - {title: AC20-D,    port: Rc1/4, x_max: 2000}
+  - {title: AC30-D,    port: Rc3/8, x_max: 4000}
+  - {title: AC40-D,    port: Rc1/2, x_max: 7000}
+  - {title: AC40-06-D, port: Rc3/4, x_max: 7000}
+  - {title: AC50-D,    port: Rc1,   x_max: 20000}
+  - {title: AC60-D,    port: Rc1,   x_max: 20000}
+
+# Nhãn trục Y giống nhau ở cả 6 ô.
+y_ticks: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+y_unit: MPa
+x_unit: "L/min (ANR)"
+
+# ── MỖI Ô CÓ HAI HỌ ĐƯỜNG THEO ÁP VÀO ───────────────────────────────────────
+# LỖI NẶNG THỨ HAI tránh được, và cổng bản đầu ĐÃ ĐỂ LỌT. Bản YAML đầu tiên có
+# hai đường cùng nhãn 0,5 MPa ở MỌI ô — engine.chart.lookup lấy đường nào là
+# ngẫu nhiên theo thứ tự tệp. Nguyên nhân: mỗi trang có CHÚ GIẢI CẤP TRANG
+#
+#     "Inlet pressure: 1.0 MPa"  ← nét liền   (đo: vạch mẫu cy 85,3, không đứt)
+#     "Inlet pressure: 0.7 MPa"  ← nét đứt    (đo: vạch mẫu cy 93,1, dasharray)
+#
+# nên mỗi ô vẽ HAI họ đường, và áp đặt 0,5 MPa có mặt ở CẢ HAI họ.
+#
+# Ghép nét ↔ áp vào theo THỨ TỰ ĐỌC của chú giải (ghép theo cy gần nhất cho kết
+# quả NGƯỢC: 85,3 gần 89 hơn 81). Rồi kiểm chứng bằng vật lý: không điều áp LÊN
+# được, nên mọi áp đặt phải ≤ áp vào của họ nó. Ghép ngược là vi phạm hàng loạt.
+#
+# Thành phần mỗi họ ĐO ĐƯỢC, đồng nhất trên cả 17 ô của 3 trang. Bằng chứng độc
+# lập cho số lượng: trang 22 có đúng 30 path nét đứt / 6 ô = 5 mỗi ô — đếm từ
+# thuộc tính SVG, không qua hiệu chuẩn hay phép gán ô nào.
+inlet_families:
+  "0.7": [0.5, 0.4, 0.3, 0.2, 0.1]
+  "1.0": [0.8, 0.7, 0.6, 0.5]
+
+# ── MỌI TRANG ĐỒ THỊ TRONG CATALOG ──────────────────────────────────────────
+# kind đọc từ tiêu đề mục + chú thích trục trong text. n_panels và titles đếm từ
+# text, KHÔNG từ đường cong. Trang 128 chỉ có 5 ô: catalog KHÔNG có AW50 —
+# đã đối chiếu bằng grep trên text trang.
+pages:
+  - page: 22
+    kind: flow_outlet
+    n_panels: 6
+    titles: [AC20-D, AC30-D, AC40-D, AC40-06-D, AC50-D, AC60-D]
+  - page: 103
+    kind: flow_outlet
+    n_panels: 6
+    titles: ["AR20(K)-D", "AR30(K)-D", "AR40(K)-D", "AR40(K)-06-D",
+             "AR50(K)-D", "AR60(K)-D"]
+  - page: 128
+    kind: flow_outlet
+    n_panels: 5
+    titles: ["AW20(K)-D", "AW30(K)-D", "AW40(K)-D", "AW40(K)-06-D", "AW60(K)-D"]
+  - {page: 23,  kind: pressure_char}
+  - {page: 104, kind: pressure_char}
+  - {page: 129, kind: pressure_char}
+  - {page: 79,  kind: flow_drop}
+  - {page: 92,  kind: flow_drop}
+  - {page: 119, kind: flow_drop}
+
+# ── DUNG SAI VƯỢT KHUNG — ĐO ĐƯỢC, KHÔNG CHỌN CHO VỪA ───────────────────────
+# Nét vẽ tràn qua trục một ít ở CẢ HAI đầu. Đo trên CẢ BA trang flow_outlet
+# (22, 103, 128 — 17 ô, 50+ đường):
+#   vượt trái 0,46%   ·   vượt phải 1,09%   ·   vượt Y 0,0020 MPa
+#
+# LÀ NÉT VẼ, KHÔNG PHẢI LỖI HIỆU CHUẨN. Ba căn cứ:
+#   · C3 và C4 xác nhận tỉ lệ trục đúng (x_max khớp 100%, điểm đầu trùng nhãn Y)
+#   · quy ra pixel thì mức vượt là HẰNG SỐ ~2px trên vùng vẽ rộng ~200px, nên
+#     tính theo % thì lớn nhất ở ô có trục hẹp nhất (x_max=2000) — đúng như đo
+#   · các đường vượt đều bắt đầu đúng nhãn Y và giảm đơn điệu → là dữ liệu
+#
+# Đặt 2% x_max và 0,02 MPa: gấp ~2 lần mức đo. Một đường KHUNG lệch tới 100%
+# nên vẫn bị bắt.
+#
+# (Ghi lại vì đã đọc sai một lần: 'x lớn nhất=2022' với x_max=2000 tôi ghi là
+#  +0,6%, thực ra +1,1%. Đó là lý do C6 fail ở lần chạy trước, không phải do bộ
+#  số hoá.)
+tolerance:
+  x_frac_of_max: 0.02
+  y_mpa: 0.02
+  measured_worst_x_frac_low: 0.0046
+  measured_worst_x_frac_high: 0.0109
+  measured_worst_y_mpa: 0.0020
+
+# ── TIÊU CHÍ PASS / FAIL ────────────────────────────────────────────────────
+# Bộ số hoá phải đạt HẾT. Thiếu một tiêu chí là FAIL và KHÔNG được ghi YAML cho
+# engine dùng — sai cỡ FRL là sụt áp khi nhiều xy-lanh chạy cùng lúc.
+criteria:
+  - id: C1-số-ô
+    rule: "trích đúng 6 ô trên trang 22"
+    fail_means: "gom ô sai → nhãn trục ô này áp cho đường cong ô kia"
+
+  - id: C2-tiêu-đề
+    rule: "6/6 ô gán đúng title theo thứ tự trên, mỗi title dùng MỘT lần"
+    fail_means: "số liệu không gắn được vào model → vô dụng, hoặc gắn sai model"
+
+  - id: C3-dải-trục-X
+    rule: "x_max mỗi ô khớp bảng trên (sai số ≤ 2%)"
+    fail_means: "sai tỉ lệ trục → mọi số lưu lượng sai theo"
+
+  - id: C4-neo-áp-đặt
+    rule: "≥ 90% đường cong bắt đầu (lưu lượng nhỏ nhất) đúng MỘT nhãn Y, ±0,025 MPa"
+    fail_means: "sai transform hoặc sai hiệu chuẩn Y"
+
+  - id: C5-đơn-điệu
+    rule: "áp ra KHÔNG tăng khi lưu lượng tăng (cho phép nhiễu ≤ 0,02 MPa)"
+    fail_means: "còn lẫn đường lưới/khung, hoặc nối sai đoạn"
+
+  - id: C6-trong-khung
+    rule: "mọi điểm nằm trong khung, theo dung sai `tolerance` đo được ở trên"
+    fail_means: "đường ngoài khung là khung vẽ, không phải dữ liệu"
+
+  - id: C7-tổng-quát
+    rule: >
+      CẢ BA trang họ flow_outlet (22, 103, 128) phải: đủ n_panels, đủ titles
+      đúng thứ tự, và MỌI ô có ≥1 đường hợp lệ.
+    fail_means: >
+      chỉ canh được đúng một trang → hardcode. Đây là lớp lỗi 'mainY=380 cứng'
+      đã phê phán ở prototype, chỉ đổi chỗ.
+
+  - id: C8-phân-loại-họ
+    rule: >
+      mọi trang trích được ô phải nhận đúng kind theo bảng `pages`, và KHÔNG
+      trang nào ngoài flow_outlet bị nhận thành flow_outlet.
+    fail_means: >
+      trộn họ đồ thị. Trang 23 từng báo '6/6 ô đạt' với trục X là áp vào —
+      engine sẽ đọc áp suất thành lưu lượng.
+
+  - id: C9-an-toàn
+    rule: "trang KHÔNG thuộc flow_outlet phải trả về 0 đường (từ chối tường minh)"
+    fail_means: "số của họ khác lọt vào YAML lưu lượng"
+
+  - id: C10-đủ-hai-họ
+    rule: >
+      MỌI ô của cả 3 trang phải có đủ hai họ áp vào với đúng tập áp đặt ở
+      `inlet_families`, mỗi áp đặt xuất hiện MỘT lần trong họ của nó.
+    fail_means: >
+      hai đường cùng nhãn thì tra ra số của điều kiện nào là ngẫu nhiên; thiếu
+      một họ thì im lặng mất dữ liệu. Cả hai đã thật sự xảy ra.
+
+  - id: C11-áp-đặt-dưới-áp-vào
+    rule: "mọi đường có áp đặt ≤ áp vào của họ nó — không điều áp LÊN được"
+    fail_means: "ghép kiểu nét ↔ áp vào bị ngược"
+
+  - id: C12-đơn-điệu-liên-model
+    rule: >
+      trong cùng một họ mã (AC/AR/AW) và cùng điều kiện, cỡ lớn hơn phải giữ áp
+      ra ≥ cỡ nhỏ hơn tại cùng lưu lượng (dung sai 0,02 MPa).
+    fail_means: >
+      gán tiêu đề lẫn giữa các ô, hoặc trộn số của ô này sang ô khác. Đây là
+      kiểm chứng vật lý ĐỘC LẬP với mọi tiêu chí trong một ô.
+
+# ── VÒNG A KHÔNG BAO GỒM — nói rõ để không ai tưởng đã xong ─────────────────
+gaps:
+  - "flow_drop (lọc AFM/AFD/AFF, tr79/92/119): bộ tìm ô hiện trả 0 ô. Chưa số
+     hoá được, và cũng chưa có ground truth cho họ này."
+  - "pressure_char (tr23/104/129): nhận dạng được nhưng TỪ CHỐI số hoá — engine
+     chưa cần, và chưa có ground truth riêng."
+  - "Chưa có người mở catalog đối chiếu bằng mắt. Cổng chứng minh phép trích
+     TỰ NHẤT QUÁN với nhãn trục trong PDF, không chứng minh catalog in đúng.
+     Nên confidence để 0.9, không phải 0.95."
+
+# Chưa đạt C1..C9 thì KHÔNG sinh db/seed/charts/ac-flow.yaml.
+gate: "C1..C9 phải PASS trước khi ghi bất kỳ YAML nào cho engine"

@@ -195,8 +195,26 @@ def test_frl_chot_co_thi_ra_ma():
     frl = next((l for l in r["lines"] if l["layer"] == "air_prep"), None)
     assert frl and frl["part_number"] == "AC40B-03DG-A", f"FRL: {frl}"
     codes = [w.get("code") for w in r["warnings"]]
+    # FRL_CFG không khai áp nguồn → engine chưa tra được đồ thị nên vẫn cảnh báo
     assert "FRL_FLOW_UNVERIFIED" in codes, \
-        "phải cảnh báo: catalog chỉ cho lưu lượng dạng đồ thị, engine không kiểm được"
+        "thiếu áp nguồn thì phải cảnh báo chưa kiểm được lưu lượng"
+
+
+def test_kiem_duoc_luu_luong_thi_khong_con_canh_bao_cu():
+    """Đồ thị đã số hoá — không được tiếp tục nói 'engine không kiểm được'."""
+    r = _build([("CDM2L32-500Z", 5)], dict(FRL_AUTO, frl_series="AC-D-E"))
+    codes = [w.get("code") for w in r["warnings"]]
+    assert "FRL_FLOW_UNVERIFIED" not in codes, \
+        f"đã tra được đồ thị thì không được nói chưa kiểm được: {codes}"
+
+
+def test_co_ac_khai_thieu_thi_bao_thieu():
+    """Người dùng chốt cỡ quá nhỏ → engine phải nói ra, không im lặng làm theo."""
+    r = _build([("CDM2B40-150AZ", 8)], dict(FRL_AUTO, frl_series="AC-D-E",
+                                            frl_size="20"))
+    w = next((x for x in r["warnings"] if x.get("code") == "FRL_SIZE_TOO_SMALL"), None)
+    assert w, f"phải cảnh báo cỡ AC khai quá nhỏ: {[x.get('code') for x in r['warnings']]}"
+    assert "20" in w["message"] and w["severity"] == "warn", w
 
 
 def test_frl_khong_lubricator_mac_dinh():
@@ -528,6 +546,72 @@ def test_an_doc_duoc_ma_trong_bom_that():
     # dẫn nạp âm đọc từ bảng Performance cùng trang — để sau engine chọn cỡ giảm
     # âm theo lưu lượng xả thay vì hỏi
     assert a.get("sonic_C") == 3, a
+
+
+# ── engine TỰ TÍNH cỡ AC từ đồ thị lưu lượng đã số hoá ──────────────────────
+# Trước đây `frl_size` bắt người dùng khai vì "catalog chỉ in dạng ĐỒ THỊ".
+# db/seed/charts/ac-flow.yaml (qua cổng tests/test_chart.py) đã số hoá xong.
+FRL_AUTO = {"tube_total_m": 60, "main_line_port_size": "3/8",
+            "valve_series_size": "SY5000", "supply_pressure_mpa": 1.0}
+
+
+def test_co_ac_engine_tu_tinh_khi_co_ap_nguon():
+    # frl_series -D để khớp thế hệ của đồ thị; ca lệch thế hệ có test riêng
+    r = _build([("CDM2B40-150AZ", 4)], dict(FRL_AUTO, frl_series="AC-D-E"))
+    info = next((w for w in r.get("warnings") or []
+                 if w.get("code") == "AUTO_FRL_SIZE"), None)
+    assert info, f"phải nói ra cỡ AC engine tự tính: {r.get('warnings')}"
+    assert "Cỡ AC:" in info["message"], info
+    # lý do phải nêu ĐỦ ba yếu tố, không chỉ ra con số
+    for kw in ("L/min", "áp vào", "đặt"):
+        assert kw in info["rationale"], f"thiếu '{kw}' trong lý do: {info['rationale']}"
+    assert any(l["layer"] == "air_prep" for l in r["lines"]), "phải có dòng FRL"
+
+
+def test_do_thi_khac_the_he_thi_canh_bao_khong_bao_info():
+    """Đồ thị -D dùng để chọn mã -A là giả thiết chưa kiểm — phải nói ra."""
+    r = _build([("CDM2B40-150AZ", 4)], dict(FRL_AUTO, frl_series="AC-A-E"))
+    w = next((x for x in r.get("warnings") or []
+              if x.get("code") == "AUTO_FRL_SIZE_OTHER_GEN"), None)
+    assert w, f"phải cảnh báo lệch thế hệ: {[x.get('code') for x in r['warnings']]}"
+    assert w["severity"] == "warn", w
+    assert "-D" in w["rationale"] and "ES40-60-AC10-A" in w["rationale"], w["rationale"]
+
+
+def test_dung_the_he_khop_thi_khong_canh_bao():
+    r = _build([("CDM2B40-150AZ", 4)], dict(FRL_AUTO, frl_series="AC-D-E"))
+    codes = [x.get("code") for x in r.get("warnings") or []]
+    assert "AUTO_FRL_SIZE" in codes, codes
+    assert "AUTO_FRL_SIZE_OTHER_GEN" not in codes, codes
+
+
+def test_thieu_ap_nguon_thi_hoi_ap_nguon_khong_hoi_co_ac():
+    """Thiếu dữ liệu thì hỏi ĐÚNG thứ người dùng biết, không bắt tra catalog."""
+    cfg = dict(FRL_AUTO)
+    cfg.pop("supply_pressure_mpa")
+    r = _build([("CDM2B40-150AZ", 4)], cfg)
+    g = next((x for x in r.get("gaps") or []
+              if x.get("field") == "supply_pressure_mpa"), None)
+    assert g, f"phải báo gap ở áp nguồn: {[x.get('field') for x in r.get('gaps') or []]}"
+    assert not any(x.get("field") == "frl_size" for x in r.get("gaps") or []), \
+        "không được hỏi cỡ AC khi nguyên nhân thật là thiếu áp nguồn"
+    assert "áp vào" in (g.get("detail") or ""), g
+
+
+def test_co_ac_nguoi_dung_khai_khong_bi_ghi_de():
+    cfg = dict(FRL_AUTO)
+    cfg["frl_size"] = "60"
+    r = _build([("CDM2B40-150AZ", 1)], cfg)
+    assert not any(w.get("code") == "AUTO_FRL_SIZE" for w in r.get("warnings") or []), \
+        "người dùng đã khai thì engine KHÔNG được tự quyết rồi báo"
+
+
+def test_luu_luong_lon_thi_bao_vuot_dai_chu_khong_ngoai_suy():
+    """Vượt dải đã số hoá phải BÁO, không được kéo dài đường cong."""
+    from engine import chart
+    size, why = chart.pick_frl_size(200000, 0.5, 1.0)
+    assert size is None, f"200.000 L/min không được ra cỡ nào: {size}"
+    assert "vượt cả cỡ lớn nhất" in why, why
 
 
 if __name__ == "__main__":

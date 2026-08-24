@@ -108,7 +108,11 @@ DEFAULT_PROJECT = {
     "main_line_port_size": None,
     # thế hệ AC: AC-A-E hoặc AC-D-E — hai catalog khác nhau, mã khác nhau
     "frl_series": "AC-A-E",
-    "frl_size": None,            # khai nếu muốn chốt cỡ AC (10/20/25/30/40)
+    "frl_size": None,            # engine TỰ TÍNH từ đồ thị lưu lượng (xem dưới)
+    # ÁP NGUỒN của xưởng — engine KHÔNG suy được, và cần nó để chọn cỡ FRL:
+    # đồ thị catalog có hai họ đường theo áp vào (0,7 và 1,0 MPa) cho số khác
+    # nhau, mà không điều áp LÊN được nên áp vào phải ≤ áp nguồn.
+    "supply_pressure_mpa": None,
     "thread_standard": "Rc",
     "frl_lubricator": False,     # xy-lanh CM2 dùng mỡ sẵn, không cần dầu
     "frl_mist_separator": False, # chỉ cần khi yêu cầu khí sạch cấp cao hơn
@@ -438,23 +442,54 @@ def build(con, inputs, project=None, project_name="demo"):
     # Nguyên tắc: chỉ điền khi người dùng CHƯA khai. Suy luận không bao giờ ghi đè
     # điều bạn khai tay.
     auto = {}
+    # Tổng lưu lượng tính MỘT LẦN, dùng cho cả cỡ van và cỡ FRL. Trước đây nó
+    # nằm trong nhánh `if not valve_series_size` nên khi người dùng đã khai cỡ
+    # van thì cỡ FRL không còn số liệu để tính.
+    need_lpm = 0.0
+    for it in inputs:
+        mm = materialize.materialize(con, it[0], templates)
+        if not mm.get("ok"):
+            continue
+        aa = mm.get("attrs") or {}
+        cc = calc.summary(aa.get("bore_mm"), aa.get("stroke_mm"),
+                          project["pressure_mpa"], project["cycle_s"], it[1],
+                          safety=project["safety_factor"], rod_mm=aa.get("rod_dia_mm"))
+        need_lpm += cc.get("required_flow_lpm") or 0.0
+
     if not project.get("valve_series_size"):
-        need_lpm = 0.0
-        for it in inputs:
-            mm = materialize.materialize(con, it[0], templates)
-            if not mm.get("ok"):
-                continue
-            aa = mm.get("attrs") or {}
-            cc = calc.summary(aa.get("bore_mm"), aa.get("stroke_mm"),
-                              project["pressure_mpa"], project["cycle_s"], it[1],
-                              safety=project["safety_factor"], rod_mm=aa.get("rod_dia_mm"))
-            need_lpm += cc.get("required_flow_lpm") or 0.0
         size, why = chart.pick_valve_size(need_lpm, project["pressure_mpa"])
         if size:
             project["valve_series_size"] = size
             auto["valve_series_size"] = (size, why)
         else:
             auto["_valve_size_failed"] = why
+
+    # Cỡ FRL: trước đây bắt người dùng khai vì "catalog chỉ in dạng ĐỒ THỊ".
+    # Đã số hoá (db/seed/charts/ac-flow.yaml, qua cổng tests/test_chart.py) nên
+    # engine tự tra. Thiếu áp nguồn thì pick_frl_size trả gap nói rõ, không đoán.
+    if not project.get("frl_size"):
+        fam = (project.get("frl_series") or "AC-A-E").split("-")[0]
+        size, why = chart.pick_frl_size(need_lpm, project["pressure_mpa"],
+                                        project.get("supply_pressure_mpa"), fam)
+        if size:
+            project["frl_size"] = size
+            auto["frl_size"] = (size, why)
+        else:
+            auto["_frl_size_failed"] = why
+    elif project.get("supply_pressure_mpa"):
+        # Người dùng ĐÃ chốt cỡ — không ghi đè, nhưng vẫn KIỂM được bằng đồ thị.
+        # Trước đây engine chỉ nói "chưa kiểm được lưu lượng, bạn tự mở catalog";
+        # giờ có số nên kiểm luôn: chọn thiếu cỡ là sụt áp khi nhiều xy-lanh chạy.
+        need_size, why = chart.pick_frl_size(
+            need_lpm, project["pressure_mpa"], project["supply_pressure_mpa"],
+            (project.get("frl_series") or "AC-A-E").split("-")[0])
+        auto["frl_size_checked"] = (need_size, why)
+        try:
+            too_small = need_size and int(need_size) > int(project["frl_size"])
+        except (TypeError, ValueError):
+            too_small = False
+        if too_small:
+            auto["_frl_too_small"] = (project["frl_size"], need_size, why)
 
     for item in inputs:
         code, count = item[0], item[1]
@@ -589,6 +624,49 @@ def build(con, inputs, project=None, project_name="demo"):
             "R-VLV-02", "chưa chọn được cỡ van từ lưu lượng",
             field="valve_series_size", options=chart.valve_sizes() or None,
             detail=auto["_valve_size_failed"])))
+    if auto.get("frl_size"):
+        size, why = auto["frl_size"]
+        # THẾ HỆ CATALOG có khớp không? DB có ngữ pháp cả AC-A và AC-D, nhưng
+        # DOCUMENT/ chỉ có đồ thị lưu lượng của -D cho cỡ 20–60. Dùng đường -D để
+        # chọn linh kiện -A là giả thiết CHƯA KIỂM ĐƯỢC — nâng lên 'warning' và
+        # nói rõ, chứ không báo 'info' như thể đã chắc.
+        fam_parts = (project.get("frl_series") or "").split("-")
+        gen_proj = fam_parts[1] if len(fam_parts) > 2 else None
+        gen_chart = chart.frl_chart_generation(fam_parts[0] or "AC")
+        mismatch = gen_proj and gen_chart and gen_proj != gen_chart
+        if mismatch:
+            why += (f" ⚠ Đồ thị số hoá là catalog thế hệ -{gen_chart}, còn mã đang "
+                    f"sinh là thế hệ -{gen_proj}. DOCUMENT/ không có đồ thị lưu "
+                    f"lượng -{gen_proj} cho cỡ 20–60 (bản -A duy nhất là "
+                    f"ES40-60-AC10-A.pdf, chỉ AC10) nên chưa đối chiếu được. "
+                    f"Cần xác nhận, hoặc đổi frl_series sang AC-{gen_chart}-E.")
+        # từ vựng severity của project_output là ('info','warn','error')
+        warns.append({"severity": "warn" if mismatch else "info",
+                      "code": "AUTO_FRL_SIZE_OTHER_GEN" if mismatch
+                              else "AUTO_FRL_SIZE",
+                      "rule_code": "R-FRL-02",
+                      "message": f"Cỡ AC: {size} (engine tra đồ thị lưu lượng"
+                                 + (f", đồ thị -{gen_chart} ≠ mã -{gen_proj})"
+                                    if mismatch else ")"),
+                      "rationale": why, "detail": why})
+    if auto.get("_frl_size_failed"):
+        # Thiếu áp nguồn là NGUYÊN NHÂN thường gặp nhất, và nó là thứ người dùng
+        # biết ngay — nên hỏi đúng trường đó thay vì bắt tra catalog chọn cỡ AC.
+        need_supply = not project.get("supply_pressure_mpa")
+        gaps.append(PB.as_gap(PB.problem(
+            "R-FRL-02",
+            "chưa chọn được cỡ AC từ lưu lượng",
+            field="supply_pressure_mpa" if need_supply else "frl_size",
+            fix=("Khai áp nguồn của xưởng (MPa) — engine sẽ tự tra đồ thị"
+                 if need_supply else "Chốt cỡ AC ở cấu hình"),
+            detail=auto["_frl_size_failed"])))
+    if auto.get("_frl_too_small"):
+        got, need, why = auto["_frl_too_small"]
+        warns.append({"severity": "warn", "code": "FRL_SIZE_TOO_SMALL",
+                      "rule_code": "R-FRL-02",
+                      "message": f"Cỡ AC {got} bạn khai KHÔNG đủ lưu lượng — "
+                                 f"đồ thị cho thấy cần cỡ {need}",
+                      "rationale": why, "detail": why})
     if auto.get("valve_function"):
         vf = auto["valve_function"]
         warns.append({"severity": "info", "code": "AUTO_VALVE_FUNCTION",
@@ -673,6 +751,12 @@ def build(con, inputs, project=None, project_name="demo"):
 
     # cảnh báo phụ thuộc kết quả (FRL có được đề xuất không) → chạy sau
     sys_ctx["frl_proposed"] = any(l["layer"] == "air_prep" for l in lines)
+    # Đã KIỂM được lưu lượng FRL bằng đồ thị chưa — dù engine tự chọn cỡ hay chỉ
+    # kiểm lại cỡ người dùng khai. V-FRL-FLOW-01 chỉ được cảnh báo khi CHƯA kiểm;
+    # đồ thị đã số hoá rồi mà vẫn nói "engine không kiểm được, bạn tự mở PDF
+    # trang 10" là nói sai với người dùng.
+    sys_ctx["frl_flow_checked"] = bool(auto.get("frl_size")
+                                       or auto.get("frl_size_checked"))
     for r in load_rules(con, "per_system"):
         if "warn" not in r["then"] or r["code"] in {w.get("rule_code") for w in warns}:
             continue

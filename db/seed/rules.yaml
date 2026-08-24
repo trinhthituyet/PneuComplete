@@ -201,17 +201,24 @@
   when:
     all:
       - {attr: frl_proposed, eq: true}
+      # CHỈ khi chưa kiểm được. Đồ thị đã số hoá (db/seed/charts/ac-flow.yaml) nên
+      # phần lớn trường hợp engine kiểm được — vẫn nói "engine không kiểm được,
+      # bạn tự mở PDF trang 10" là nói sai với người dùng.
+      - {attr: frl_flow_checked, eq: false}
   then:
     warn:
       severity: warn
       code: FRL_FLOW_UNVERIFIED
-      message: Cỡ FRL chọn theo cỡ cửa, CHƯA kiểm được lưu lượng — phải tự đối chiếu
-               đồ thị Flow Characteristics trong catalog
+      message: Cỡ FRL chọn theo cỡ cửa, CHƯA kiểm được lưu lượng — thiếu ÁP NGUỒN
+               của xưởng nên engine không tra được đồ thị
   rationale: >
-    Catalog AC cho lưu lượng cả bộ dưới dạng đồ thị chứ không phải bảng số, nên engine
-    không thể so Σ lưu lượng yêu cầu với khả năng của bộ FRL. Đây là giới hạn của dữ
-    liệu nguồn, không phải của engine. Hãy mở PDF AC trang 10 (Flow Characteristics)
-    và đối chiếu với Σ lưu lượng mà engine đã tính ở phần TÍNH TOÁN.
+    Đồ thị "lưu lượng → áp ra" của catalog FRL ĐÃ số hoá
+    (db/seed/charts/ac-flow.yaml, qua cổng tests/test_chart.py), nên engine tra được
+    — nhưng chỉ khi biết ÁP NGUỒN của xưởng: đồ thị có hai họ đường theo áp vào
+    (0,7 và 1,0 MPa) cho số khác nhau, và không điều áp LÊN được nên áp vào phải
+    ≤ áp nguồn. Khai áp nguồn ở cấu hình thì engine tự kiểm và tự chọn cỡ, kèm
+    số liệu; chưa khai thì phải tự đối chiếu đồ thị Flow Rate Characteristics
+    trong catalog (es40-69-AC-D.pdf trang 22).
 
 - code: V-FLOW-01
   name: Cảnh báo ống nhỏ so với tốc độ piston
@@ -388,6 +395,39 @@
     trị NHỎ NHẤT của mỗi cỡ, sai theo hướng đó chỉ chọn van to hơn cần chứ không
     bao giờ nhỏ hơn. Ngoài dải đã số hoá thì báo gap, KHÔNG ngoại suy.
   source: DOCUMENT/MAINFOLD/7-1-2-p0387-0722-SY_en.pdf trang 43; ISO 6358
+
+- code: R-FRL-02
+  name: Chọn cỡ AC theo lưu lượng — engine tự tính
+  # Thực thi trong engine/bom.py (lượt tính trước) như R-VLV-02, vì cần TỔNG lưu
+  # lượng của mọi actuator. Dòng này tồn tại để rule_code hợp lệ với khoá ngoại
+  # project_output.rule_code và để lý do hiện ra trong UI. Điều kiện không bao
+  # giờ đúng nên không tự kích hoạt.
+  #
+  # Mã RIÊNG, không dùng chung R-FRL-01: R-FRL-01 báo thiếu cỡ CỬA đường trục,
+  # đây là chọn CỠ THÂN theo lưu lượng — hai vấn đề khác nhau, và dùng chung mã
+  # thì mọi chỗ chọn gap theo rule_code sẽ bắt lẫn nhau.
+  scope: per_system
+  priority: 997
+  when:
+    all:
+      - {attr: __never__, eq: true}
+  then: {}
+  rationale: >
+    Cỡ AC suy từ tổng lưu lượng cần cấp + áp nguồn của xưởng, không hỏi người
+    dùng. Tra db/seed/charts/ac-flow.yaml — đồ thị "lưu lượng → áp ra" trích tự
+    động từ vector PDF và đã qua cổng 12 tiêu chí + 7 đối chứng âm
+    (tests/test_chart.py).
+    Bộ điều áp luôn SỤT áp khi có lưu lượng nên "áp ra ≥ áp đặt" là bất khả:
+    engine đặt điều áp lên BẬC KẾ TIẾP trên áp làm việc (bậc 0,1 MPa là khoảng
+    giữa các đường catalog vẽ, không phải hằng số tự đặt), rồi chọn cỡ NHỎ NHẤT
+    còn giữ được ≥ áp làm việc tại lưu lượng thật.
+    Cần áp nguồn vì đồ thị có HAI họ đường theo áp vào (0,7 và 1,0 MPa) cho số
+    khác nhau, mà không điều áp LÊN được nên áp vào phải ≤ áp nguồn. Thiếu áp
+    nguồn thì báo gap ở đúng trường đó, KHÔNG chọn bừa một họ.
+    Ngoài dải đã số hoá thì báo gap, KHÔNG ngoại suy.
+  source: >
+    DOCUMENT/FRL/es40-69-AC-D.pdf trang 22 (AC), 103 (AR), 128 (AW);
+    ground truth db/seed/charts/_groundtruth-ac.yaml
 
 - code: R-PARSE-00
   name: Mã hàng không đọc được

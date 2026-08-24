@@ -55,9 +55,10 @@ NEEDS_INPUT = [
      "Phụ thuộc layout máy, khoảng cách tủ van tới từng xy-lanh. Engine không suy được."),
     ("main_line_port_size", "Cỡ cửa đường trục chính (FRL)",
      "Cỡ FRL theo tổng lưu lượng, nhưng catalog chỉ cho lưu lượng dạng đồ thị."),
-    ("frl_size", "Cỡ AC (20/25/30/40/50/60)",
-     "Cần đồ thị lưu lượng của AC — catalog chỉ in dạng ĐỒ THỊ, chưa số hoá. "
-     "Số hoá xong thì engine tự tính như đã làm với cỡ van."),
+    ("supply_pressure_mpa", "Áp nguồn của xưởng (MPa)",
+     "Áp khí máy nén cấp vào FRL. Engine cần nó để chọn cỡ AC: đồ thị catalog có "
+     "hai họ đường theo áp vào (0,7 và 1,0 MPa) cho số khác nhau, mà không điều "
+     "áp LÊN được nên áp vào phải ≤ áp nguồn. Catalog không có thông số này."),
     ("manifold_type", "Kiểu manifold",
      "Type 20 và Type 20P dùng end plate khác nhau; chọn sai thì không lắp được."),
     # Ba khoá SỞ THÍCH — nhiều phương án đều lắp được nên engine không tự chọn,
@@ -90,6 +91,10 @@ ENGINE_COMPUTED = [
     ("valve_function", "Loại van",
      "Suy theo tác động của TỪNG xy-lanh: kép → 5/2, đơn → 3/2. "
      "Cần dừng giữa hành trình thì đổi ở node van."),
+    ("frl_size", "Cỡ AC",
+     "Tính từ tổng lưu lượng + áp nguồn, tra đồ thị lưu lượng→áp ra của catalog "
+     "FRL đã số hoá (db/seed/charts/ac-flow.yaml). Đặt điều áp lên bậc kế tiếp "
+     "trên áp làm việc rồi chọn cỡ nhỏ nhất còn giữ đủ áp ở lưu lượng đó."),
 ]
 
 
