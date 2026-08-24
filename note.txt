@@ -1,72 +1,88 @@
-Chưa xong. Tôi dừng để báo cáo vì kết quả không đạt yêu cầu "số hoá tất cả".
+Vòng A xong. Tóm lại:
 
-  Phát hiện tốt: không cần click tay
+  Cổng trước, số sau
 
-  Đồ thị SMC là vector, không phải ảnh. pdftocairo -svg cho đường cong, pdftotext -bbox-layout
-  cho nhãn trục kèm toạ độ. Nên số hoá tự động được — spec §7 đề xuất công cụ click từng điểm,
-  cách này chính xác hơn và chạy được trên cả trăm đồ thị.
+  tests/test_chart.py — 12 tiêu chí + 7 đối chứng âm, tất cả đạt.
+  Ground truth (db/seed/charts/_groundtruth-ac.yaml) lấy từ textcủa
+  PDF nên độc lập với việc trích đường cong. Bộ sinh YAML tự gọi
+  cổng và raise nếu chưa đạt, nên "không đoán số rồi ghi YAML" là
+  ràng buộc trong code, không phải việc tôi phải nhớ.
 
-  Bóc được bốn lớp, mỗi lớp tôi đoán sai một lần trước khi đo:
+  Đối chứng âm quan trọng ngang bộ tiêu chí: tôi gieo 7 lỗi (saitỉ
+  lệ X/Y, xoay tiêu đề, trộn họ đồ thị, bỏ một họ áp vào, ghép nét
+  ngược, đổi tiêu đề hai ô) — cổng bắt được cả 7. Không có phần này
+  thì "12/12" không chứng minh gì.
 
-  ┌────────────┬────────────────────┬─────────────────────────────────────────┐
-  │    Lớp     │     Tôi tưởng      │                 Thực tế                 │
-  ├────────────┼────────────────────┼─────────────────────────────────────────┤
-  │ transform  │ trên <g> bao ngoài │ trên chính thẻ <path>                   │
-  ├────────────┼────────────────────┼─────────────────────────────────────────┤
-  │ đường cong │ polyline M…L…      │ bezier — lọc bỏ C là bỏ luôn đường cong │
-  ├────────────┼────────────────────┼─────────────────────────────────────────┤
-  │ glyph chữ  │ phân biệt bằng C   │ phân biệt bằng fill="none" + stroke=    │
-  ├────────────┼────────────────────┼─────────────────────────────────────────┤
-  │ điểm       │ lấy mọi số         │ lấy điểm neo, bỏ điểm điều khiển        │
-  └────────────┴────────────────────┴─────────────────────────────────────────┘
+  Hai lỗi nặng ground truth bắt được, cả hai đều im lặng
 
-  Cộng một lỗi regex: nhóm transform tuỳ chọn sau [^>]*? lười luôn khớp rỗng nên transform bị bỏ
-  im lặng.
+  Trang 23 báo "6/6 ô đạt" nhưng trục X là áp vào [MPa], không phải
+  lưu lượng. Catalog có ba họ đồ thị, không một. Vào YAML thì engine
+  đọc áp suất thành lưu lượng, không dấu hiệu gì.
 
-  Nhưng chỉ 1/5 trang chạy
+  Mỗi ô vẽ hai họ đường theo áp vào (chú giải cấp trang: nét liền
+  1,0 MPa · nét đứt 0,7 MPa), nên áp đặt 0,5 MPa có ở cả hai họ.Bản
+  YAML đầu tiên của tôi có hai đường trùng nhãn 0,5 ở mọi ô —
+  lookup lấy đường nào là ngẫu nhiên. Tôi đã xoá tệp đó ngay và ghi
+  lại với nhãn "áp vào/áp đặt".
 
-  es40-69-AC-D.pdf  tr22   6/6 ô hiệu chuẩn · 0/6 có tiêu đề
-  es40-69-AC-D.pdf  tr61   0/1
-  es40-72-AR_M-D    tr20   0/0
-  SY3000            tr45   0/4
-  ES13-12-VHS-D     tr8    0/2
+  Lỗi thiết kế tôi tự mắc ba lần
 
-  Số liệu trang 22 hợp lý về vật lý: áp ra 0,602 → 0,494 MPa khi lưu lượng 15 → 1012 L/min, đúng
-  dạng đường đặc trưng.
+  Ô được suy từ cụm đường cong, rồi cộng offset đo trên đúng một
+  trang. Mỗi lần sửa bộ lọc đường cong là bbox đổi, mọi vùng nhãn
+  lệch, cả trang mất nhãn — đúng lớp lỗi "mainY=380 cứng" tôi đãphê
+  phán ở prototype. Đảo chiều phụ thuộc: nhãn trục định nghĩa ô,
+  đường cong được gán vào ô theo điểm đầu. Không còn hằng số nào
+  theo trang.
 
-  Nguyên nhân không tổng quát: tôi hardcode vùng tìm nhãn theo số đo của đúng trang đó (nhãn Y ở 
-  x0+30, nhãn X ở y1−18). Đây chính là lớp lỗi tôi đã phê phán ở prototype của bạn — "mainY=380 
-  cứng". Canh theo một trang thì trang khác lệch.
+  Kết quả
 
-  Cách sửa đúng, tôi thấy rồi nhưng chưa làm
+  17 model AC/AR/AW × 9 điều kiện = 153 đường. Kiểm chứng vật lýđộc
+  lập với mọi tiêu chí trong một ô: cỡ lớn hơn giữ áp tốt hơn, đúng
+  ở cả ba họ mã.
 
-  Tôi đang loại các đường thẳng vì cho là "lưới" — nhưng chính chúng là khung trục. Dùng khung để
-  xác định hình chữ nhật vùng vẽ, rồi tìm nhãn ngay cạnh khung. Đó là mốc neo tự nhiên, không
-  cần offset hardcode nào và sẽ tổng quát.
+  frl_size chuyển sang engine tự tính. Đổi lại phải khai áp nguồn
+  của xưởng — catalog không có thông số này, và thiếu nó thì khôn
+  Bản YAML đầu tiên của tôi có hai đường trùng nhãn 0,5 ở mọi ô
+  — lookup lấy đường nào là ngẫu nhiên. Tôi đã xoá tệp đó ngay và
+  ghi lại với nhãn "áp vào/áp đặt".
 
-  Tôi không ghi số ra YAML
+  Lỗi thiết kế tôi tự mắc ba lần
 
-  Hai lý do:
+  Ô được suy từ cụm đường cong, rồi cộng offset đo trên đúng một
+  trang. Mỗi lần sửa bộ lọc đường cong là bbox đổi, mọi vùng nhãn
+  lệch, cả trang mất nhãn — đúng lớp lỗi "mainY=380 cứng" tôi đã
+  phê phán ở prototype. Đảo chiều phụ thuộc: nhãn trục định
+  nghĩa ô, đường cong được gán vào ô theo điểm đầu. Không còn
 
-  1. Tiêu đề chưa gán được (0/6) — số liệu không thuộc model nào thì vô nghĩa
-  2. Không có nguồn đối chiếu độc lập cho đồ thị AC. Bảng số duy nhất trong catalog là dẫn nạp âm
-  của van (đã số hoá ở sy-flow.yaml); đồ thị AC là nguồn duy nhất nên không kiểm chéo được
+  Mỗi ô vẽ hai họ đường theo áp vào (chú giải cấp trang: nét liền 1,0 MPa · nét đứt 0,7 MPa), nên áp đặt 0,5 MPa
+  có ở cả hai họ. Bản YAML đầu tiên của tôi có hai đường trùng nhãn 0,5 ở mọi ô — lookup lấy đường nào là ngẫu
+  nhiên. Tôi đã xoá tệp đó ngay và ghi lại với nhãn "áp vào/áp đặt".
 
-  Sai cỡ FRL là sụt áp khi nhiều xy-lanh chạy cùng lúc — tôi không đưa số chưa kiểm chứng vào chỗ
-  engine tin.
+  Lỗi thiết kế tôi tự mắc ba lần
 
-  165 test Python + 36 node, không regression (tệp này độc lập).
+  Ô được suy từ cụm đường cong, rồi cộng offset đo trên đúng một trang. Mỗi lần sửa bộ lọc đường cong là bbox
+  đổi, mọi vùng nhãn lệch, cả trang mất nhãn — đúng lớp lỗi "mainY=380 cứng" tôi đã phê phán ở prototype. Đảo
+  chiều phụ thuộc: nhãn trục định nghĩa ô, đường cong được gán vào ô theo điểm đầu. Không còn hằng số nào theo
+  trang.
 
-  Ước lượng thật cho phần còn lại
+  Kết quả
 
-  Tôi đã ước sai một lần rồi nên nói thẳng: sửa neo theo khung trục + gán tiêu đề là một vòng làm
-  việc nữa cỡ bằng vòng vừa rồi. Sau đó mới đến việc chạy trên ~10 trang AC + ~60 trang
-  SY/VHS/AR và duyệt tay kết quả — vì không có nguồn đối chiếu.
+  17 model AC/AR/AW × 9 điều kiện = 153 đường. Kiểm chứng vật lý độc lập với mọi tiêu chí trong một ô: cỡ lớn
+  hơn giữ áp tốt hơn, đúng ở cả ba họ mã.
 
-  Ba hướng, bạn chọn:
+  frl_size chuyển sang engine tự tính. Đổi lại phải khai áp nguồn của xưởng — catalog không có thông số này, và
+  thiếu nó thì không chọn được họ đường. Không có hằng số tự đặt: đặt điều áp lên bậc kế tiếp trên áp làm việc
+  (bậc 0,1 MPa do catalog vẽ) rồi chọn cỡ nhỏ nhất còn giữ đủ áp.
 
-  - A. Tôi làm tiếp vòng sửa neo — có cơ sở rõ ràng, nhưng chưa chắc là lớp cuối
-  - B. Dừng ở đây. Giữ sy-flow.yaml (đã số hoá, đang dùng để chọn cỡ van), tiếp tục hỏi người
-  dùng 2 khoá frl_size và main_line_port_size
-  - C. Bạn tự đọc 4 đồ thị AC quan trọng nhất rồi cho tôi số — nhanh nhất và chắc chắn nhất, vì
-  bạn có nguồn đối chiếu là kinh nghiệm
+  Ba chỗ tôi phải nói ra
+
+  - Đồ thị là catalog thế hệ -D, mã mặc định là -A; DOCUMENT/ không có đồ thị -A cho cỡ 20–60 → cảnh báo warn,
+  không phải info.
+  - Luật V-FRL-FLOW-01 vẫn nói "engine không kiểm được lưu lượng, hãy tự mở PDF trang 10" — đã sai kể từ khi số
+  hoá xong. Giờ chỉ hiện khi thiếu áp nguồn.
+  - Chưa có người mở catalog đối chiếu bằng mắt. Cổng chứng minh phép trích tự nhất quán với nhãn trục, không
+  chứng minh catalog in đúng → confidence 0.9.
+
+  Chưa làm: hai họ đồ thị kia (sụt áp của lọc AFM/AFD; áp vào→áp ra) nhận dạng được nhưng từ chối số hoá. Các
+  catalog FRL khác đọc được tiêu đề ô nhưng chưa gán được đường cong — ví dụ es40-74-AWM-AWD-D.pdf có ô ở hàng
+  y≈467–535 mà _axes chưa nhận ra. Đó là vòng B; tôi không vá nửa vời.
