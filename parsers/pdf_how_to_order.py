@@ -93,9 +93,14 @@ def find_spine(ws, series_hint: str | None = None):
             continue
         if not all(_is_code(t) for t in toks):
             continue
-        # token đầu phải là mã series (dài hơn, có chữ) — 'CM2', 'CDM2'
+        # Token đầu phải là mã series: bắt đầu bằng CHỮ, có thể kèm số.
+        #
+        # LỖI CŨ: `^[A-Z]{1,4}\d` bắt buộc kết thúc bằng CHỮ SỐ. Đúng cho CM2,
+        # SY5, KQ2, SS5Y — nhưng loại thẳng AN, VQ, AS, MGP, AC (họ chỉ có chữ).
+        # Đó là lý do 5 họ đó phải nhập tay YAML, và vì sao chạy `grammar` trên
+        # AN/VQ/VT ra 0 slot dù trang How-to-Order đọc rõ "AN 20 C 10 02".
         head = toks[0]
-        if len(head) < 2 or not re.match(r"^[A-Z]{1,4}\d", head):
+        if len(head) < 2 or not re.match(r"^[A-Z]{2,5}\d{0,3}$", head, re.I):
             continue
         if series_hint:
             # SMC chèn 'D' sau chữ đầu để chỉ loại có nam châm: CM2 → CDM2.

@@ -232,14 +232,33 @@ SLICE = ["CM2-CDM2-Z-E", "CJ2-CDJ2-Z-E", "SY-E", "AS-E-E", "AS-FS-E",
          "AS1-E", "MGP-Z-E", "CQS-Z-E", "CQSB-Z-E", "MY1B-Z-E", "J-E"]
 
 
-def cmd_pdf(only_slice=True, limit=None):
-    """Tải PDF từ hàng đợi. Mặc định chỉ bộ SLICE (pha 3), không tải cả 1.252 file.
+def cmd_pdf(only_slice=True, limit=None, bom_only=False):
+    """Tải PDF từ hàng đợi. Mặc định chỉ bộ SLICE, không tải cả nghìn tệp.
 
-        python3 -m crawler.run pdf              # chỉ bộ SLICE
-        python3 -m crawler.run pdf --all        # toàn bộ hàng đợi PDF
+        python3 -m crawler.run pdf              # chỉ bộ SLICE (14 họ pha 3)
+        python3 -m crawler.run pdf --bom        # họ CÓ TRONG BOM thật của bạn
+        python3 -m crawler.run pdf --all        # toàn bộ hàng đợi
     """
     con = db.connect()
-    if only_slice:
+    if bom_only:
+        # Ưu tiên theo TÁC ĐỘNG THẬT: chỉ tải họ mà BOM của bạn đang dùng mà
+        # engine chưa đọc được. Tải cả 1.175 tệp là ~20 phút ở 1 req/s và phần
+        # lớn là họ bạn không dùng.
+        from crawler import rebuild_queue as RQ
+        found, _, _ = RQ.scan_cache()
+        known = RQ.known_grammars(con)
+        want = {sid for sid, _, _ in
+                RQ.rank_by_bom(con, {k: v for k, v in found.items() if k not in known})}
+        if not want:
+            print("Không họ nào trong BOM cần tải thêm.")
+            return 0
+        marks = ",".join("?" * len(want))
+        rows = con.execute(
+            f"""select * from crawl_target where kind='pdf' and state='pending'
+                and series_code in ({marks}) order by priority, id""",
+            sorted(want)).fetchall()
+        print(f"  họ theo BOM: {', '.join(sorted(want))}")
+    elif only_slice:
         marks = ",".join("?" * len(SLICE))
         rows = con.execute(
             f"""select * from crawl_target where kind='pdf' and state='pending'
@@ -250,7 +269,8 @@ def cmd_pdf(only_slice=True, limit=None):
             "order by priority, id").fetchall()
     if limit:
         rows = rows[:limit]
-    print(f"tải {len(rows)} PDF" + (" (bộ SLICE)" if only_slice else " (toàn bộ)"))
+    which = "theo BOM" if bom_only else ("bộ SLICE" if only_slice else "toàn bộ")
+    print(f"tải {len(rows)} PDF ({which})")
 
     mb = 0.0
     for i, t in enumerate(rows, 1):
@@ -328,5 +348,6 @@ if __name__ == "__main__":
         lim = int(sys.argv[sys.argv.index("--limit") + 1])
     {"init": cmd_init, "crawl": lambda: cmd_crawl(lim),
      "reparse": cmd_reparse, "backfill": cmd_backfill, "grammar": cmd_grammar,
-     "pdf": lambda: cmd_pdf("--all" not in sys.argv, lim),
+     "pdf": lambda: cmd_pdf("--all" not in sys.argv and "--bom" not in sys.argv,
+                            lim, bom_only="--bom" in sys.argv),
      "stats": cmd_stats}[cmd]()

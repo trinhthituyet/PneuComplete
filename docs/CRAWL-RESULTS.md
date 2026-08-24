@@ -303,3 +303,76 @@ Engine tra theo bore, không giả định một cỡ ren cho cả series.
 | CJ2 | có PDF, spine không khớp — cần đọc tay |
 | Web UI | pha 8 của lộ trình |
 | Golden test từ BOM máy cũ | cần file Excel của bạn |
+
+
+---
+
+## Phương án A — dựng lại từ cache (2026-08-24)
+
+### Kết quả: A KHÔNG cho ngữ pháp như tôi đề xuất ban đầu
+
+Tôi đề xuất A ("crawl lại rộng hơn từ cache, 0 request") rồi **đo thấy nó sai**.
+
+```
+cache/ 974 MB = 2.188 HTML + 11 PDF
+  1.936 trang không có bảng nào (trang tìm kiếm, điều hướng)
+    249 trang nhiều bảng  →  45 trang thật sự cho dữ liệu
+      5 trang có How-to-Order
+```
+
+Reparse toàn bộ: **575 variation + 651 option hậu tố**. Đó là DANH MỤC
+("có series này, bore này"), KHÔNG phải NGỮ PHÁP (`code_slot`+`code_option`).
+Ngữ pháp chỉ đến từ `pdf_how_to_order.py` (đọc PDF) hoặc YAML nhập tay — mà cache
+có đúng 11 PDF.
+
+Giá trị thật của cache là **5.973 link PDF / 394 catalog ID**: danh sách chính
+xác cần tải.
+
+### Đã làm được
+
+`crawler/rebuild_queue.py`:
+- `--relink` dựng lại `crawl_fetch` cho 249 trang có nội dung → `reparse` chạy
+  lại được sau khi bảng đó mất trong sự cố `pneu.db`
+- `--write` dựng hàng đợi **1.175 PDF** từ link trong cache
+- `--report` xếp ưu tiên theo **BOM thật**
+
+`crawler.run pdf --bom` tải đúng họ BOM đang dùng thay vì cả 1.175 tệp.
+
+### Lọc bằng danh sách TRẮNG, không phải danh sách đen
+
+Bản đầu liệt kê tiền tố cơ khí cần loại — nó cứ phải nối dài mãi. Đảo lại: chỉ
+giữ mã khớp tiền tố catalog SMC **suy từ 1.300 series đã crawl**.
+
+Kết quả bảng ưu tiên sạch: **11 họ khí nén / 46 cái**, sau khi loại
+**2.432 cái thuộc 65 họ cơ khí MISUMI** (bulông, đai ốc, nhôm định hình —
+ngoài phạm vi phần mềm). "Thiếu khá nhiều" thực ra chủ yếu là hàng cơ khí.
+
+### Lỗi thật tìm ra trong parser
+
+`find_spine()` đòi token đầu khớp `^[A-Z]{1,4}\d` — **bắt buộc kết thúc bằng chữ
+số**. Đúng cho CM2, SY5, KQ2, SS5Y; **loại thẳng AN, VQ, AS, MGP, AC**. Đó là lý
+do 5 họ đó phải nhập tay YAML, và vì sao chạy `grammar` ra 0 slot dù trang
+How-to-Order đọc rõ `AN 20 C 10 02`. Sửa thành `^[A-Z]{2,5}\d{0,3}$`.
+
+### Nhưng vẫn CHƯA ĐỦ để dùng
+
+Sau khi sửa, AN/AMC/VQ ra được slot, nạp vào DB thành 18 họ. Kiểm mã thật:
+
+```
+AN15-02          ✗ dư "-02"      AMC320-02B  ✗ dư "-02B"
+VT307-5D1-02N    ✗ không nhận ra series
+VQ31A1-5G-C10-F  ✗ không nhận ra series
+```
+
+**Không mã nào trong BOM đọc được.** Bộ trích chỉ lấy 1/3 ô của AN. Đã **gỡ
+ngữ pháp AN/AMC khỏi DB** — giữ lại chỉ gây ảo giác là có hỗ trợ trong khi
+parse vẫn hỏng. Về lại 16 họ.
+
+### Kết luận
+
+A cho **hạ tầng** (hàng đợi, relink, ưu tiên theo BOM, sửa regex chặn 5 họ) nhưng
+**không cho thêm họ dùng được**. Muốn có ngữ pháp dùng được thì vẫn phải duyệt
+tay từng ô — đúng như cảnh báo "~60% đúng, phải duyệt tay" lúc đề xuất.
+
+Bước tiếp hợp lý là B: chọn 3–5 họ theo bảng ưu tiên (`--report`) rồi nhập YAML
+tay, ~1 giờ/họ.
