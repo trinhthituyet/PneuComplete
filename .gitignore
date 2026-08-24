@@ -71,3 +71,10 @@ __pycache__/
 # note.txt (do bạn tạo trên GitHub) vẫn theo dõi, nên không dùng mẫu *.txt chung.
 /Thông tin*.txt
 /thong-tin*.txt
+/chỉnh sửa*.txt
+/chinh-sua*.txt
+
+# CÁCH GỌN HƠN cho lần sau: bỏ mọi tệp yêu cầu vào thư mục yeu-cau/ thì không
+# phải thêm mẫu mỗi lần đặt tên mới. Đuổi theo từng tên file đã sót 2 lần
+# ("chỉnh sửa.txt" lọt vào commit 8a4d740 và phải amend).
+yeu-cau/

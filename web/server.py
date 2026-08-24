@@ -55,12 +55,9 @@ NEEDS_INPUT = [
      "Phụ thuộc layout máy, khoảng cách tủ van tới từng xy-lanh. Engine không suy được."),
     ("main_line_port_size", "Cỡ cửa đường trục chính (FRL)",
      "Cỡ FRL theo tổng lưu lượng, nhưng catalog chỉ cho lưu lượng dạng đồ thị."),
-    ("frl_size", "Cỡ AC (10/20/25/30/40)",
-     "Một cỡ cửa có ở nhiều cỡ AC — engine liệt kê ứng viên, bạn chọn."),
-    ("valve_series_size", "Cỡ van (SY3000/SY5000/SY7000)",
-     "Phụ thuộc lưu lượng cần thiết; engine chưa trích được Cv từ catalog."),
-    ("valve_function", "Loại van mặc định",
-     "Phụ thuộc CHỨC NĂNG từng cơ cấu — khai riêng cho từng xy-lanh ở bảng bên trên."),
+    ("frl_size", "Cỡ AC (20/25/30/40/50/60)",
+     "Cần đồ thị lưu lượng của AC — catalog chỉ in dạng ĐỒ THỊ, chưa số hoá. "
+     "Số hoá xong thì engine tự tính như đã làm với cỡ van."),
     ("manifold_type", "Kiểu manifold",
      "Type 20 và Type 20P dùng end plate khác nhau; chọn sai thì không lắp được."),
     # Ba khoá SỞ THÍCH — nhiều phương án đều lắp được nên engine không tự chọn,
@@ -82,6 +79,18 @@ def api_series(con):
            where exists (select 1 from code_slot cs where cs.series_id=s.id)
            order by s.code""").fetchall()
     return [dict(r) for r in rows]
+
+
+# Khoá engine TỰ TÍNH — UI hiện kết quả kèm cách tính, có ô ghi đè, KHÔNG hỏi.
+# Trước đây hai khoá này nằm trong NEEDS_INPUT nên UI vẫn bắt chọn dù engine đã
+# tính xong từ §10.2 — người dùng thấy ô trống thì tưởng bắt buộc phải điền.
+ENGINE_COMPUTED = [
+    ("valve_series_size", "Cỡ van",
+     "Tính từ tổng lưu lượng cần cấp, tra bảng dẫn nạp âm C của catalog SY."),
+    ("valve_function", "Loại van",
+     "Suy theo tác động của TỪNG xy-lanh: kép → 5/2, đơn → 3/2. "
+     "Cần dừng giữa hành trình thì đổi ở node van."),
+]
 
 
 def api_groups():
@@ -191,8 +200,35 @@ def api_bom_tree(con, payload, root):
       2. normalize — dịch về đúng cha, và NÓI RA đã dịch gì
       3. to_graph  — dịch cha–con thành cạnh để dùng lại nguyên resolver đã có
     """
+    # Bỏ phụ kiện lần dựng trước TRƯỚC khi làm gì khác — nếu giữ thì số lượng
+    # cộng dồn qua mỗi lần bấm Dựng BOM.
+    T.drop_generated(root)
     problems = T.validate(root)
     root, fixed = T.normalize(root)
+
+    # XOÁ mã do ENGINE điền ở lần dựng trước, giữ mã BẠN gõ.
+    #
+    # LỖI ĐÃ MẮC: fill_codes() bỏ qua mọi node "đã có mã", không phân biệt nguồn.
+    # Nên dựng BOM với 1 trạm → engine điền SY3220 (SY3000, đủ cho 1 xy-lanh);
+    # thêm trạm 2,3,4 rồi dựng lại → lưu lượng tăng, các trạm mới nhận SY5220
+    # (SY5000) nhưng trạm 1 GIỮ NGUYÊN SY3220 → van trạm 1 THIẾU CỠ, và cả máy
+    # lẫn lộn hai cỡ van trên cùng manifold.
+    #
+    # Quyết định do engine suy phải được TÍNH LẠI mỗi lần, vì đầu vào đã đổi.
+    # Chỉ giá trị người dùng gõ mới được giữ.
+    # `filled_by_bom` lưu CHÍNH GIÁ TRỊ engine đã điền, không phải cờ true/false.
+    # Nhờ vậy so được: code còn khớp giá trị đó ⇒ chưa ai sửa ⇒ tính lại được.
+    # Code đã khác ⇒ người dùng đã gõ đè ⇒ GIỮ.
+    # Dùng cờ boolean thì hễ UI quên xoá cờ là mất giá trị người dùng nhập —
+    # đúng lỗi vừa mắc.
+    for n, _, _ in T.walk(root):
+        prev = n.get("filled_by_bom")
+        if prev and n.get("code") == prev:
+            n["code"] = ""
+            n.pop("filled_by_bom", None)
+        elif prev:
+            n.pop("filled_by_bom", None)     # người dùng đã đè → quên dấu cũ đi
+
     gr = T.to_graph(root)
 
     res = api_bom_graph(con, payload, gr, tree=root)
@@ -250,7 +286,10 @@ def api_bom_graph(con, payload, gr, tree=None):
             f = fill.get(n.get("id"))
             if f and not n.get("code"):
                 n["code"] = f["code"]
-                n["filled_by_bom"] = True
+                n["filled_by_bom"] = f["code"]      # lưu GIÁ TRỊ, không phải cờ
+        # (1) treo phụ kiện engine sinh vào đúng node cha → cây, bảng BOM và sơ
+        # đồ cùng thấy quan hệ mẹ–con.
+        T.attach_lines(tree, lines)
         T.save(con, res["project_id"], tree)
     else:
         G.save(con, res["project_id"], gr)
@@ -334,6 +373,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, {"defaults": bom.DEFAULT_PROJECT,
                                  "needs_input": [{"key": k, "label": l, "why": w}
                                                  for k, l, w in NEEDS_INPUT],
+                                 "computed": [{"key": k, "label": l, "why": w}
+                                              for k, l, w in ENGINE_COMPUTED],
                                  "valve_functions": list(bom.VALVE_FUNCTION)})
             elif u.path == "/api/groups":
                 self._send(200, api_groups())

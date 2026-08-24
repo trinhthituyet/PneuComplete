@@ -21,6 +21,7 @@ import tmpdb                                # noqa: E402,F401  PHẢI trước c
 from crawler import db                      # noqa: E402
 from engine import graph as G               # noqa: E402
 from engine import materialize              # noqa: E402
+from engine import tree as T                # noqa: E402
 
 import web.server as W                      # noqa: E402
 
@@ -269,6 +270,123 @@ def test_api_groups():
           any(p["kind"] == "electrical" for p in vp), str(vp))
 
 
+# ── Ba lỗi tìm ra khi người dùng dùng thật (2026-08-24) ─────────────────────
+
+def _station(i, code):
+    return {"id": f"v{i}", "type": "valve", "name": f"SV{i}", "code": "", "qty": 1,
+            "attrs": {}, "children": [
+                {"id": f"c{i}", "type": "cylinder", "name": "Xy-lanh", "code": code,
+                 "qty": 1, "attrs": {}, "children": []}]}
+
+
+def _tree(codes):
+    return {"id": "frl", "type": "frl", "name": "FRL", "code": "", "qty": 1,
+            "attrs": {}, "children": [_station(i + 1, c) for i, c in enumerate(codes)]}
+
+
+def test_them_tram_thi_van_cu_phai_tinh_lai():
+    """Thêm trạm → cỡ van của TRẠM CŨ phải tính lại theo lưu lượng mới.
+
+    LỖI THẬT: fill_codes() bỏ qua node "đã có mã" nên trạm 1 giữ SY3220 (SY3000,
+    đủ cho 1 xy-lanh) trong khi trạm 2,3,4 nhận SY5220 → van trạm 1 THIẾU CỠ và
+    cả máy lẫn hai cỡ van trên cùng manifold.
+    """
+    con = db.connect()
+    tree = _tree([])
+    sizes = []
+    for i in range(1, 5):
+        tree["children"].append(_station(i, "CDM2L32-500Z"))
+        r = W.api_bom(con, {"tree": tree, "config": dict(CFG), "name": f"b{i}"})
+        tree = r["tree"]
+        sizes = [n.get("code") for n, _, _ in T.walk(tree) if n["type"] == "valve"]
+    con.close()
+    check("4 trạm cùng xy-lanh → CÙNG một cỡ van", len(set(sizes)) == 1, str(sizes))
+    check("cỡ van cuối là SY5000 (lưu lượng 4 xy-lanh)",
+          all("SY5" in (c or "") for c in sizes), str(sizes))
+
+
+def test_ma_ban_go_khong_bi_ghi_de():
+    """Mã người dùng gõ phải sống sót qua mọi lần dựng lại.
+
+    `filled_by_bom` lưu CHÍNH GIÁ TRỊ engine điền, không phải cờ true/false — nhờ
+    vậy so được "còn khớp ⇒ tính lại" với "đã khác ⇒ người dùng đè ⇒ giữ".
+    """
+    con = db.connect()
+    tree = _tree(["CDM2L32-500Z"] * 3)
+    r = W.api_bom(con, {"tree": tree, "config": dict(CFG), "name": "a"})
+    tree = r["tree"]
+    T.find(tree, "v1")["code"] = "SY7220-5DZE-C6"      # cố ý KHÔNG xoá dấu cũ
+    r = W.api_bom(con, {"tree": tree, "config": dict(CFG), "name": "b"})
+    tree = r["tree"]
+    v1 = T.find(tree, "v1")
+    check("mã bạn gõ được giữ", v1.get("code") == "SY7220-5DZE-C6", str(v1.get("code")))
+    tree["children"].append(_station(9, "CDM2L32-500Z"))
+    r = W.api_bom(con, {"tree": tree, "config": dict(CFG), "name": "c"})
+    con.close()
+    v1 = T.find(r["tree"], "v1")
+    check("thêm trạm nữa vẫn giữ mã bạn gõ",
+          v1.get("code") == "SY7220-5DZE-C6", str(v1.get("code")))
+
+
+def test_phu_kien_treo_dung_cha_va_dung_so_luong():
+    """Phụ kiện engine sinh phải treo đúng node mẹ, số lượng THEO TỪNG xy-lanh.
+
+    LỖI THẬT: dòng BOM gộp theo mã nên khi chia về từng xy-lanh tôi chia ĐỀU —
+    2 con CDM2 + 1 con MGPM dùng chung mã tiết lưu (tổng 6) ra 3/3 thay vì 4/2.
+    Sửa bằng cách for_items mang {mã: số lượng} thay vì chỉ danh sách mã.
+    """
+    con = db.connect()
+    tree = {"id": "frl", "type": "frl", "name": "FRL", "code": "", "qty": 1,
+            "attrs": {}, "children": [
+                {"id": "v1", "type": "valve", "name": "SV1", "code": "", "qty": 1,
+                 "attrs": {}, "children": [
+                     {"id": "c1", "type": "cylinder", "name": "A",
+                      "code": "CDM2L32-500Z", "qty": 2, "attrs": {}, "children": []}]},
+                {"id": "v2", "type": "valve", "name": "SV2", "code": "", "qty": 1,
+                 "attrs": {}, "children": [
+                     {"id": "c2", "type": "cylinder", "name": "B",
+                      "code": "MGPM25-200Z-M9BL", "qty": 1, "attrs": {},
+                      "children": []}]}]}
+    r = W.api_bom(con, {"tree": tree, "config": dict(CFG), "name": "phukien"})
+    con.close()
+    c1 = T.find(r["tree"], "c1")
+    c2 = T.find(r["tree"], "c2")
+    sc1 = [c for c in c1["children"] if c["type"] == "speed_controller"]
+    sc2 = [c for c in c2["children"] if c["type"] == "speed_controller"]
+    check("tiết lưu treo dưới xy-lanh, không ngang hàng", sc1 and sc2,
+          f"{len(sc1)}/{len(sc2)}")
+    check("2 xy-lanh CDM2 → 4 tiết lưu (không phải chia đều)",
+          sc1 and sc1[0]["qty"] == 4, str(sc1))
+    check("1 xy-lanh MGPM → 2 tiết lưu", sc2 and sc2[0]["qty"] == 2, str(sc2))
+    sens = [c for c in c1["children"] if c["type"] == "sensor"]
+    check("cảm biến cũng treo dưới xy-lanh", len(sens) == 1, str(sens))
+
+
+def test_dung_lai_khong_cong_don_phu_kien():
+    """Bấm Dựng BOM nhiều lần: phụ kiện KHÔNG được nhân lên."""
+    con = db.connect()
+    tree = _tree(["CDM2L32-500Z"])
+    n = []
+    for i in range(3):
+        r = W.api_bom(con, {"tree": tree, "config": dict(CFG), "name": f"r{i}"})
+        tree = r["tree"]
+        n.append(sum(1 for x, _, _ in T.walk(tree) if x.get("from_bom")))
+    con.close()
+    check("dựng 3 lần, số phụ kiện không đổi", len(set(n)) == 1, str(n))
+
+
+def test_khoa_engine_tu_tinh_khong_con_bat_khai():
+    """Cỡ van và loại van engine đã tính → không được nằm trong 'cần bạn khai'."""
+    keys = {k for k, _, _ in W.NEEDS_INPUT}
+    comp = {k for k, _, _ in W.ENGINE_COMPUTED}
+    check("valve_series_size chuyển sang nhóm engine tự tính",
+          "valve_series_size" in comp and "valve_series_size" not in keys)
+    check("valve_function chuyển sang nhóm engine tự tính",
+          "valve_function" in comp and "valve_function" not in keys)
+    check("frl_size VẪN hỏi — chưa số hoá đồ thị lưu lượng AC",
+          "frl_size" in keys)
+
+
 if __name__ == "__main__":
     print("Kiểm đồ thị đấu nối")
     print("=" * 60)
@@ -277,7 +395,12 @@ if __name__ == "__main__":
                test_loai_van_khai_o_van_truyen_xuong_xylanh,
                test_cong_that_tach_A_B, test_payload_phang_van_chay,
                test_luu_va_doc_lai_do_thi, test_do_thi_chi_co_node_tu_do,
-               test_do_thi_rong_bao_loi_ro_rang, test_api_groups):
+               test_do_thi_rong_bao_loi_ro_rang, test_api_groups,
+               test_them_tram_thi_van_cu_phai_tinh_lai,
+               test_ma_ban_go_khong_bi_ghi_de,
+               test_phu_kien_treo_dung_cha_va_dung_so_luong,
+               test_dung_lai_khong_cong_don_phu_kien,
+               test_khoa_engine_tu_tinh_khong_con_bat_khai):
         print(f"\n{fn.__name__}")
         fn()
     print("\n" + "=" * 60)

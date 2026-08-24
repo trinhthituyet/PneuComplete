@@ -554,10 +554,13 @@ def build(con, inputs, project=None, project_name="demo"):
                           "qty": res["qty"] * count, "rule_code": r["code"],
                           "rationale": r["rationale"], "confidence": conf_line,
                           "note": res.get("note"),
-                          # for_items: dòng này sinh RA VÌ actuator nào. Cần cho
-                          # mục 5 của spec sơ đồ — điền mã ngược lại vào node van
-                          # đang điều khiển đúng xy-lanh đó.
-                          "for_items": [code],
+                          # for_items: {mã actuator: số lượng dòng này sinh CHO nó}.
+                          # Phải là TỪ ĐIỂN chứ không phải danh sách: dòng BOM đã
+                          # gộp theo mã, nên nếu chỉ giữ danh sách thì lúc treo phụ
+                          # kiện về từng xy-lanh phải chia đều — sai. Ví dụ 2 con
+                          # CDM2 + 1 con MGPM dùng chung mã tiết lưu: tổng 6 cái,
+                          # chia đều ra 3/3 trong khi thực tế là 4/2.
+                          "for_items": {code: res["qty"] * count},
                           "alternatives": res.get("alternatives")})
             # Đếm đầu one-touch còn hở bằng cách xem GIAO DIỆN THẬT của mã vừa
             # chọn, không so tên series. Bản trước hardcode `== "AS-E-E"` nên khi
@@ -683,9 +686,11 @@ def build(con, inputs, project=None, project_name="demo"):
         k = (l["layer"], l["part_number"])
         if k in merged:
             merged[k]["qty"] += l["qty"]
-            # hợp nhất chứ không ghi đè: một mã van có thể phục vụ nhiều xy-lanh
-            merged[k]["for_items"] = sorted(set(merged[k].get("for_items") or [])
-                                           | set(l.get("for_items") or []))
+            # cộng dồn theo từng actuator, không chỉ hợp nhất tên
+            fi = dict(merged[k].get("for_items") or {})
+            for code_, q_ in (l.get("for_items") or {}).items():
+                fi[code_] = fi.get(code_, 0) + q_
+            merged[k]["for_items"] = fi
         else:
             merged[k] = dict(l)
     lines = list(merged.values())

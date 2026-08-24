@@ -561,3 +561,59 @@ nên trạm ≥10 thiết bị bị cắt mất phần trên), và hàng phụ k
 `tests/test_ui.js` **chứng minh** bằng máy: sinh cây 1/9/40 trạm, tên dài, cây
 lệch (1 trạm 12 con) rồi kiểm **mọi cặp hộp** — 0 cặp giao nhau, mọi hộp nằm trọn
 trong khung.
+
+
+---
+
+## 12. Ba lỗi lộ ra khi dùng thật (2026-08-24)
+
+### 12.1 Thêm trạm thì trạm cũ giữ cỡ van cũ — VAN THIẾU CỠ
+
+Dựng BOM với 1 trạm → engine điền `SY3220` (SY3000, đủ cho 1 xy-lanh). Thêm trạm
+2–4 rồi dựng lại → lưu lượng tăng, trạm mới nhận `SY5220` nhưng **trạm 1 giữ
+nguyên `SY3220`**. Kết quả: van trạm 1 thiếu cỡ, và cả máy lẫn hai cỡ van trên
+cùng một manifold.
+
+Nguyên nhân: `fill_codes()` bỏ qua mọi node "đã có mã", không phân biệt mã do
+**engine điền** với mã do **người dùng gõ**.
+
+Sửa: mỗi lần dựng, xoá mã engine đã điền rồi tính lại — quyết định suy luận phải
+tính lại khi đầu vào đổi.
+
+### 12.2 Sửa 12.1 xong thì mã người dùng gõ bị ghi đè
+
+Lần sửa đầu dùng cờ boolean `filled_by_bom: true`. Hễ UI quên xoá cờ là mất giá
+trị người dùng nhập.
+
+Sửa: `filled_by_bom` lưu **chính giá trị** engine đã điền. So được:
+code còn khớp ⇒ chưa ai sửa ⇒ tính lại; code đã khác ⇒ người dùng đè ⇒ **giữ**.
+Cách này tự bảo vệ, không phụ thuộc UI nhớ xoá cờ.
+
+### 12.3 Số lượng phụ kiện chia sai
+
+Dòng BOM gộp theo mã, nên khi treo phụ kiện về từng xy-lanh tôi **chia đều**:
+2 con CDM2 + 1 con MGPM dùng chung mã tiết lưu (tổng 6) ra **3/3** thay vì **4/2**.
+
+Sửa: `for_items` mang `{mã: số lượng}` thay vì chỉ danh sách mã.
+
+### 12.4 Quan hệ mẹ–con hiện ở CẢ BA chỗ
+
+`tree.attach_lines()` treo dòng BOM engine sinh vào đúng node cha theo
+`for_items`. Bảng BOM đổi từ danh sách phẳng sang **cây thụt lề**; dòng không gắn
+được (ống, FRL dùng chung) xếp riêng cuối bảng. `drop_generated()` xoá phụ kiện
+lần trước trước khi sinh lại — nếu không thì số lượng cộng dồn mỗi lần bấm.
+
+### 12.5 Hai khoá engine đã tính mà UI vẫn hỏi
+
+`valve_series_size` và `valve_function` engine tự tính từ §10.2, nhưng vẫn nằm
+trong `NEEDS_INPUT` nên UI hiện ô trống — người dùng tưởng bắt buộc phải điền.
+Chuyển sang `ENGINE_COMPUTED`: UI hiện **kết quả** + cách tính + ô ghi đè.
+
+Còn lại trong "cần bạn khai", và lý do từng khoá:
+
+| Khoá | Vì sao chưa tính được |
+|---|---|
+| `tube_total_m` | phụ thuộc layout máy. Cây có thể cộng chiều dài từng nhánh — chưa làm |
+| `main_line_port_size`, `frl_size` | catalog AC in lưu lượng dạng **đồ thị**, chưa số hoá. Đã kiểm `es40-69-AC-D.pdf`: không có bảng số theo cỡ |
+| `manifold_type` | Type 20 vs 20P dùng end plate khác nhau, không suy từ thông số |
+| `valve_piping`, `fitting_shape`, `exhaust_silencer` | **sở thích** — nhiều phương án đều lắp được |

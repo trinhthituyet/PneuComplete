@@ -275,6 +275,75 @@ def stats(root):
     return {"specified": spec, "type_only": typ, "empty": emp}
 
 
+# ── Phụ kiện engine sinh → gắn về đúng node CHA trong cây ────────────────────
+#
+# Yêu cầu (1): bảng BOM, cây cấu trúc và sơ đồ đều phải thấy quan hệ mẹ–con.
+# Dòng BOM mang `for_items` = sinh ra vì actuator nào; ở đây dịch ngược thành
+# "phụ kiện này treo dưới node nào".
+#
+# Layer của dòng → loại node con, và loại node đó có cha hợp lệ là ai (PARENT_OF).
+LINE_TO_TYPE = {
+    "accessory": "speed_controller",   # AS…F vặn vào cửa xy-lanh
+    "electrical": "sensor",            # D-M9 gắn rãnh xy-lanh
+    "piping": "tubing",
+}
+
+
+def attach_lines(root, lines):
+    """Treo dòng BOM engine sinh vào đúng node cha. Trả số phụ kiện đã gắn.
+
+    Gắn theo `for_items` chứ không theo thứ tự: một mã tiết lưu có thể phục vụ
+    nhiều xy-lanh, mà mỗi xy-lanh phải thấy phần của mình.
+    """
+    by_code = {}
+    for n, _, _ in walk(root):
+        if n.get("code"):
+            by_code.setdefault(n["code"], []).append(n)
+
+    n_new = 0
+    for l in lines:
+        if l.get("source") == "manual":
+            continue
+        ctype = LINE_TO_TYPE.get(l.get("layer"))
+        if not ctype:
+            continue
+        # số lượng THEO TỪNG actuator, không chia đều tổng
+        per = {}
+        for item, q in (l.get("for_items") or {}).items():
+            for h in by_code.get(item, []):
+                per[id(h)] = (h, per.get(id(h), (h, 0))[1] + q / max(1, len(by_code[item])))
+        if not per:
+            continue
+        for h, share in per.values():
+            kids = h.setdefault("children", [])
+            ex = next((c for c in kids if c.get("code") == l["part_number"]), None)
+            if ex:
+                ex["qty"] = share
+                ex["from_bom"] = True
+                continue
+            kids.append({
+                "id": f"{h['id']}__{l['part_number']}",
+                "type": ctype, "name": l["part_number"],
+                "code": l["part_number"], "qty": share,
+                "attrs": {}, "children": [],
+                # đánh dấu để lần dựng sau xoá đi rồi sinh lại — nếu giữ thì số
+                # lượng sẽ cộng dồn qua mỗi lần bấm Dựng BOM
+                "from_bom": True,
+                "rule_code": l.get("rule_code"),
+                "confidence": l.get("confidence"),
+            })
+            n_new += 1
+    return n_new
+
+
+def drop_generated(root):
+    """Xoá phụ kiện do lần dựng trước sinh ra. Giữ node người dùng tự tạo."""
+    for n, _, _ in walk(root):
+        if n.get("children"):
+            n["children"] = [c for c in n["children"] if not c.get("from_bom")]
+    return root
+
+
 def save(con, project_id, root):
     G.ensure_table(con)
     con.execute(

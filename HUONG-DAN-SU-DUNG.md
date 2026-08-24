@@ -141,8 +141,8 @@ Vòng tròn trên đầu là tỉ lệ đã chốt mã.
 | Tab | Nội dung |
 |---|---|
 | **Cây dự án** | khai thiết bị |
-| **Cấu hình** | những gì phần mềm không suy được, mỗi dòng kèm lý do |
-| **BOM** | kết quả, kèm *Engine đã tự quyết* để bạn kiểm lại |
+| **Cấu hình** | **Engine tự tính** (cỡ van, loại van — hiện kết quả, có ô ghi đè) và **Cần bạn khai** (những gì không suy được, kèm lý do) |
+| **BOM** | kết quả theo **cây thụt lề** — phụ kiện nằm dưới thiết bị mẹ, đúng như bạn khai |
 | **Sơ đồ** | vẽ lại cây kèm mã đã chọn — nhìn là biết lắp gì |
 
 Bấm **CSV** để mở bằng Excel.
