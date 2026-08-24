@@ -1,0 +1,64 @@
+# Giảm âm (silencer) AN — loại nhựa gọn, ren ngoài
+#
+# NGUỒN: cache/d8/d869a8ed…pdf trang 1 (catalog SMC 7-9-4-p1195-1203-AN_en.pdf,
+# trang in số 1195). Đọc bằng pdftotext -bbox-layout, đối chiếu theo toạ độ.
+#
+# Spine trên trang: "AN 20 02"  →  AN · <cỡ thân> · <cỡ cửa>
+# Ô thread_type nằm GIỮA hai ô đó trong bảng nhưng KHÔNG có trong spine vì
+# Nil = M thread (mặc định). Mã thật `AN15-02` và `AN200-02` khớp dạng này.
+#
+# VÌ SAO NHẬP TAY: bộ trích tự động chỉ lấy được 1/3 ô (xem docs/CRAWL-RESULTS.md
+# mục "Phương án A"). Nó gộp cột "Applicable model" vào ô cửa và bỏ mất cỡ thân.
+series_catalog_id: AN-E
+create_series: true
+part_prefix: AN
+source: >
+  DOCUMENT/…/7-9-4-p1195-1203-AN_en.pdf trang 1195, bảng "How to Order".
+  Bảng Performance cùng trang cho dẫn nạp âm C — đã ghi vào attrs để về sau
+  engine chọn cỡ giảm âm theo lưu lượng xả của van.
+entered_by: "đọc tay từ PDF, 2026-08-24"
+note: >
+  RÀNG BUỘC đọc được từ cột "Applicable model": mỗi cỡ cửa chỉ dùng với một số cỡ
+  thân — M5→AN05 · 01→AN10 · 02→AN15/AN20 · 03→AN30 · 04→AN40. Đã khai bằng
+  `requires` nên engine không sinh được cặp không tồn tại.
+
+slots:
+  - name: body_size
+    pos: 1
+    value_type: enum
+    separator: ""
+    is_required: true
+    options:
+      # cột "Effective area / Sonic conductance C" cùng trang, mục Performance
+      - {code: "05", label: "AN05", attrs: {body_size: 5,  effective_area_mm2: 5,  sonic_C: 1}}
+      - {code: "10", label: "AN10", attrs: {body_size: 10, effective_area_mm2: 10, sonic_C: 2}}
+      - {code: "15", label: "AN15", attrs: {body_size: 15, effective_area_mm2: 15, sonic_C: 3}}
+      - {code: "20", label: "AN20", attrs: {body_size: 20, effective_area_mm2: 35, sonic_C: 7}}
+      - {code: "30", label: "AN30", attrs: {body_size: 30, effective_area_mm2: 60, sonic_C: 12}}
+      - {code: "40", label: "AN40", attrs: {body_size: 40, effective_area_mm2: 90, sonic_C: 18}}
+
+  - name: thread_type
+    pos: 2
+    value_type: enum
+    separator: ""
+    is_required: false
+    options:
+      # Nil = M thread. Mã AN15-02 không có ký tự này → đúng là tuỳ chọn.
+      - {code: "Nil", label: "M thread", attrs: {thread_standard: "M"}}
+      - {code: "R",   label: "R",        attrs: {thread_standard: "R"}}
+      - {code: "N",   label: "NPT",      attrs: {thread_standard: "NPT"}}
+
+  - name: port_size
+    pos: 3
+    value_type: enum
+    # mã thật là AN15-02: có dấu gạch TRƯỚC cỡ cửa. Thiếu separator thì parser
+    # dừng ngay sau cỡ thân và báo dư "-02".
+    separator: "-"
+    is_required: true
+    options:
+      - {code: "M5", label: "M5 x 0.8", attrs: {port_size: "M5", port_standard: "M"},
+         requires: {body_size: ["05"]}}
+      - {code: "01", label: "1/8", attrs: {port_size: "1/8"}, requires: {body_size: ["10"]}}
+      - {code: "02", label: "1/4", attrs: {port_size: "1/4"}, requires: {body_size: ["15", "20"]}}
+      - {code: "03", label: "3/8", attrs: {port_size: "3/8"}, requires: {body_size: ["30"]}}
+      - {code: "04", label: "1/2", attrs: {port_size: "1/2"}, requires: {body_size: ["40"]}}

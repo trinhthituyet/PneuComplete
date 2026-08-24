@@ -35,6 +35,22 @@ def _match(opt, want):
     return hits
 
 
+def _requires_ok(opt, chosen):
+    """Option này có lắp được với các ô ĐÃ CHỌN không?
+
+    Dùng chung cho cả hai nhánh chọn option — nhánh "chỉ định thẳng mã" và nhánh
+    "khớp theo attrs". Để riêng mỗi nhánh một bản là chỗ ràng buộc bị lách.
+    """
+    for rk, rv in (opt.get("requires") or {}).items():
+        cv = chosen.get(rk)
+        if cv is None:
+            continue
+        allowed = rv if isinstance(rv, list) else [rv]
+        if str(cv) not in [str(a) for a in allowed]:
+            return False
+    return True
+
+
 def generate(con, series_id, want, prefix=None, soft=()):
     """want: dict thuộc tính mong muốn (khớp với attrs của option).
 
@@ -87,27 +103,37 @@ def generate(con, series_id, want, prefix=None, soft=()):
         direct = want.get(slot["name"])
         if direct is not None and any(o["code"] == str(direct) for o in opts):
             o = next(o for o in opts if o["code"] == str(direct))
+            # Nhánh này ĐI TRƯỚC phần kiểm `requires` bên dưới, nên phải tự kiểm —
+            # nếu không thì chỉ định thẳng mã option sẽ LÁCH được ràng buộc.
+            # Đã mắc: want={"port_size":"M5"} khớp đúng mã option "M5" nên sinh ra
+            # AN40-M5, trong khi catalog ghi M5 chỉ dùng với thân AN05.
+            if not _requires_ok(o, chosen):
+                return {"ok": False,
+                        "gap": f"ô '{slot['name']}': '{o['code']}' không lắp được với "
+                               + ", ".join(f"{k}={v}" for k, v in chosen.items()),
+                        "field": slot["name"],
+                        "options": [x["code"] for x in opts
+                                    if _requires_ok(x, chosen)][:8]}
             chosen[slot["name"]] = o["code"]
             if o["code"].lower() not in NIL:
                 out += slot["separator"] + o["code"]
             continue
 
         # loại option có điều kiện `requires` mà các ô đã chọn không thoả
-        ok_opts = []
-        for o in opts:
-            req = o.get("requires") or {}
-            bad = False
-            for rk, rv in req.items():
-                cv = chosen.get(rk)
-                if cv is None:
-                    continue
-                allowed = rv if isinstance(rv, list) else [rv]
-                if str(cv) not in [str(a) for a in allowed]:
-                    bad = True
-                    break
-            if not bad:
-                ok_opts.append(o)
-        opts = ok_opts or opts
+        ok_opts = [o for o in opts if _requires_ok(o, chosen)]
+        # LỖI CŨ: `opts = ok_opts or opts` — lọc xong còn RỖNG thì quay lại dùng
+        # TOÀN BỘ danh sách, tức bỏ qua ràng buộc thay vì báo không lắp được.
+        # Sinh ra mã không tồn tại một cách im lặng: AN40-M5 (thân AN40 không có
+        # cửa M5 — catalog trang 1195 ghi M5 chỉ dùng với AN05).
+        # Ràng buộc `requires` là RÀNG BUỘC, không phải gợi ý: hết ứng viên thì
+        # báo gap để người dùng đổi yêu cầu.
+        if not ok_opts:
+            return {"ok": False,
+                    "gap": f"ô '{slot['name']}': không lựa chọn nào lắp được với "
+                           f"{', '.join(f'{k}={v}' for k, v in chosen.items())}",
+                    "field": slot["name"],
+                    "options": [o["code"] for o in opts][:8]}
+        opts = ok_opts
         scored = [(s, o) for o in opts if (s := _match(o, want)) is not None]
         if not scored and soft:
             # thử lại sau khi bỏ các ràng buộc mềm liên quan tới ô này
@@ -117,10 +143,16 @@ def generate(con, series_id, want, prefix=None, soft=()):
                 dropped = [k for k in soft if k in want]
                 relaxed.append({"slot": slot["name"], "dropped": dropped})
         if not scored:
-            undecided.append({"slot": slot["name"],
-                              "reason": "không option nào thoả ràng buộc",
-                              "options": [o["code"] for o in opts][:8]})
-            continue
+            # Dùng CHUNG một hình dạng với nhánh requires ở trên: cùng là "không
+            # sinh được mã", nên phải cùng khoá `gap`. Trước đây nhánh này báo
+            # bằng `undecided` còn nhánh kia bằng `gap` — hai hình dạng cho cùng
+            # một loại kết quả là chỗ người gọi sẽ bỏ sót một nhánh.
+            return {"ok": False,
+                    "gap": f"ô '{slot['name']}': không lựa chọn nào thoả "
+                           + (", ".join(f"{k}={v}" for k, v in want.items()) or "yêu cầu"),
+                    "field": slot["name"],
+                    "options": [o["code"] for o in opts][:8],
+                    "chosen": chosen}
         best = max(s for s, _ in scored)
         picks = [o for s, o in scored if s == best]
 

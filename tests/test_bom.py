@@ -484,6 +484,52 @@ def test_van_suy_doan_thi_ha_tin_cay():
     assert tv[0]["confidence"] > 0.5, f"bạn khai mà tin cậy {tv[0]['confidence']}"
 
 
+def test_requires_khong_bi_lach():
+    """Ràng buộc `requires` phải chặn ở CẢ HAI nhánh chọn option.
+
+    Hai lỗi im lặng đã sửa, cùng hậu quả: sinh ra mã KHÔNG TỒN TẠI mà không báo.
+      1. `opts = ok_opts or opts` — lọc xong còn rỗng thì quay lại dùng TOÀN BỘ
+         danh sách, tức bỏ qua ràng buộc.
+      2. nhánh "chỉ định thẳng mã option" đi TRƯỚC phần kiểm requires nên lách
+         được: want={"port_size":"M5"} khớp đúng mã "M5" → sinh AN40-M5, trong
+         khi catalog trang 1195 ghi M5 chỉ dùng với thân AN05.
+    """
+    con = db.connect()
+    row = con.execute("select id from series where catalog_id='AN-E'").fetchone()
+    if not row:
+        con.close()
+        return                                  # bản phát hành chưa có họ AN
+    sid = row["id"]
+    from engine import generate
+    okc = generate.generate(con, sid, {"body_size": 15, "port_size": "1/4"})
+    assert okc.get("part_number") == "AN15-02", okc
+    okm = generate.generate(con, sid, {"body_size": 5, "port_size": "M5"})
+    assert okm.get("part_number") == "AN05-M5", okm
+    # cặp không tồn tại — phải GAP, không được nặn ra mã
+    for want in ({"body_size": 40, "port_size": "M5"},
+                 {"body_size": 5, "port_size": "1/2"}):
+        bad = generate.generate(con, sid, want)
+        assert not bad.get("part_number"), f"sinh mã không tồn tại: {bad}"
+        assert bad.get("gap"), bad
+    con.close()
+
+
+def test_an_doc_duoc_ma_trong_bom_that():
+    """AN15-02 là mã CÓ THẬT trong BOM máy 23-432 — phải parse được."""
+    con = db.connect()
+    from engine import parser as P
+    r = P.parse(con, "AN15-02")
+    con.close()
+    if not con:
+        return
+    assert r.get("ok"), r
+    a = r.get("attrs") or {}
+    assert a.get("port_size") == "1/4", a
+    # dẫn nạp âm đọc từ bảng Performance cùng trang — để sau engine chọn cỡ giảm
+    # âm theo lưu lượng xả thay vì hỏi
+    assert a.get("sonic_C") == 3, a
+
+
 if __name__ == "__main__":
     ok = fail = 0
     for name, fn in sorted(globals().items()):
