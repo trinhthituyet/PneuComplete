@@ -751,6 +751,23 @@ def test_co_25_khong_con_trong_ngu_phap_AC_D():
     assert "25" not in sizes, sizes
 
 
+def test_so_do_thi_dò_tu_anh_phai_ha_tin_cay_va_noi_ra():
+    """Số dò từ ẢNH kém chính xác hơn vector — không được coi ngang nhau."""
+    from engine import chart
+    y, note = chart.lookup("frl_flow_awm20_d", 50, "0.7/0.5")
+    assert y is not None, note
+    assert "DÒ TỪ ẢNH" in note, note
+    y2, n2 = chart.lookup("frl_flow_ac30_d", 1000, "1/0.6")
+    assert "DÒ TỪ ẢNH" not in n2, n2
+
+
+def test_moi_bang_do_thi_deu_khai_nguon_kieu():
+    from engine import chart
+    for cid, ch in chart.load_all().items():
+        if cid.startswith("frl_flow_"):
+            assert ch.get("source_kind") in ("vector", "raster"), (cid, ch.get("source_kind"))
+
+
 def test_khong_lan_series_AR_voi_AR_M():
     """'AR20M(K)-D' là series AR…M, KHÁC 'AR20(K)-D' — không được gộp một họ."""
     from engine import chart

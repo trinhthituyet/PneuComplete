@@ -33,6 +33,7 @@ FLOW_PAGES = [
     (PDF, 128),                                    # AW20(K)-D … AW60(K)-D
     ("DOCUMENT/FRL/es40-70-ARG-B.pdf", 4),         # ARG20(K)-B … ARG40(K)-B
     ("DOCUMENT/FRL/es40-72-AR_M-D.pdf", 11),       # AR20M(K)-D … AR40M(K)-D
+    ("DOCUMENT/FRL/es40-74-AWM-AWD-D.pdf", 8),     # AWM/AWD — DÒ TỪ ẢNH raster
 ]
 
 
@@ -92,6 +93,7 @@ def collect():
             clamped += p.get("trimmed_points") or 0
             series.sort(key=lambda s: (-s["inlet_mpa"], -s["set_mpa"]))
             charts.append({
+                "source_kind": r.get("source") or "vector",
                 "chart_id": f"frl_flow_{slug(expand(p['title'])[0])}",
                 "model_label": p["title"],
                 "applies_to": expand(p["title"]),
@@ -291,6 +293,9 @@ def render(charts, clamped, n_crit, n_neg):
         out.append(f"    applies_to: [{', '.join(c['applies_to'])}]\n")
         out.append(f"    catalog: {c['pdf']}\n")
         out.append(f"    pdf_page: {c['pdf_page']}\n")
+        # raster = đường cong DÒ TỪ ẢNH, không phải vector. Kém chính xác hơn nên
+        # engine phải hạ tin cậy, không được coi ngang số vector.
+        out.append(f"    source_kind: {c['source_kind']}\n")
         out.append(f"    x_max: {c['x_max']:g}\n")
         # Cỡ cửa mà đồ thị ĐƯỢC ĐO Ở: lắp cửa nhỏ hơn thì số lưu lượng lạc quan.
         out.append(f"    port_in: {c['port_in']}\n")

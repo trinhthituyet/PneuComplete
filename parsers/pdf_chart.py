@@ -280,7 +280,17 @@ def _single_inlet(ws):
     vals = set()
     for _, items in rows.items():
         line = " ".join(t for _, t in sorted(items))
-        for m in re.finditer(r"(?i)inlet\s+pressure\s+of\s+([\d.]+)\s*MPa", line):
+        # Hai cách viết đo được trong catalog:
+        #   "Condition: Inlet pressure of 0.7 MPa"   (ES40-60-AR10-A tr2)
+        #   "Inlet pressure: 0.7 MPa"                (es40-74-AWM-AWD-D tr8)
+        # Chỉ nhận khi CÂU NÓI VỀ ĐÚNG MỘT giá trị: dòng liệt kê nhiều thông số
+        # ("Inlet pressure: 0.7 MPa, Outlet pressure: 0.2 MPa, Flow rate: 20…")
+        # là điều kiện của đồ thị KHÁC trên cùng trang, không phải của đồ thị lưu
+        # lượng — nhận nhầm là gán sai áp vào cho toàn bộ số liệu.
+        if re.search(r"(?i)outlet\s+pressure\s*:", line):
+            continue
+        for m in re.finditer(r"(?i)inlet\s+pressure\s*(?:of|:)\s*([\d.]+)\s*MPa",
+                             line):
             try:
                 vals.add(float(m.group(1)))
             except ValueError:
@@ -648,6 +658,33 @@ def digitize(pdf, page, samples=10):
     """
     ws = words(pdf, page)
     curves, lines = svg_paths(pdf, page)
+    # ĐỒ THỊ DẠNG ẢNH: một số trang vẽ đường cong bằng ảnh raster nhúng thay vì
+    # vector (đo: es40-74-AWM-AWD-D tr8, 9 ô). Nhãn trục vẫn ở LỚP TEXT nên mọi
+    # phần hiệu chuẩn/gán ô/đọc tiêu đề giữ nguyên — chỉ đổi nguồn đường cong.
+    # Dò ảnh là phương án CUỐI (kém chính xác hơn, không phân biệt nét đứt), và
+    # điều kiện kích hoạt phải là "THIẾU đường cong so với số ô", không phải
+    # "không có đường cong nào": trang tr8 vẫn có 12 đường vector của mấy ô
+    # áp-vào→áp-ra, nên `if not curves` không bao giờ đúng và 6 ô ảnh vẫn rỗng.
+    raster = False
+    n_axes = len(_axes(ws))
+    if n_axes and len(curves) < n_axes * 2:
+        from parsers import pdf_raster
+        try:
+            # Truyền vị trí ô (từ nhãn trục) để bộ dò làm việc TRONG từng ô:
+            # lưới chỉ nhận ra được trong phạm vi một ô, và dò cả ảnh thì đường
+            # của ba ô cạnh nhau bị nối liền thành một.
+            extra = pdf_raster.raster_curves(
+                pdf, page, boxes=[(a["L"], a["T"], a["R"], a["B"])
+                                  for a in _axes(ws)])
+        except Exception:                 # noqa: BLE001 — không có ảnh thì thôi
+            extra = []
+        if extra:
+            # KHÔNG cắt lại ở đây: raster_curves đã dò TRONG TỪNG Ô rồi, mỗi
+            # đường chỉ thuộc một ô. Bản trước cắt thêm theo cả 9 dải x nên mỗi
+            # đường sinh ra 3 bản sao (ba ô cùng hàng có dải y giống nhau) — ô
+            # AWM20-D ra 21 đường trong khi chỉ có 7 mức áp đặt.
+            curves = curves + extra
+            raster = True
     legend = _legend(ws, lines)
     if legend is None:
         # Không có chú giải nét → có thể trang chỉ vẽ MỘT điều kiện áp vào, ghi
@@ -800,6 +837,26 @@ def digitize(pdf, page, samples=10):
             # cùng nhãn áp đặt mà không phân biệt được thì số vô nghĩa.
             pan["series"].append({"inlet_mpa": (legend or {}).get(dash),
                                   "dashed": dash, "points": data})
+        if raster and pan["series"]:
+            # ── DÒ ẢNH: MỘT ĐƯỜNG CHO MỖI ÁP ĐẶT ────────────────────────────
+            # Bất biến này KHÔNG phải suy đoán: C10 đã kiểm trên 23 ô vector.
+            # Dò ảnh thì nhiễu hơn — vạch lưới bị đường cong che một phần nên
+            # lọt qua bộ lọc lưới và thành 'đường' thứ hai cùng áp đặt (đo:
+            # 4/6 ô của tr8). Trong nhóm trùng, đường THẬT là đường DỐC nhất:
+            # đặc trưng lưu lượng sụt 4,4–37%, còn lưới sót sụt −0,8…2,8%.
+            # Chỉ áp cho nhánh raster: nhánh vector đã sạch, áp thêm ở đó là che
+            # mất lỗi trùng nếu sau này phát sinh.
+            best = {}
+            for sr in pan["series"]:
+                q = sr["points"]
+                setp = min(yt_vals, key=lambda v: abs(v - q[0][1]))
+                if setp <= 0:
+                    continue      # áp đặt 0 = trục X, không phải đường đặc trưng
+                fall = (q[0][1] - q[-1][1]) / max(q[0][1], 1e-9)
+                if setp not in best or fall > best[setp][0]:
+                    best[setp] = (fall, sr)
+            pan["series"] = [sr for _, sr in
+                             sorted(best.values(), key=lambda t: -t[1]["points"][0][1])]
         pan["dropped"] = dropped
         pan["trimmed_points"] = trimmed[0]
         if kind == "flow_drop":
@@ -838,6 +895,7 @@ def digitize(pdf, page, samples=10):
     # áp vào→áp ra, nên "đa số" là một con số vô nghĩa và làm tiêu chí phân loại
     # báo sai. Trang trộn họ thì phải xét theo TỪNG Ô.
     return {"ok": bool(good), "page": page, "n_curves": len(curves),
+            "source": "raster" if raster else "vector",
             "kind": kinds[0] if kinds and len(set(kinds)) == 1 else None,
             "kinds": {k: kinds.count(k) for k in sorted(set(kinds))},
             "panels": panels, "n_ok": len(good),

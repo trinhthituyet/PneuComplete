@@ -122,6 +122,22 @@ pages:
   # titles đối chiếu độc lập bằng grep trên text trang. inlets đọc từ câu điều
   # kiện ("Condition: Inlet pressure of 0.7 MPa") hoặc chú giải nét — text, nên
   # độc lập với việc trích đường cong. Mọi áp đặt ≤ áp vào: kiểm bằng vật lý.
+  # ── ĐỒ THỊ DẠNG ẢNH RASTER ────────────────────────────────────────────────
+  # Đường cong là ảnh nhúng (hai ảnh RGB 1842×557 và 1848×557 @250dpi), KHÔNG có
+  # vector. Nhãn trục vẫn ở LỚP TEXT nên hiệu chuẩn/gán ô/tiêu đề/cỡ cửa dùng y
+  # nguyên đường cũ; chỉ nguồn đường cong đổi sang parsers/pdf_raster.py.
+  # Trang ghi MỘT điều kiện: "Inlet pressure: 0.7 MPa" (cy≈95, ngay trên hai hàng
+  # ô lưu lượng). Dòng ở cy≈445 liệt kê nhiều thông số là điều kiện của đồ thị
+  # áp-vào→áp-ra bên dưới — KHÔNG được nhận nhầm.
+  - pdf: DOCUMENT/FRL/es40-74-AWM-AWD-D.pdf
+    page: 8
+    kind: flow_outlet
+    n_panels: 6
+    titles: [AWM20-D, AWM30-D, AWM40-D, AWD20-D, AWD30-D, AWD40-D]
+    x_max: [150, 300, 1000, 100, 200, 500]
+    families:
+      "0.7": [0.6, 0.5, 0.4, 0.3, 0.2, 0.1]
+
   - pdf: DOCUMENT/FRL/ES30-25-AFG-D.pdf
     page: 4
     kind: flow_drop
@@ -315,9 +331,11 @@ criteria:
 
 # ── VÒNG A KHÔNG BAO GỒM — nói rõ để không ai tưởng đã xong ─────────────────
 gaps:
-  - "Đồ thị của es40-74-AWM-AWD-D.pdf trang 8 là ẢNH RASTER nhúng (1842×557,
-     250 dpi), không phải vector — phương pháp này không đọc được. 9 ô. Đo được:
-     68/77 ô đồ thị FRL là vector nên đây là ngoại lệ duy nhất."
+  - "es40-74-AWM-AWD-D.pdf tr8: 6 ô lưu lượng→áp ra ĐÃ số hoá bằng cách DÒ ẢNH
+     (parsers/pdf_raster.py) vì đường cong là ảnh raster nhúng. Độ tin thấp hơn
+     đường vector: dò ảnh không phân biệt được kiểu nét, và phải dùng bất biến
+     'một đường cho mỗi áp đặt' để loại vạch lưới còn sót. 3 ô áp-vào→áp-ra cùng
+     trang vẫn TỪ CHỐI như mọi trang khác."
   - "pressure_char (tr23/104/129): nhận dạng được nhưng TỪ CHỐI số hoá — engine
      chưa cần, và chưa có ground truth riêng."
   - "ES40-60-AR10-A.pdf tr2 (AR10-A, 1 ô): ĐƯỜNG CONG KHÔNG CÓ trong PDF dưới

@@ -78,9 +78,14 @@ def lookup(chart_id, x, series_label=None):
         return None, f"bảng '{chart_id}' không có điểm dữ liệu"
 
     src = ch.get("source") or {}
-    where = f"{src.get('catalog', '?')} trang {src.get('pdf_page', '?')}"
+    where = f"{ch.get('catalog') or src.get('catalog', '?')} trang {ch.get('pdf_page') or src.get('pdf_page', '?')}"
     conf_s = ch.get("confidence")
     tag = f"tra {where}"
+    if ch.get("source_kind") == "raster":
+        # Đường cong DÒ TỪ ẢNH: catalog in đồ thị này dạng ảnh chứ không phải
+        # vector, nên số kém chính xác hơn. Nói ra để người ký BOM biết.
+        tag += " (DÒ TỪ ẢNH — kém chính xác hơn số trích từ vector)"
+        conf_s = min(conf_s or 1.0, 0.75)
     if ch.get("needs_review"):
         tag += " (CHỜ NGƯỜI ĐỐI CHIẾU)"
 

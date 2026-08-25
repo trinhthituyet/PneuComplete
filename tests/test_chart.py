@@ -485,6 +485,19 @@ def negative_controls(got, gt):
 
 
 
+    AWM = "DOCUMENT/FRL/es40-74-AWM-AWD-D.pdf"
+    if (AWM, 8) in got:
+        g = copy.deepcopy(got)                            # 12. nhân đôi đường raster
+        # Nhánh dò ẢNH giữ "đường dốc nhất cho mỗi áp đặt". Gieo một bản sao gần
+        # trùng để chắc C10 vẫn bắt nếu luật đó hỏng — đúng lỗi ĐÃ xảy ra: vạch
+        # lưới bị đường cong che thành 'đường' thứ hai cùng áp đặt ở 4/6 ô.
+        ps = [p for p in g[(AWM, 8)]["panels"] if p.get("kind") == "flow_outlet"]
+        if ps and ps[0].get("series"):
+            src = ps[0]["series"][0]
+            ps[0]["series"] = ps[0]["series"] + [copy.deepcopy(src)]
+            cases.append(("nhân đôi 1 đường của ô raster", g,
+                          "C10-đủ-đúng-họ-áp-vào"))
+
     print("\nĐỐI CHỨNG ÂM — cổng phải BẮT ĐƯỢC từng lỗi cố tình gieo")
     print("-" * 70)
     ok_all = True

@@ -75,6 +75,7 @@ charts:
     applies_to: [AC20-D]
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 22
+    source_kind: vector
     x_max: 2000
     port_in: Rc1/4
     port_out: Rc1/4
@@ -123,6 +124,7 @@ charts:
     applies_to: [AC30-D]
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 22
+    source_kind: vector
     x_max: 4000
     port_in: Rc3/8
     port_out: Rc3/8
@@ -171,6 +173,7 @@ charts:
     applies_to: [AC40-D]
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 22
+    source_kind: vector
     x_max: 7000
     port_in: Rc1/2
     port_out: Rc1/2
@@ -219,6 +222,7 @@ charts:
     applies_to: [AC40-06-D]
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 22
+    source_kind: vector
     x_max: 7000
     port_in: Rc3/4
     port_out: Rc3/4
@@ -267,6 +271,7 @@ charts:
     applies_to: [AC50-D]
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 22
+    source_kind: vector
     x_max: 20000
     port_in: Rc1
     port_out: Rc1
@@ -315,6 +320,7 @@ charts:
     applies_to: [AC60-D]
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 22
+    source_kind: vector
     x_max: 20000
     port_in: Rc1
     port_out: Rc1
@@ -363,6 +369,7 @@ charts:
     applies_to: [AR20-D, AR20K-D]
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 103
+    source_kind: vector
     x_max: 2000
     port_in: Rc1/4
     port_out: Rc1/4
@@ -411,6 +418,7 @@ charts:
     applies_to: [AR30-D, AR30K-D]
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 103
+    source_kind: vector
     x_max: 4000
     port_in: Rc3/8
     port_out: Rc3/8
@@ -459,6 +467,7 @@ charts:
     applies_to: [AR40-D, AR40K-D]
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 103
+    source_kind: vector
     x_max: 7000
     port_in: Rc1/2
     port_out: Rc1/2
@@ -507,6 +516,7 @@ charts:
     applies_to: [AR40-06-D, AR40K-06-D]
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 103
+    source_kind: vector
     x_max: 7000
     port_in: Rc3/4
     port_out: Rc3/4
@@ -555,6 +565,7 @@ charts:
     applies_to: [AR50-D, AR50K-D]
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 103
+    source_kind: vector
     x_max: 20000
     port_in: Rc1
     port_out: Rc1
@@ -603,6 +614,7 @@ charts:
     applies_to: [AR60-D, AR60K-D]
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 103
+    source_kind: vector
     x_max: 20000
     port_in: Rc1
     port_out: Rc1
@@ -651,6 +663,7 @@ charts:
     applies_to: [AW20-D, AW20K-D]
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 128
+    source_kind: vector
     x_max: 2000
     port_in: Rc1/4
     port_out: Rc1/4
@@ -699,6 +712,7 @@ charts:
     applies_to: [AW30-D, AW30K-D]
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 128
+    source_kind: vector
     x_max: 4000
     port_in: Rc3/8
     port_out: Rc3/8
@@ -747,6 +761,7 @@ charts:
     applies_to: [AW40-D, AW40K-D]
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 128
+    source_kind: vector
     x_max: 7000
     port_in: Rc1/2
     port_out: Rc1/2
@@ -795,6 +810,7 @@ charts:
     applies_to: [AW40-06-D, AW40K-06-D]
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 128
+    source_kind: vector
     x_max: 7000
     port_in: Rc3/4
     port_out: Rc3/4
@@ -843,6 +859,7 @@ charts:
     applies_to: [AW60-D, AW60K-D]
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 128
+    source_kind: vector
     x_max: 20000
     port_in: Rc1
     port_out: Rc1
@@ -891,6 +908,7 @@ charts:
     applies_to: [ARG20-B, ARG20K-B]
     catalog: DOCUMENT/FRL/es40-70-ARG-B.pdf
     pdf_page: 4
+    source_kind: vector
     x_max: 800
     port_in: Rc1/4
     port_out: Rc1/4
@@ -927,6 +945,7 @@ charts:
     applies_to: [ARG30-B, ARG30K-B]
     catalog: DOCUMENT/FRL/es40-70-ARG-B.pdf
     pdf_page: 4
+    source_kind: vector
     x_max: 1500
     port_in: Rc3/8
     port_out: Rc3/8
@@ -963,6 +982,7 @@ charts:
     applies_to: [ARG40-B, ARG40K-B]
     catalog: DOCUMENT/FRL/es40-70-ARG-B.pdf
     pdf_page: 4
+    source_kind: vector
     x_max: 3000
     port_in: Rc1/2
     port_out: Rc1/2
@@ -999,6 +1019,7 @@ charts:
     applies_to: [AR20M-D, AR20MK-D]
     catalog: DOCUMENT/FRL/es40-72-AR_M-D.pdf
     pdf_page: 11
+    source_kind: vector
     x_max: 2000
     port_in: Rc1/4
     port_out: Rc1/4
@@ -1047,6 +1068,7 @@ charts:
     applies_to: [AR30M-D, AR30MK-D]
     catalog: DOCUMENT/FRL/es40-72-AR_M-D.pdf
     pdf_page: 11
+    source_kind: vector
     x_max: 3000
     port_in: Rc3/8
     port_out: Rc1/4
@@ -1095,6 +1117,7 @@ charts:
     applies_to: [AR40M-D, AR40MK-D]
     catalog: DOCUMENT/FRL/es40-72-AR_M-D.pdf
     pdf_page: 11
+    source_kind: vector
     x_max: 6000
     port_in: Rc1/2
     port_out: Rc3/8
@@ -1138,3 +1161,225 @@ charts:
         inlet_mpa: 0.7
         set_mpa: 0.1
         points: [[0, 0.102], [27.1, 0.094], [167.6, 0.084], [437.3, 0.077], [977.6, 0.07], [1719.4, 0.062], [2389.6, 0.056], [2714.9, 0.052]]
+  - chart_id: frl_flow_awm20_d
+    model_label: "AWM20-D"
+    applies_to: [AWM20-D]
+    catalog: DOCUMENT/FRL/es40-74-AWM-AWD-D.pdf
+    pdf_page: 8
+    source_kind: raster
+    x_max: 150
+    port_in: Rc1/4
+    port_out: Rc1/4
+    port_code: "02"
+    port_inch: 0.25
+    kind: continuous
+    series:
+      - label: "0.7/0.6"   # áp vào 0.7 → đặt 0.6 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.6
+        points: [[0, 0.594], [12.1, 0.581], [24.6, 0.571], [37, 0.565], [49.4, 0.557], [62.6, 0.552], [75, 0.546], [87.5, 0.541], [99.9, 0.537], [113, 0.533], [125.5, 0.53], [137.9, 0.527]]
+      - label: "0.7/0.5"   # áp vào 0.7 → đặt 0.5 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.5
+        points: [[0, 0.491], [10.7, 0.481], [21.8, 0.471], [32.9, 0.465], [43.9, 0.457], [55.7, 0.452], [66.7, 0.448], [77.8, 0.443], [88.8, 0.44], [99.9, 0.437], [111.7, 0.434], [122.7, 0.433], [133.8, 0.43]]
+      - label: "0.7/0.4"   # áp vào 0.7 → đặt 0.4 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.4
+        points: [[0.4, 0.391], [9.3, 0.383], [18.3, 0.376], [27.3, 0.37], [36.3, 0.364], [45.3, 0.358], [55, 0.354], [64, 0.35], [72.9, 0.347], [81.9, 0.343], [90.9, 0.341], [99.9, 0.338], [109.6, 0.337]]
+      - label: "0.7/0.3"   # áp vào 0.7 → đặt 0.3 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.3
+        points: [[0, 0.288], [6.6, 0.283], [13.5, 0.276], [20.4, 0.271], [27.3, 0.267], [34.2, 0.263], [41.1, 0.259], [48.1, 0.256], [55.7, 0.253], [62.6, 0.251], [69.5, 0.248], [76.4, 0.246], [83.3, 0.245]]
+      - label: "0.7/0.2"   # áp vào 0.7 → đặt 0.2 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.2
+        points: [[0, 0.193], [3.8, 0.186], [8, 0.183], [12.1, 0.181], [16.3, 0.178], [20.4, 0.175], [24.6, 0.173], [28.7, 0.17], [32.9, 0.167], [37, 0.165], [41.1, 0.163], [45.3, 0.161], [49.4, 0.16], [54.3, 0.158]]
+      - label: "0.7/0.1"   # áp vào 0.7 → đặt 0.1 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.1
+        points: [[0, 0.089], [3.1, 0.086], [6.6, 0.084], [10, 0.082], [13.5, 0.079], [17, 0.077], [20.4, 0.076], [23.9, 0.074], [27.3, 0.072], [30.8, 0.071], [34.2, 0.068], [37.7, 0.066], [41.1, 0.065]]
+  - chart_id: frl_flow_awm30_d
+    model_label: "AWM30-D"
+    applies_to: [AWM30-D]
+    catalog: DOCUMENT/FRL/es40-74-AWM-AWD-D.pdf
+    pdf_page: 8
+    source_kind: raster
+    x_max: 300
+    port_in: Rc3/8
+    port_out: Rc3/8
+    port_code: "03"
+    port_inch: 0.375
+    kind: continuous
+    series:
+      - label: "0.7/0.6"   # áp vào 0.7 → đặt 0.6 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.6
+        points: [[0, 0.6], [23.2, 0.581], [46.8, 0.571], [70.4, 0.564], [94, 0.559], [119, 0.557], [142.6, 0.553], [166.2, 0.55], [189.8, 0.547], [214.8, 0.544], [238.4, 0.543], [262, 0.54], [285.6, 0.539]]
+      - label: "0.7/0.5"   # áp vào 0.7 → đặt 0.5 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.5
+        points: [[0, 0.498], [21.7, 0.483], [45.3, 0.475], [68.9, 0.468], [92.5, 0.465], [117.5, 0.462], [141.1, 0.458], [164.7, 0.455], [188.3, 0.452], [213.4, 0.45], [236.9, 0.448], [260.5, 0.448], [284.1, 0.447]]
+      - label: "0.7/0.4"   # áp vào 0.7 → đặt 0.4 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.4
+        points: [[0, 0.401], [18.8, 0.381], [39.4, 0.373], [60.1, 0.366], [80.7, 0.362], [102.8, 0.359], [123.4, 0.356], [144.1, 0.353], [164.7, 0.352], [185.3, 0.35], [207.5, 0.348], [228.1, 0.347], [248.7, 0.347]]
+      - label: "0.7/0.3"   # áp vào 0.7 → đặt 0.3 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.3
+        points: [[0, 0.29], [15.8, 0.28], [32, 0.274], [48.3, 0.268], [64.5, 0.264], [80.7, 0.26], [98.4, 0.258], [114.6, 0.256], [130.8, 0.255], [147, 0.253], [163.2, 0.253], [179.5, 0.251], [195.7, 0.251]]
+      - label: "0.7/0.2"   # áp vào 0.7 → đặt 0.2 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.2
+        points: [[0, 0.191], [11.4, 0.184], [23.2, 0.179], [35, 0.175], [46.8, 0.171], [58.6, 0.168], [70.4, 0.166], [82.2, 0.163], [94, 0.161], [107.2, 0.16], [119, 0.158], [130.8, 0.156], [142.6, 0.155]]
+      - label: "0.7/0.1"   # áp vào 0.7 → đặt 0.1 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.1
+        points: [[0, 0.092], [7, 0.086], [14.4, 0.082], [21.7, 0.078], [29.1, 0.074], [36.5, 0.071], [43.8, 0.068], [51.2, 0.066], [58.6, 0.064], [65.9, 0.063], [73.3, 0.061], [80.7, 0.059], [88.1, 0.059], [95.4, 0.058]]
+  - chart_id: frl_flow_awm40_d
+    model_label: "AWM40-D"
+    applies_to: [AWM40-D]
+    catalog: DOCUMENT/FRL/es40-74-AWM-AWD-D.pdf
+    pdf_page: 8
+    source_kind: raster
+    x_max: 1000
+    port_in: Rc1/2
+    port_out: Rc1/2
+    port_code: "04"
+    port_inch: 0.5
+    kind: continuous
+    series:
+      - label: "0.7/0.6"   # áp vào 0.7 → đặt 0.6 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.6
+        points: [[0, 0.598], [65.9, 0.576], [133.4, 0.567], [200.9, 0.562], [273.3, 0.557], [340.8, 0.552], [408.3, 0.547], [475.8, 0.542], [552.9, 0.537], [620.5, 0.532], [688, 0.527], [765.1, 0.522], [832.6, 0.517]]
+      - label: "0.7/0.5"   # áp vào 0.7 → đặt 0.5 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.5
+        points: [[0, 0.498], [56.3, 0.48], [114.1, 0.473], [172, 0.468], [229.9, 0.463], [292.6, 0.458], [350.4, 0.455], [408.3, 0.451], [466.1, 0.448], [533.7, 0.443], [591.5, 0.441], [649.4, 0.438], [707.2, 0.435]]
+      - label: "0.7/0.4"   # áp vào 0.7 → đặt 0.4 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.4
+        points: [[0, 0.397], [46.6, 0.38], [94.8, 0.374], [143.1, 0.37], [191.3, 0.366], [244.3, 0.362], [292.6, 0.358], [340.8, 0.355], [389, 0.352], [437.2, 0.35], [485.4, 0.347], [538.5, 0.343], [586.7, 0.341]]
+      - label: "0.7/0.3"   # áp vào 0.7 → đặt 0.3 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.3
+        points: [[0, 0.3], [27.3, 0.285], [61.1, 0.276], [94.8, 0.273], [128.6, 0.269], [162.4, 0.266], [196.1, 0.264], [229.9, 0.26], [268.4, 0.258], [302.2, 0.256], [336, 0.253], [369.7, 0.251], [403.5, 0.249], [437.2, 0.248]]
+      - label: "0.7/0.2"   # áp vào 0.7 → đặt 0.2 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.2
+        points: [[0, 0.196], [27.3, 0.187], [56.3, 0.181], [85.2, 0.175], [114.1, 0.171], [143.1, 0.166], [172, 0.164], [200.9, 0.16], [229.9, 0.158], [263.6, 0.155], [292.6, 0.151], [321.5, 0.15], [350.4, 0.146]]
+      - label: "0.7/0.1"   # áp vào 0.7 → đặt 0.1 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.1
+        points: [[0, 0.097], [12.9, 0.093], [32.2, 0.088], [51.4, 0.083], [70.7, 0.081], [90, 0.077], [109.3, 0.076], [128.6, 0.073], [147.9, 0.071], [167.2, 0.069], [186.5, 0.068], [205.8, 0.068], [225, 0.068], [249.2, 0.067]]
+  - chart_id: frl_flow_awd20_d
+    model_label: "AWD20-D"
+    applies_to: [AWD20-D]
+    catalog: DOCUMENT/FRL/es40-74-AWM-AWD-D.pdf
+    pdf_page: 8
+    source_kind: raster
+    x_max: 100
+    port_in: Rc1/4
+    port_out: Rc1/4
+    port_code: "02"
+    port_inch: 0.25
+    kind: continuous
+    series:
+      - label: "0.7/0.6"   # áp vào 0.7 → đặt 0.6 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.6
+        points: [[0, 0.597], [7.7, 0.596], [15.1, 0.589], [22.6, 0.584], [30.5, 0.579], [37.9, 0.574], [45.3, 0.57], [53.2, 0.566], [60.7, 0.563], [68.1, 0.561], [76, 0.558], [83.4, 0.556], [90.8, 0.555]]
+      - label: "0.7/0.5"   # áp vào 0.7 → đặt 0.5 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.5
+        points: [[0, 0.502], [7.2, 0.494], [14.2, 0.487], [21.1, 0.483], [28.5, 0.479], [35.4, 0.474], [42.4, 0.471], [49.3, 0.467], [56.7, 0.464], [63.6, 0.461], [70.6, 0.459], [78, 0.456], [84.9, 0.455]]
+      - label: "0.7/0.4"   # áp vào 0.7 → đặt 0.4 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.4
+        points: [[0, 0.4], [5.7, 0.394], [11.2, 0.387], [16.6, 0.382], [22.1, 0.378], [28, 0.373], [33.4, 0.369], [38.9, 0.366], [44.3, 0.364], [49.8, 0.362], [55.7, 0.36], [61.2, 0.359], [66.6, 0.359]]
+      - label: "0.7/0.3"   # áp vào 0.7 → đặt 0.3 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.3
+        points: [[0.8, 0.3], [5.2, 0.292], [9.7, 0.287], [14.2, 0.282], [18.6, 0.278], [23.1, 0.274], [28, 0.271], [32.5, 0.268], [36.9, 0.264], [41.4, 0.263], [45.8, 0.261], [50.8, 0.259]]
+      - label: "0.7/0.2"   # áp vào 0.7 → đặt 0.2 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.2
+        points: [[0, 0.195], [3.3, 0.191], [6.2, 0.187], [9.2, 0.184], [12.2, 0.181], [15.1, 0.177], [18.1, 0.176], [21.1, 0.172], [24, 0.171], [27.5, 0.168], [30.5, 0.166], [33.4, 0.165], [36.4, 0.164], [39.4, 0.163]]
+      - label: "0.7/0.1"   # áp vào 0.7 → đặt 0.1 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.1
+        points: [[0.8, 0.095], [2.8, 0.094], [4.8, 0.089], [6.7, 0.087], [8.7, 0.084], [10.7, 0.081], [12.7, 0.079], [14.6, 0.076], [16.6, 0.076], [18.6, 0.072], [20.6, 0.071], [22.6, 0.07], [24.5, 0.067]]
+  - chart_id: frl_flow_awd30_d
+    model_label: "AWD30-D"
+    applies_to: [AWD30-D]
+    catalog: DOCUMENT/FRL/es40-74-AWM-AWD-D.pdf
+    pdf_page: 8
+    source_kind: raster
+    x_max: 200
+    port_in: Rc3/8
+    port_out: Rc3/8
+    port_code: "03"
+    port_inch: 0.375
+    kind: continuous
+    series:
+      - label: "0.7/0.6"   # áp vào 0.7 → đặt 0.6 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.6
+        points: [[1.2, 0.6], [17, 0.598], [32.8, 0.592], [48.5, 0.589], [65.3, 0.585], [81, 0.581], [96.8, 0.579], [114.5, 0.575], [130.3, 0.573], [146.1, 0.57], [162.8, 0.568], [178.6, 0.566], [194.3, 0.563]]
+      - label: "0.7/0.5"   # áp vào 0.7 → đặt 0.5 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.5
+        points: [[1.2, 0.503], [14, 0.494], [26.8, 0.484], [39.7, 0.479], [53.4, 0.475], [66.3, 0.473], [79.1, 0.471], [91.9, 0.468], [106.6, 0.465], [119.5, 0.464], [132.3, 0.461], [145.1, 0.46], [158.9, 0.458]]
+      - label: "0.7/0.4"   # áp vào 0.7 → đặt 0.4 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.4
+        points: [[1.2, 0.401], [12.1, 0.397], [22.9, 0.391], [33.7, 0.386], [44.6, 0.381], [56.4, 0.378], [67.2, 0.375], [78.1, 0.373], [88.9, 0.373], [101.7, 0.37], [112.6, 0.369], [123.4, 0.368], [134.2, 0.366]]
+      - label: "0.7/0.3"   # áp vào 0.7 → đặt 0.3 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.3
+        points: [[1.2, 0.3], [10.1, 0.295], [19, 0.287], [27.8, 0.282], [36.7, 0.276], [45.6, 0.272], [55.4, 0.268], [64.3, 0.266], [73.2, 0.264], [82, 0.263], [90.9, 0.263], [101.7, 0.263], [110.6, 0.263]]
+      - label: "0.7/0.2"   # áp vào 0.7 → đặt 0.2 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.2
+        points: [[1.2, 0.196], [7.1, 0.193], [13.1, 0.187], [19, 0.182], [24.9, 0.178], [30.8, 0.174], [36.7, 0.171], [42.6, 0.167], [48.5, 0.164], [55.4, 0.163], [61.3, 0.161], [67.2, 0.159], [73.2, 0.159], [79.1, 0.16]]
+      - label: "0.7/0.1"   # áp vào 0.7 → đặt 0.1 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.1
+        points: [[1.2, 0.092], [5.2, 0.089], [9.1, 0.088], [13.1, 0.082], [17, 0.079], [20.9, 0.076], [24.9, 0.073], [28.8, 0.071], [32.8, 0.069], [36.7, 0.067], [40.6, 0.066], [44.6, 0.064], [48.5, 0.064]]
+  - chart_id: frl_flow_awd40_d
+    model_label: "AWD40-D"
+    applies_to: [AWD40-D]
+    catalog: DOCUMENT/FRL/es40-74-AWM-AWD-D.pdf
+    pdf_page: 8
+    source_kind: raster
+    x_max: 500
+    port_in: Rc1/2
+    port_out: Rc1/2
+    port_code: "04"
+    port_inch: 0.5
+    kind: continuous
+    series:
+      - label: "0.7/0.6"   # áp vào 0.7 → đặt 0.6 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.6
+        points: [[10.2, 0.6], [45.7, 0.592], [81.3, 0.583], [119.2, 0.579], [154.7, 0.574], [190.2, 0.57], [228.2, 0.566], [263.7, 0.562], [304, 0.559], [339.5, 0.556], [375, 0.554], [415.3, 0.552], [450.8, 0.551]]
+      - label: "0.7/0.5"   # áp vào 0.7 → đặt 0.5 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.5
+        points: [[0, 0.482], [69.4, 0.486], [100.2, 0.481], [128.7, 0.477], [157.1, 0.474], [185.5, 0.472], [216.3, 0.469], [244.7, 0.467], [273.2, 0.466], [306.3, 0.463], [334.8, 0.462], [363.2, 0.461], [391.6, 0.461]]
+      - label: "0.7/0.4"   # áp vào 0.7 → đặt 0.4 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.4
+        points: [[0, 0.404], [26.8, 0.396], [52.8, 0.387], [78.9, 0.381], [107.3, 0.376], [133.4, 0.373], [159.5, 0.371], [185.5, 0.369], [213.9, 0.368], [240, 0.366], [266.1, 0.364], [292.1, 0.363], [322.9, 0.363]]
+      - label: "0.7/0.3"   # áp vào 0.7 → đặt 0.3 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.3
+        points: [[0, 0.286], [48.1, 0.288], [69.4, 0.28], [90.7, 0.274], [114.4, 0.269], [135.8, 0.266], [157.1, 0.264], [178.4, 0.262], [202.1, 0.259], [223.4, 0.259], [244.7, 0.257], [266.1, 0.255], [287.4, 0.255]]
+      - label: "0.7/0.2"   # áp vào 0.7 → đặt 0.2 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.2
+        points: [[0, 0.207], [17.3, 0.198], [33.9, 0.193], [50.5, 0.187], [67.1, 0.182], [83.6, 0.178], [102.6, 0.174], [119.2, 0.17], [135.8, 0.167], [152.3, 0.164], [168.9, 0.162], [185.5, 0.161]]
+      - label: "0.7/0.1"   # áp vào 0.7 → đặt 0.1 MPa
+        inlet_mpa: 0.7
+        set_mpa: 0.1
+        points: [[3.1, 0.104], [12.6, 0.099], [22, 0.097], [31.5, 0.092], [41, 0.089], [50.5, 0.085], [59.9, 0.083], [69.4, 0.081], [78.9, 0.078], [88.4, 0.077], [102.6, 0.074], [112.1, 0.073], [121.5, 0.073]]
