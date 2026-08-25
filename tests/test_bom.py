@@ -848,6 +848,30 @@ def test_AS1_chan_cua_khong_co_o_co_than():
         con.close()
 
 
+def test_SY_cua_ren_gan_voi_co_van():
+    """Bảng 'A, B port size / Thread piping' khai: M5→SY3000 · 01→SY5000 · 02→SY7000."""
+    from engine import generate as G
+    con = db.connect()
+    sid = con.execute("select id from series where catalog_id='SY-5-E'").fetchone()["id"]
+    base = {"actuation": "2", "piping": "40", "voltage": "5",
+            "electrical_entry": "L", "light_surge": "Z", "manual_override": "E"}
+    try:
+        for want, exp in (({"series_size": "7", "port_size": "1/4"}, "SY7240-5LZE-02"),
+                          ({"series_size": "5", "port_size": "1/8"}, "SY5240-5LZE-01")):
+            got = G.generate(con, sid, dict(base, **want)).get("part_number")
+            assert got == exp, f"{want} → {got}, cần {exp}"
+        # Cỡ van không hợp cửa ren → KHÔNG được gắn cửa đó vào mã.
+        # port_size là ô TUỲ CHỌN (van lắp manifold không có cửa riêng — mã thật
+        # 'SY5100-5UE1-NA'), nên engine bỏ ô thay vì báo lỗi. Điều phải bảo đảm:
+        # mã sinh ra KHÔNG mang cỡ cửa sai.
+        for want in ({"series_size": "3", "port_size": "1/4"},
+                     {"series_size": "5", "port_size": "1/4"}):
+            pn = G.generate(con, sid, dict(base, **want)).get("part_number") or ""
+            assert not pn.endswith("-02"), f"{want} → {pn} mang cửa không hợp cỡ"
+    finally:
+        con.close()
+
+
 def test_co_25_khong_con_trong_ngu_phap_AC_D():
     """Catalog -D không có AC25 (grep toàn PDF: 0 lần)."""
     con = db.connect()

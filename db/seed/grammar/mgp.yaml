@@ -46,6 +46,14 @@ slots:
       - {code: "80",  label: "80 mm",  attrs: {bore_mm: 80.0,  rod_dia_mm: 35.0}}
       - {code: "100", label: "100 mm", attrs: {bore_mm: 100.0, rod_dia_mm: 40.0}}
 
+  # ── HÀNH TRÌNH KHÔNG PHẢI ENUM, ĐỪNG RÀNG BUỘC THEO BẢNG CHUẨN ──────────
+  # Catalog có bảng "Standard Strokes" (nòng 12,16 → 10…250 · 20,25 → 20…400 ·
+  # 32-100 → 25…400) nhưng NGAY DƯỚI là mục "Manufacture of Intermediate
+  # Strokes": ø12–ø32 đặt được theo bước 1 mm, ø40–ø100 bước 5 mm.
+  # Nên hành trình gần như TỰ DO, và ràng buộc enum theo bảng chuẩn sẽ SAI.
+  # Đã kiểm: mã thật 'MGPM25-25Z-M9BZ' (×4 trong BOM) KHÔNG có trong bảng chuẩn
+  # của nòng 25 (bảng nhảy 20 → 30) nhưng vẫn là mã hợp lệ đặt được.
+  # Ràng buộc thật sự có của họ này là port_thread theo nòng — đã khai ở pos 5.
   - pos: 3
     name: stroke
     value_type: integer

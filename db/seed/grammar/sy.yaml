@@ -138,8 +138,20 @@ slots:
       - {code: "N3", label: 'One-touch fitting ø5/32"', attrs: {tube_od_in: "5/32"}, requires: {piping: ["20"]}}
       - {code: "N7", label: 'One-touch fitting ø1/4"',  attrs: {tube_od_in: "1/4"},  requires: {piping: ["20"]}}
       - {code: "N9", label: 'One-touch fitting ø5/16"', attrs: {tube_od_in: "5/16"}, requires: {piping: ["20"]}}
-      - {code: "01", label: "Rc 1/8", attrs: {port_standard: "Rc", port_size: "1/8"}}
-      - {code: "02", label: "Rc 1/4", attrs: {port_standard: "Rc", port_size: "1/4"}}
+      # ── CỬA REN GẮN CHẶT VỚI CỠ VAN ──────────────────────────────────────
+      # Bảng "A, B port size / Thread piping" (tr25 và tr59 của catalog SY) khai
+      # thẳng cột "Applicable series": M5→SY3000 · 01→SY5000 · 02→SY7000.
+      # Kiểm trên 10 mã SY thật trong BOM: 0 loại nhầm ('SY7140-5LZE-02' khớp).
+      #
+      # KHÔNG ràng buộc cửa ONE-TOUCH (C4/C6/C8/N…) theo cỡ van: bảng trên chỉ
+      # nói về cửa REN. Mã thật trong catalog cho thấy SY5000 dùng CẢ C6 lẫn C8,
+      # nên áp cùng kiểu ràng buộc lên one-touch sẽ loại nhầm.
+      # '03' (Rc 3/8) không có trong bảng — có thể thuộc SY9000, chưa có nguồn
+      # xác nhận nên để trống thay vì đoán.
+      - {code: "01", label: "Rc 1/8", attrs: {port_standard: "Rc", port_size: "1/8"},
+         requires: {series_size: ["5"]}}
+      - {code: "02", label: "Rc 1/4", attrs: {port_standard: "Rc", port_size: "1/4"},
+         requires: {series_size: ["7"]}}
       - {code: "03", label: "Rc 3/8", attrs: {port_standard: "Rc", port_size: "3/8"}}
       - {code: "N",  label: "NPT",  attrs: {port_standard: "NPT"}}
       - {code: "T",  label: "NPTF", attrs: {port_standard: "NPTF"}}
