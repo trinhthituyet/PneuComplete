@@ -40,7 +40,18 @@ SEED = ROOT / "db/seed/grammar"
 # Họ nào lấy ma trận từ trang nào. Mỗi mục: (tệp YAML, catalog_id, pdf, trang).
 SOURCES = [
     ("ac-d.yaml", "AC-D-E", "DOCUMENT/FRL/es40-69-AC-D.pdf", 20),
+    ("ar.yaml", "AR-D-E", "DOCUMENT/FRL/es40-69-AC-D.pdf", 100),
 ]
+
+# Họ FRL có ngữ pháp nhưng KHÔNG rút được ràng buộc, kèm lý do — để lần sau khỏi
+# dò lại, và để không ai tưởng là bỏ sót.
+NO_MATRIX = {
+    "AR10-A-E": "chỉ MỘT cỡ thân (AR10) nên bảng How to Order không có cột cỡ — "
+                "không có ràng buộc theo cỡ để rút",
+    "AC-A-E": "ngữ pháp khai cỡ 10..40 nhưng DOCUMENT/ chỉ có ES40-60-AC10-A.pdf "
+              "(riêng AC10). Thiếu catalog cho cỡ 20..40 của thế hệ -A",
+    "AMC-E": "chưa có catalog AMC trong DOCUMENT/",
+}
 
 # Mã bịa engine ĐANG sinh — cổng G4 đòi chặn được đúng những mã này.
 MUST_REJECT = [
@@ -119,15 +130,21 @@ def gate(con, cid, table):
     from engine import parser as P
     rep, ok = [], True
 
-    # G2: mã FRL THẬT trong BOM phải vẫn hợp lệ
+    # G2: mã FRL THẬT trong BOM phải vẫn hợp lệ.
+    # LỌC THEO SERIES PARSE RA, không theo tiền tố mã. 'AR10-M5BG-N-A' bắt đầu
+    # bằng 'AR' nhưng thuộc ngữ pháp AR10-A-E (có ô exhaust/knob, cỡ 10) — đem
+    # so với bảng của AR-D-E là so hai họ khác nhau, và G2 báo "loại nhầm" oan.
+    sid = con.execute("select id from series where catalog_id=?", (cid,)).fetchone()
+    sid = sid["id"] if sid else None
     real = [r["raw_code"] for r in con.execute(
         """select distinct raw_code from bom_line
            where raw_code like ? order by raw_code""", (cid.split("-")[0] + "%",))]
-    bad = []
+    bad, n_own = [], 0
     for code in real:
         r = P.parse(con, code)
-        if not r.get("ok"):
-            continue                      # vốn đã không parse được, không phải do ta
+        if not r.get("ok") or (sid and r.get("series_id") != sid):
+            continue                      # mã của họ khác, hoặc vốn không parse được
+        n_own += 1
         slots = r.get("slots") or {}
         sz = slots.get("size")
         for slot, m in table.items():
@@ -136,7 +153,7 @@ def gate(con, cid, table):
                 bad.append(f"{code}: {slot}={v} nhưng bảng nói chỉ có ở {m[v]}")
     ok &= not bad
     rep.append(("G2-mã-thật", not bad,
-                f"{len(real)} mã FRL thật trong BOM" +
+                f"{n_own}/{len(real)} mã BOM thật thuộc ĐÚNG họ này" +
                 ("" if not bad else " · LOẠI NHẦM: " + "; ".join(bad[:2]))))
 
     # G3: mỗi cỡ còn ít nhất một tuỳ chọn ở mỗi ô có ràng buộc
@@ -173,6 +190,8 @@ def main(argv):
     write = "--write" in argv
     con = db.connect()
     total_add = 0
+    for cid, why in sorted(NO_MATRIX.items()):
+        print(f"── {cid:10} BỎ QUA: {why}")
     for fname, cid, pdf, page in SOURCES:
         print(f"── {cid} ← {Path(pdf).name} tr{page}")
         table, err, skipped = matrix_for(cid, pdf, page, con)

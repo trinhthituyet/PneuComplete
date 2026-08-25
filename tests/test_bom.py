@@ -740,6 +740,52 @@ def test_moi_tep_ngu_phap_nap_duoc_tren_db_dung_moi():
             os.environ["PNEU_DB"] = old
 
 
+def test_AR_D_sinh_lai_dung_ma_that_trong_BOM():
+    """Sinh lại ĐÚNG mã khách hàng đã mua — phép kiểm mạnh nhất cho ngữ pháp.
+
+    Bắt được lỗi dấu gạch: gạch đặt ở ô `thread_type` (is_required=0) nên khi ren
+    = Rc cả ô bị bỏ, mang theo cả gạch → 'AR3003BE-D' thay vì 'AR30-03BE-D'.
+    """
+    from engine import generate as G
+    con = db.connect()
+    sid = con.execute("select id from series where catalog_id='AR-D-E'").fetchone()["id"]
+    cases = [
+        ({"size": "30", "port_size": "3/8", "mounting": "B",
+          "pressure_gauge": "E"}, "AR30-03BE-D"),
+        ({"size": "30", "port_size": "3/8", "mounting": "B"}, "AR30-03B-D"),
+        ({"size": "30", "port_size": "3/8", "pressure_gauge": "E"}, "AR30-03E-D"),
+        ({"size": "30", "port_size": "3/8", "port_standard": "NPT"}, "AR30N-03-D"),
+    ]
+    try:
+        for want, exp in cases:
+            got = G.generate(con, sid, dict(want)).get("part_number")
+            assert got == exp, f"{want} → {got}, cần {exp}"
+    finally:
+        con.close()
+
+
+def test_AR_D_chan_to_hop_khong_co_trong_bang():
+    """Ràng buộc đọc từ bảng How to Order tr100 phải CHẶN."""
+    from engine import generate as G
+    con = db.connect()
+    sid = con.execute("select id from series where catalog_id='AR-D-E'").fetchone()["id"]
+    try:
+        # bảng: '01 1/8 V — — — —' · '10 1 — — — V V' · chân H chỉ có ở 20/30/40
+        for want, tag in (({"size": "20", "port_size": "1"}, "Rc1 trên thân 20"),
+                          ({"size": "50", "port_size": "3/8"}, "3/8 trên thân 50"),
+                          ({"size": "50", "port_size": "3/4",
+                            "mounting": "H"}, "chân H trên thân 50")):
+            g = G.generate(con, sid, dict(want))
+            assert not g.get("ok"), f"{tag} không có trong bảng mà vẫn sinh: {g}"
+        # cỡ 25 chỉ có ở thế hệ -B, tệp này là -D
+        assert not G.generate(con, sid, {"size": "25", "port_size": "1/4"}).get("ok")
+        # ca CÓ THẬT vẫn phải sinh được
+        assert G.generate(con, sid, {"size": "30", "port_size": "3/8",
+                                     "mounting": "H"}).get("ok")
+    finally:
+        con.close()
+
+
 def test_co_25_khong_con_trong_ngu_phap_AC_D():
     """Catalog -D không có AC25 (grep toàn PDF: 0 lần)."""
     con = db.connect()

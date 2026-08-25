@@ -26,7 +26,9 @@ slots:
     separator: ""
     options:
       - {code: "20", label: "AR20", attrs: {ar_size: 20, port_sizes: ["1/8", "1/4"]}}
-      - {code: "25", label: "AR25", attrs: {ar_size: 25, port_sizes: ["1/4", "3/8"]}}
+      # BỎ cỡ 25: bảng How to Order của thế hệ -D (tr100) chỉ có 20/30/40/50/60.
+      # 'AR25-B' CÓ THẬT nhưng là thế hệ -B, mà tệp này khai series_suffix: D —
+      # để lại thì engine sinh 'AR25-…-D', một mã lai hai thế hệ.
       - {code: "30", label: "AR30", attrs: {ar_size: 30, port_sizes: ["1/4", "3/8"]}}
       - {code: "40", label: "AR40", attrs: {ar_size: 40, port_sizes: ["1/4", "3/8", "1/2"]}}
       - {code: "50", label: "AR50", attrs: {ar_size: 50, port_sizes: ["3/4", "1"]}}
@@ -38,32 +40,35 @@ slots:
     separator: ""
     is_required: 0
     options:
-      - {code: "Nil", label: "Without backflow function", attrs: {backflow: false}}
-      - {code: "K",   label: "With backflow function",    attrs: {backflow: true}}
+      - {code: "Nil", label: "Without backflow function", attrs: {backflow: false}, requires: {size: ["20", "30", "40", "50", "60"]}}
+      - {code: "K",   label: "With backflow function",    attrs: {backflow: true}, requires: {size: ["20", "30", "40", "50", "60"]}}
 
   - pos: 3
     name: thread_type
-    # Gạch nối đứng TRƯỚC ô ren, không trước cỡ cửa: AR30-N03BE-D (ren NPT) và
-    # AR30-03BE-D (ren Rc, ô ren bỏ trống). Đặt sai chỗ thì mã NPT không parse được.
+    # Gạch nối KHÔNG đặt ở đây. Ô này is_required=0 nên khi ren = Rc (mã Nil) cả
+    # ô bị bỏ, MANG THEO dấu gạch — sinh ra 'AR3003BE-D' thay vì 'AR30-03BE-D'.
+    # Đặt gạch ở port_size (ô luôn có mặt) thì cả hai dạng đều đúng:
+    #     Rc  → AR30 + '' + -03 + BE + -D = AR30-03BE-D
+    #     NPT → AR30 + N  + -03 + BE + -D = AR30N-03BE-D
     value_type: enum
-    separator: "-"
+    separator: ""
     is_required: 0
     options:
-      - {code: "Nil", label: "Rc",  attrs: {port_standard: "Rc"}}
-      - {code: "N",   label: "NPT", attrs: {port_standard: "NPT"}}
-      - {code: "F",   label: "G",   attrs: {port_standard: "G"}}
+      - {code: "Nil", label: "Rc",  attrs: {port_standard: "Rc"}, requires: {size: ["20", "30", "40", "50", "60"]}}
+      - {code: "N",   label: "NPT", attrs: {port_standard: "NPT"}, requires: {size: ["20", "30", "40", "50", "60"]}}
+      - {code: "F",   label: "G",   attrs: {port_standard: "G"}, requires: {size: ["20", "30", "40", "50", "60"]}}
 
   - pos: 4
     name: port_size
     value_type: enum
-    separator: ""
+    separator: "-"
     options:
-      - {code: "01", label: "1/8", attrs: {port_size: "1/8"}}
-      - {code: "02", label: "1/4", attrs: {port_size: "1/4"}}
-      - {code: "03", label: "3/8", attrs: {port_size: "3/8"}}
-      - {code: "04", label: "1/2", attrs: {port_size: "1/2"}}
-      - {code: "06", label: "3/4", attrs: {port_size: "3/4"}}
-      - {code: "10", label: "1",   attrs: {port_size: "1"}}
+      - {code: "01", label: "1/8", attrs: {port_size: "1/8"}, requires: {size: ["20"]}}
+      - {code: "02", label: "1/4", attrs: {port_size: "1/4"}, requires: {size: ["20", "30", "40"]}}
+      - {code: "03", label: "3/8", attrs: {port_size: "3/8"}, requires: {size: ["30", "40"]}}
+      - {code: "04", label: "1/2", attrs: {port_size: "1/2"}, requires: {size: ["40"]}}
+      - {code: "06", label: "3/4", attrs: {port_size: "3/4"}, requires: {size: ["40", "50"]}}
+      - {code: "10", label: "1",   attrs: {port_size: "1"}, requires: {size: ["50", "60"]}}
 
   - pos: 5
     name: mounting
@@ -71,9 +76,9 @@ slots:
     separator: ""
     is_required: 0
     options:
-      - {code: "Nil", label: "Without mounting option",        attrs: {mounting_opt: none}}
-      - {code: "B",   label: "With bracket",                   attrs: {mounting_opt: bracket}}
-      - {code: "H",   label: "With set nut (for panel mount)",  attrs: {mounting_opt: set_nut}}
+      - {code: "Nil", label: "Without mounting option",        attrs: {mounting_opt: none}, requires: {size: ["20", "30", "40", "50", "60"]}}
+      - {code: "B",   label: "With bracket",                   attrs: {mounting_opt: bracket}, requires: {size: ["20", "30", "40", "50", "60"]}}
+      - {code: "H",   label: "With set nut (for panel mount)",  attrs: {mounting_opt: set_nut}, requires: {size: ["20", "30", "40"]}}
 
   - pos: 6
     name: pressure_gauge
