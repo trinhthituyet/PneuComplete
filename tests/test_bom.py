@@ -674,14 +674,36 @@ def test_cua_nho_hon_do_thi_thi_canh_bao_lac_quan():
     assert "LẠC QUAN" in w["message"], w["message"]
 
 
-def test_cua_qua_lon_so_voi_than_thi_canh_bao_co_the_khong_ton_tai():
-    """requires của cỡ cửa đang RỖNG nên engine sinh được cặp không có thật."""
+def test_cua_khong_co_o_co_engine_chon_thi_nang_co():
+    """Cửa là ràng buộc CỨNG của người dùng, cỡ thân thì engine chọn 'nhỏ nhất
+    đủ' — nên nâng cỡ, không bế tắc và cũng không bịa mã."""
     r = _build([("CDM2B40-150AZ", 4)],
                dict(FRL_AUTO, frl_series="AC-D-E", main_line_port_size="10"))
     w = next((x for x in r["warnings"]
-              if x.get("code") == "PORT_TOO_BIG_FOR_BODY"), None)
-    assert w and w["severity"] == "warn", [x.get("code") for x in r["warnings"]]
-    assert "KHÔNG TỒN TẠI" in w["message"], w["message"]
+              if x.get("code") == "FRL_SIZE_RAISED_FOR_PORT"), None)
+    assert w, [x.get("code") for x in r["warnings"]]
+    frl = next((l["part_number"] for l in r["lines"] if l["layer"] == "air_prep"), None)
+    assert frl and frl.startswith("AC50"), f"phải nâng lên cỡ 50: {frl}"
+    assert not r["gaps"], r["gaps"]
+
+
+def test_khong_sinh_ma_khong_ton_tai_theo_bang_how_to_order():
+    """Ràng buộc đọc từ bảng How to Order phải CHẶN, không phải cảnh báo suông."""
+    from engine import generate as G
+    con = db.connect()
+    sid = con.execute("select id from series where catalog_id='AC-D-E'").fetchone()["id"]
+    # catalog: '01 1/8 V — — — —' · '06 3/4 — — V V —' · '10 1 — — — V V'
+    for want, tag in ((({"size": "20", "port_size": "1"}), "Rc1 trên thân 20"),
+                      (({"size": "60", "port_size": "3/4"}), "3/4 trên thân 60"),
+                      (({"size": "30", "port_size": "1/8"}), "1/8 trên thân 30")):
+        g = G.generate(con, sid, dict(want))
+        assert not g.get("ok"), f"{tag} không tồn tại mà vẫn sinh: {g.get('part_number')}"
+        assert g.get("options"), f"{tag}: phải liệt kê cửa còn lắp được"
+    for want, tag in ((({"size": "20", "port_size": "1/4"}), "1/4 trên thân 20"),
+                      (({"size": "50", "port_size": "1"}), "Rc1 trên thân 50")):
+        g = G.generate(con, sid, dict(want))
+        assert g.get("ok"), f"{tag} CÓ thật mà bị chặn: {g}"
+    con.close()
 
 
 def test_khai_du_ca_co_va_cua_thi_van_kiem_luu_luong():
@@ -691,6 +713,42 @@ def test_khai_du_ca_co_va_cua_thi_van_kiem_luu_luong():
                     main_line_port_size="02"))
     assert any(x.get("code") == "FRL_SIZE_TOO_SMALL" for x in r["warnings"]), \
         [x.get("code") for x in r["warnings"]]
+
+
+def test_moi_tep_ngu_phap_nap_duoc_tren_db_dung_moi():
+    """Dựng DB từ đầu phải nạp được MỌI tệp ngữ pháp.
+
+    Lỗi đã mắc: an.yaml dùng `create_series: true` dạng bool, code gọi thẳng
+    cs.get() nên VỠ. Không lộ trong ngày thường vì series AN-E đã có sẵn trong DB
+    nên nhánh tạo series không chạy — chỉ vỡ khi dựng lại từ đầu.
+    """
+    import os
+    import tempfile
+    from crawler import grammar_seed as GS
+    tmp = tempfile.mkdtemp()
+    old = os.environ.get("PNEU_DB")
+    os.environ["PNEU_DB"] = os.path.join(tmp, "t.db")
+    try:
+        con = db.init(Path(os.environ["PNEU_DB"]))
+        for f in sorted(GS.SEED_DIR.glob("*.yaml")):
+            GS.load_file(con, f)        # chỉ cần KHÔNG ném lỗi
+        con.close()
+    finally:
+        if old is None:
+            os.environ.pop("PNEU_DB", None)
+        else:
+            os.environ["PNEU_DB"] = old
+
+
+def test_co_25_khong_con_trong_ngu_phap_AC_D():
+    """Catalog -D không có AC25 (grep toàn PDF: 0 lần)."""
+    con = db.connect()
+    sizes = {r["code"] for r in con.execute(
+        """select o.code from code_option o join code_slot cs on cs.id=o.slot_id
+           join series s on s.id=cs.series_id
+           where s.catalog_id='AC-D-E' and cs.name='size'""")}
+    con.close()
+    assert "25" not in sizes, sizes
 
 
 def test_khong_lan_series_AR_voi_AR_M():

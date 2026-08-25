@@ -311,7 +311,18 @@ def _resolve_need(con, need, ctx, project, src_part_id, templates):
     if not g.get("ok"):
         if g.get("error"):
             return {"gap": f"{from_series}: {g['error']}"}
-        bits = "; ".join(f"{u['slot']} ({u['reason']})" for u in g["undecided"])
+        # BA NHÁNH THẤT BẠI của generate() trả dạng gap+field+options; chỉ nhánh
+        # "thành công một phần" mới có `undecided`. Bản trước đọc thẳng
+        # g["undecided"] nên KeyError — nhánh chết từ lâu, chỉ sống dậy khi ngữ
+        # pháp FRL có `requires` và bắt đầu từ chối tổ hợp không tồn tại.
+        if g.get("gap"):
+            # `options` là các mã CÒN LẮP ĐƯỢC — đưa ra để người dùng chọn ngay,
+            # không phải mở catalog tra.
+            return {"gap": f"{from_series}: {g['gap']}",
+                    "field": g.get("field"),
+                    "options": g.get("options")}
+        bits = "; ".join(f"{u['slot']} ({u['reason']})"
+                         for u in (g.get("undecided") or []))
         # nếu ràng buộc lấy từ ctx mà ctx không có giá trị → nói rõ THIẾU DỮ LIỆU
         empty = [k for k, v in (need.get("want") or {}).items()
                  if isinstance(v, dict) and "from_ctx" in v
@@ -492,6 +503,34 @@ def build(con, inputs, project=None, project_name="demo"):
                           + (f" (cửa vào {p_in})" if p_in and p_in != p_out else ""))
         else:
             auto["_frl_size_failed"] = why
+
+    # ── CỬA NGƯỜI DÙNG KHAI KHÔNG CÓ Ở CỠ ENGINE CHỌN → NÂNG CỠ ─────────────
+    # Cửa là ràng buộc CỨNG của bạn (đi theo đường ống đã có); cỡ thân thì engine
+    # chọn "nhỏ nhất đủ lưu lượng", nên nâng lên luôn an toàn — chỉ dư khả năng.
+    # Trước khi ngữ pháp có `requires`, engine im lặng xuất AC20B-03DG-D: cửa 3/8
+    # trên thân 20, catalog ghi '—'. Bế tắc cũng không phải câu trả lời tốt.
+    if (not user_frl_size) and project.get("frl_size") \
+            and project.get("main_line_port_size"):
+        cid = project.get("frl_series") or "AC-A-E"
+        want_port = project["main_line_port_size"]
+        rows = con.execute(
+            """select o.code, o.attrs, o.requires from code_option o
+               join code_slot cs on cs.id = o.slot_id
+               join series s on s.id = cs.series_id
+               where s.catalog_id = ? and cs.name = 'port_size'""", (cid,)).fetchall()
+        for r in rows:
+            a = json.loads(r["attrs"] or "{}")
+            if want_port not in (r["code"], a.get("port_size")):
+                continue
+            req = json.loads(r["requires"] or "{}")
+            allow = [str(x) for x in (req.get("size") or [])]
+            cur = str(project["frl_size"])
+            if allow and cur not in allow:
+                bigger = sorted((x for x in allow if int(x) > int(cur)), key=int)
+                if bigger:
+                    auto["_frl_size_raised"] = (cur, bigger[0], want_port)
+                    project["frl_size"] = bigger[0]
+            break
 
     # KIỂM CỠ CỬA người dùng khai — chạy dù cỡ thân do engine chọn hay bạn chốt.
     if project.get("frl_size") and project.get("main_line_port_size"):
@@ -711,6 +750,16 @@ def build(con, inputs, project=None, project_name="demo"):
                       "rationale": msg + ". Sụt áp thật sẽ nhiều hơn đồ thị vì cửa "
                       "nhỏ hơn tự nó đã gây sụt. Muốn dùng đúng số thì lắp cửa "
                       f"{p_out}, hoặc chấp nhận và kiểm lại bằng tay.",
+                      "detail": msg})
+    if auto.get("_frl_size_raised"):
+        frm, to, port = auto["_frl_size_raised"]
+        msg = (f"Nâng cỡ AC {frm} → {to}: cửa {port} bạn khai KHÔNG có ở cỡ {frm} "
+               f"theo bảng How to Order")
+        warns.append({"severity": "info", "code": "FRL_SIZE_RAISED_FOR_PORT",
+                      "rule_code": "R-FRL-02", "message": msg,
+                      "rationale": msg + ". Cỡ thân engine chọn là 'nhỏ nhất đủ lưu "
+                      "lượng' nên nâng lên chỉ dư khả năng, không thiếu. Muốn giữ "
+                      f"cỡ {frm} thì đổi cửa sang cỡ có ở {frm}.",
                       "detail": msg})
     if auto.get("_port_too_big_for_body"):
         mine, sz, need = auto["_port_too_big_for_body"]

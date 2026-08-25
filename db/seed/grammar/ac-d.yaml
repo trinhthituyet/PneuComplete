@@ -34,7 +34,8 @@ slots:
     separator: ""
     options:
       - {code: "20", label: "cỡ 20", attrs: {ac_size: 20, port_sizes: ["1/8", "1/4"]}}
-      - {code: "25", label: "cỡ 25", attrs: {ac_size: 25, port_sizes: ["1/4", "3/8"]}}
+      # BỎ cỡ 25: catalog -D KHÔNG có AC25 (grep toàn PDF: 0 lần; chỉ AR25-B của
+      # thế hệ khác mới có thật). Còn trong ngữ pháp thì engine sinh 'AC25-02-D'.
       - {code: "30", label: "cỡ 30", attrs: {ac_size: 30, port_sizes: ["1/4", "3/8"]}}
       - {code: "40", label: "cỡ 40", attrs: {ac_size: 40, port_sizes: ["1/4", "3/8", "1/2", "3/4"]}}
       - {code: "50", label: "cỡ 50", attrs: {ac_size: 50, port_sizes: ["3/4", "1"]}}
@@ -67,21 +68,21 @@ slots:
     separator: ""
     is_required: 0
     options:
-      - {code: "Nil", label: "Rc",  attrs: {port_standard: "Rc"}}
-      - {code: "N",   label: "NPT", attrs: {port_standard: "NPT"}}
-      - {code: "F",   label: "G",   attrs: {port_standard: "G"}}
+      - {code: "Nil", label: "Rc",  attrs: {port_standard: "Rc"}, requires: {size: ["20", "30", "40", "50", "60"]}}
+      - {code: "N",   label: "NPT", attrs: {port_standard: "NPT"}, requires: {size: ["20", "30", "40", "50", "60"]}}
+      - {code: "F",   label: "G",   attrs: {port_standard: "G"}, requires: {size: ["20", "30", "40", "50", "60"]}}
 
   - pos: 4
     name: port_size
     value_type: enum
     separator: "-"
     options:
-      - {code: "01", label: "1/8", attrs: {port_size: "1/8"}}
-      - {code: "02", label: "1/4", attrs: {port_size: "1/4"}}
-      - {code: "03", label: "3/8", attrs: {port_size: "3/8"}}
-      - {code: "04", label: "1/2", attrs: {port_size: "1/2"}}
-      - {code: "06", label: "3/4", attrs: {port_size: "3/4"}}
-      - {code: "10", label: "1",   attrs: {port_size: "1"}}
+      - {code: "01", label: "1/8", attrs: {port_size: "1/8"}, requires: {size: ["20"]}}
+      - {code: "02", label: "1/4", attrs: {port_size: "1/4"}, requires: {size: ["20", "30", "40"]}}
+      - {code: "03", label: "3/8", attrs: {port_size: "3/8"}, requires: {size: ["30", "40"]}}
+      - {code: "04", label: "1/2", attrs: {port_size: "1/2"}, requires: {size: ["40"]}}
+      - {code: "06", label: "3/4", attrs: {port_size: "3/4"}, requires: {size: ["40", "50"]}}
+      - {code: "10", label: "1",   attrs: {port_size: "1"}, requires: {size: ["50", "60"]}}
 
   - pos: 5
     name: auto_drain
@@ -89,9 +90,9 @@ slots:
     separator: ""
     is_required: 0
     options:
-      - {code: "Nil", label: "Without auto drain",            attrs: {auto_drain: none}}
-      - {code: "C",   label: "N.C. — cửa xả đóng khi có áp",  attrs: {auto_drain: "N.C."}}
-      - {code: "D",   label: "N.O. — cửa xả mở khi mất áp",   attrs: {auto_drain: "N.O."}}
+      - {code: "Nil", label: "Without auto drain",            attrs: {auto_drain: none}, requires: {size: ["20", "30", "40", "50", "60"]}}
+      - {code: "C",   label: "N.C. — cửa xả đóng khi có áp",  attrs: {auto_drain: "N.C."}, requires: {size: ["20", "30", "40", "50", "60"]}}
+      - {code: "D",   label: "N.O. — cửa xả mở khi mất áp",   attrs: {auto_drain: "N.O."}, requires: {size: ["30", "40", "50", "60"]}}
 
   - pos: 6
     name: pressure_gauge

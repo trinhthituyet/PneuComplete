@@ -25,6 +25,14 @@ def load_file(con, path: Path):
         # series tổng hợp: dữ liệu có thật nhưng không có trang series riêng trên
         # webcatalog (ví dụ D-M9 trích từ bảng applicable switch của catalog CM2)
         cs = spec["create_series"]
+        # `create_series: true` (bool) là dạng hợp lệ trong an.yaml — nghĩa là
+        # "tạo series, mọi trường lấy mặc định". Bản trước gọi thẳng cs.get() nên
+        # VỠ khi dựng DB từ đầu; không lộ trong ngày thường vì series AN-E đã có
+        # sẵn nên nhánh này không chạy.
+        if not isinstance(cs, dict):
+            cs = {}
+        cs = {"code": cs.get("code") or spec.get("part_prefix") or cid.split("-")[0],
+              **cs}
         cat = None
         if cs.get("category_slug"):
             con.execute("insert or ignore into category (code, name, layer) values (?,?,?)",
