@@ -130,6 +130,14 @@ pages:
     x_max: [1200, 1800, 4000, 4000]
     y_max: 0.1
     curves_per_panel: 4
+  - pdf: DOCUMENT/FRL/ES40-60-AF10-A.pdf
+    page: 2
+    kind: flow_drop
+    n_panels: 1
+    titles: [AF10-A]
+    x_max: [200]
+    y_max: 0.1
+    curves_per_panel: 4
   - pdf: DOCUMENT/FRL/es40-70-ARG-B.pdf
     page: 4
     kind: flow_outlet
@@ -312,8 +320,14 @@ gaps:
      68/77 ô đồ thị FRL là vector nên đây là ngoại lệ duy nhất."
   - "pressure_char (tr23/104/129): nhận dạng được nhưng TỪ CHỐI số hoá — engine
      chưa cần, và chưa có ground truth riêng."
-  - "ES40-60-AR10-A.pdf tr2 (AR10-A, 1 ô): tìm được ô và trục nhưng KHÔNG gán
-     được đường cong nào. Một model nhỏ duy nhất, chưa truy nguyên nhân."
+  - "ES40-60-AR10-A.pdf tr2 (AR10-A, 1 ô): ĐƯỜNG CONG KHÔNG CÓ trong PDF dưới
+     dạng vector. Đã truy: 0 ảnh raster nhúng, 41 đoạn trong vùng ô đều NẰM NGANG
+     (lưới), và 0 path nhiều điểm ở cả lớp stroke lẫn lớp fill. Trục và tiêu đề
+     đọc được nhưng không có gì để trích — giới hạn của nguồn, không phải của bộ
+     đọc."
+  - "ES13-12-VHS-D.pdf tr5 và tr12: KHÔNG có đồ thị. Hai 'ô' bộ tìm từng nhận ra
+     (72×34 và 49×23 px) là cột số của BẢNG THÔNG SỐ, 0 đường cong bên trong.
+     Đã chặn bằng ngưỡng kích thước ô tối thiểu 90×70 px."
   - "Chưa có người mở catalog đối chiếu bằng mắt. Cổng chứng minh phép trích
      TỰ NHẤT QUÁN với nhãn trục trong PDF, không chứng minh catalog in đúng.
      Nên confidence để 0.9, không phải 0.95."

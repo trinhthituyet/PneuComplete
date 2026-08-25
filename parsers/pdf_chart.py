@@ -211,7 +211,26 @@ def _fit(ticks):
     b = (sy - a * sx) / n
     span = max(v for _, v in ticks) - min(v for _, v in ticks) or 1.0
     err = max(abs(a * p + b - v) for p, v in ticks) / span
-    return (a, b) if err < 0.04 else None
+    if err < 0.04:
+        return (a, b)
+    # ── LOẠI MỘT ĐIỂM NGOẠI LAI RỒI THỬ LẠI ──────────────────────────────────
+    # Số '0' ở GỐC thuộc về CẢ HAI trục, và cột Y hay nhặt luôn số 0 của trục X
+    # (đo: AF10-A tr2 có nhãn Y ở 131,8…223,3 rất thẳng, cộng thêm một '0' ở
+    # 230,1 kéo sai số lên 4,3% — trượt ngưỡng 4% và mất cả ô).
+    # CHỈ bỏ ĐÚNG MỘT điểm và chỉ khi phần còn lại thẳng hơn HẲN: nới ngưỡng cho
+    # vừa là chấp nhận trục cong, còn bỏ nhiều điểm là tự chọn dữ liệu cho khớp.
+    if len(ticks) >= 4:
+        best = None
+        for i in range(len(ticks)):
+            rest = ticks[:i] + ticks[i + 1:]
+            if len({v for _, v in rest}) < 3:
+                continue
+            f2 = _fit(rest)
+            if f2 and (best is None or i == len(ticks) - 1):
+                best = f2
+        if best:
+            return best
+    return None
 
 
 def _axis_caption(ws, box, axis):
@@ -415,6 +434,14 @@ def _axes(ws):
             if best is None or cy < best[0][1]:
                 best = xr
         if best is None:
+            continue
+        # ── BỎ Ô QUÁ NHỎ ────────────────────────────────────────────────────
+        # Bảng thông số cũng là các số xếp thành hàng/cột nên lọt vào đây: hai
+        # trang VHS cho "ô" 72×34 và 49×23px với trục X 0,22/7,6/16,1 — đó là
+        # cột số của bảng, không phải đồ thị (0 đường cong bên trong).
+        # Ngưỡng ĐO ĐƯỢC: ô đồ thị thật nhỏ nhất trong DOCUMENT/FRL là 116×98px.
+        # 90×70 nằm giữa hai nhóm, không sát biên nào.
+        if best[-1][0] - best[0][0] < 90 or ybot - ytop < 70:
             continue
         panels.append({"yc": yc, "xr": best,
                        "L": best[0][0], "R": best[-1][0],
@@ -678,13 +705,19 @@ def digitize(pdf, page, samples=10):
         # AR40(K)-06-D: vùng vẽ ô đó rộng tới x=689 còn nhãn cuối ở 544, nên
         # đường chỉ có ~70% điểm trong dải nhãn và bị loại IM LẶNG.
         qs = []
+        # DUNG SAI THEO KÍCH THƯỚC Ô, không phải 6px cố định. PDF không cắt đường
+        # cong nên nét có thể bắt đầu hơi ngoài khung: đo được AR10-A tr2 bắt đầu
+        # ở y=123,6 trong khi T-6=124,0 — trượt đúng 0,4px và cả ô mất sạch dữ
+        # liệu. 6px là con số tôi tự đặt; 15% chiều cao ô thì suy từ chính hình.
+        # Vẫn an toàn: hai hàng ô cách nhau ~80px, còn 15% ở đây chỉ là 16px.
+        tw, th = 0.05 * (R - L), 0.15 * (B - T)
         for q, dash in curves:
             x0q, y0q = min(q)
-            if not (L - 6 <= x0q <= L + 0.2 * (R - L)
-                    and T - 6 <= y0q <= B + 6):
+            if not (L - tw <= x0q <= L + 0.2 * (R - L)
+                    and T - th <= y0q <= B + th):
                 continue
             inside = sum(1 for x, y in q
-                         if L - 6 <= x <= R + 6 and T - 6 <= y <= B + 6)
+                         if L - tw <= x <= R + tw and T - th <= y <= B + th)
             if inside >= 0.4 * len(q):
                 qs.append((q, dash))
         pan["n_curves"] = len(qs)

@@ -114,6 +114,7 @@ DROP_PAGES = [
     (PDF, 92),                                     # AFM/AFD (tách ẩm)
     (PDF, 119),                                    # AL20-D … AL60-D (tra dầu)
     ("DOCUMENT/FRL/ES30-25-AFG-D.pdf", 4),         # AFG20-D … AFG40-06-D
+    ("DOCUMENT/FRL/ES40-60-AF10-A.pdf", 2),        # AF10-A (lọc cỡ nhỏ)
 ]
 DROP_OUT = ROOT / "db/seed/charts/frl-drop.yaml"
 

@@ -14,7 +14,7 @@
 # sụt áp khi nhiều xy-lanh chạy cùng lúc.
 #
 # ── VÌ SAO TIN ĐƯỢC ─────────────────────────────────────────────────────────
-# Mốc neo VẬT LÝ của họ này: sụt áp = 0 khi lưu lượng = 0. Đo được 94 đường
+# Mốc neo VẬT LÝ của họ này: sụt áp = 0 khi lưu lượng = 0. Đo được 98 đường
 # đều bắt đầu ở gốc. Cộng với: mọi đường tăng đơn điệu, và cỡ thân lớn hơn sụt áp
 # ít hơn ở cùng lưu lượng — kiểm chứng ĐỘC LẬP với từng ô (tiêu chí C13–C16).
 # Cổng đầy đủ: tests/test_chart.py (18 tiêu chí + 12 đối chứng âm).
@@ -335,3 +335,16 @@ charts:
     series:
       - label: "max"   # bao trên của 4 điều kiện áp vào
         points: [[0, 0], [68.5, 0.001], [320.8, 0.002], [495.2, 0.003], [731.9, 0.006], [993.5, 0.01], [1242.7, 0.015], [1491.9, 0.023], [1616.5, 0.0284], [1747.3, 0.034], [1990.2, 0.046], [2220.7, 0.061], [2239.4, 0.0622], [2388.9, 0.072]]
+  - chart_id: frl_drop_af10_a
+    model_label: "AF10-A"
+    applies_to: [AF10-A]
+    catalog: DOCUMENT/FRL/ES40-60-AF10-A.pdf
+    pdf_page: 2
+    x_max: 200
+    n_conditions: 4
+    ends_at_y_max: false
+    y_max: 0.1
+    kind: continuous
+    series:
+      - label: "max"   # bao trên của 4 điều kiện áp vào
+        points: [[0, 0], [8.2, 0.003], [14.8, 0.0065], [17.7, 0.008], [23.4, 0.0109], [25.5, 0.012], [33.9, 0.0156], [39.9, 0.0191], [42.3, 0.0204], [45.1, 0.022], [47, 0.023], [49.3, 0.024], [56.2, 0.028], [60.3, 0.033], [61.1, 0.034], [63.9, 0.038], [64.9, 0.04], [66.6, 0.0433], [67.5, 0.045], [69.9, 0.052], [71.1, 0.0557], [71.5, 0.057], [72.1, 0.06], [72.7, 0.062], [73, 0.063], [73.2, 0.064]]

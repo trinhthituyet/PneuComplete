@@ -308,19 +308,26 @@ def _criteria(got, gt):
             x_common = min(max(x for x, _ in c) for c in curves)
             fams16.setdefault(m.group(1), {}).setdefault(
                 int(m.group(2)), []).append((p["title"], x_common, C.envelope(curves)))
+    # SO TỪNG CẶP KỀ NHAU, mỗi cặp một mốc riêng — KHÔNG dùng một mốc chung cho
+    # cả họ. Lý do: một model nhỏ kéo mốc chung xuống chỗ mọi cỡ lớn đều bằng
+    # nhau. Đo được khi thêm AF10-A (x_common 73 so với 736…4392): mốc tụt còn
+    # 36,6 L/min, ở đó AF20…AF60 chênh nhau < dung sai, C16 vẫn PASS nhưng KHÔNG
+    # còn bắt được phép đổi tiêu đề nữa — một tiêu chí mất răng thì vô dụng.
     bad16, det16 = [], []
     for fam, sizes in sorted(fams16.items()):
-        probe = 0.5 * min(xc for v in sizes.values() for _, xc, _ in v)
-        worst = []
+        seq = []
         for sz, v in sorted(sizes.items()):
-            vals = [(lab, C.interp(env, probe)) for lab, _, env in v]
-            vals = [(l, y) for l, y in vals if y is not None]
-            if vals:
-                worst.append((sz, max(vals, key=lambda t: t[1])))   # bảo thủ: sụt nhiều nhất
-        for (_, (la, va)), (_, (lb, vb)) in zip(worst, worst[1:]):
+            seq.append((sz, max(v, key=lambda t: t[1])))    # bản có dải rộng nhất
+        n_cmp = 0
+        for (sa, (la, xa, ea)), (sb, (lb, xb, eb)) in zip(seq, seq[1:]):
+            probe = 0.5 * min(xa, xb)                       # mốc HỢP LỆ cho ĐÚNG cặp này
+            va, vb = C.interp(ea, probe), C.interp(eb, probe)
+            if va is None or vb is None:
+                continue
+            n_cmp += 1
             if vb > va + 0.005:
                 bad16.append(f"{fam}@{probe:.0f}: {la}={va:.4f} < {lb}={vb:.4f}")
-        det16.append(f"{fam}:{len(worst)}cỡ@{probe:.0f}")
+        det16.append(f"{fam}:{len(seq)}cỡ/{n_cmp}cặp")
     rec("C16-đơn-điệu-liên-model-sụt-áp", bool(fams16) and not bad16,
         "cỡ lớn hơn sụt áp ít hơn · " + " ".join(det16)
         + (" · SAI " + "; ".join(bad16[:2]) if bad16 else ""))
