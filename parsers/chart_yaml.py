@@ -344,6 +344,82 @@ def render_drop(charts, n_crit, n_neg):
     return "".join(out)
 
 
+PC_PAGES = [(PDF, 23), (PDF, 104), (PDF, 129)]
+PC_OUT = ROOT / "db/seed/charts/frl-regulation.yaml"
+
+
+def collect_pc():
+    """Độ ổn định điều áp: áp vào → áp ra, tại MỘT điểm làm việc."""
+    charts = []
+    for pdf, pg in PC_PAGES:
+        r = pdf_chart.digitize(pdf, pg, samples=14)
+        for p in r.get("panels") or []:
+            if p.get("kind") != "pressure_char" or not p.get("series"):
+                continue
+            pts = p["series"][0]["points"]
+            charts.append({
+                "chart_id": f"frl_reg_{slug(expand(p['title'])[0])}",
+                "model_label": p["title"], "applies_to": expand(p["title"]),
+                "pdf": pdf, "pdf_page": pg,
+                "condition": p.get("condition") or {},
+                "kind": "continuous",
+                "points": [[round(x, 3), round(y, 4)] for x, y in pts],
+            })
+    return charts
+
+
+PC_HEAD = """\
+# ĐỘ ỔN ĐỊNH ĐIỀU ÁP: áp vào → áp ra, của bộ điều áp FRL.
+#
+# ⚠ TỆP NÀY DO MÁY SINH — sửa tay sẽ bị ghi đè.
+#     python3 -m parsers.chart_yaml --write
+#
+# ── SỐ CHỈ CÓ NGHĨA KÈM ĐIỀU KIỆN ───────────────────────────────────────────
+# Đồ thị đo tại MỘT điểm làm việc, ghi bằng chữ ngay trên trang:
+#     "Inlet pressure of 0.7 MPa, Outlet pressure of 0.2 MPa, Flow rate 20 L/min"
+# Trôi 0,03 MPa ở lưu lượng 20 L/min KHÔNG nói gì về hành vi ở 2000 L/min. Nên
+# mỗi bảng mang theo `condition`, và engine phải từ chối nếu điều kiện không hợp.
+# Trang nào không đọc được điều kiện thì KHÔNG có trong tệp này (2 trang, 4 ô).
+#
+# ── DÙNG ĐỂ LÀM GÌ ──────────────────────────────────────────────────────────
+# Cho biết áp ra trôi bao nhiêu khi áp nguồn dao động. Đo được: trôi 0,024–0,033
+# MPa quanh mức đặt 0,2 khi áp vào đi từ 0,24 đến 0,99 MPa — tức bộ điều áp giữ
+# khá tốt, và áp nguồn tụt trong dải đó không làm hỏng áp làm việc.
+#
+#   điểm = [áp vào MPa, áp ra MPa]
+
+source:
+  catalog: {PDF}
+  pdf_page: "23 (AC), 104 (AR), 129 (AW)"
+  table: "Pressure Characteristics (Representative values)"
+confidence: 0.85
+digitized_by: "parsers/chart_yaml.py — tự động từ vector PDF, cổng tests/test_chart.py"
+axis:
+  x: {{name: inlet_pressure, unit: MPa}}
+  y: {{name: outlet_pressure, unit: MPa}}
+
+charts:
+"""
+
+
+def render_pc(charts):
+    out = [PC_HEAD.replace("{PDF}", PDF).replace("{{", "{").replace("}}", "}")]
+    for c in charts:
+        cond = c["condition"]
+        out.append(f"  - chart_id: {c['chart_id']}\n")
+        out.append(f"    model_label: \"{c['model_label']}\"\n")
+        out.append(f"    applies_to: [{', '.join(c['applies_to'])}]\n")
+        out.append(f"    catalog: {c['pdf']}\n")
+        out.append(f"    pdf_page: {c['pdf_page']}\n")
+        out.append(f"    condition: {{set_mpa: {cond.get('set_mpa')}, "
+                   f"flow_lpm: {cond.get('flow_lpm')}, "
+                   f"inlet_mpa: {cond.get('inlet_mpa')}}}\n")
+        out.append(f"    kind: {c['kind']}\n")
+        out.append("    series:\n      - label: \"outlet\"\n        points: ["
+                   + ", ".join(f"[{x:g}, {y:g}]" for x, y in c["points"]) + "]\n")
+    return "".join(out)
+
+
 def build(write=False):
     """Trích + ghi. RAISE nếu cổng chưa đạt — đó là điểm chính của hàm này."""
     from tests import test_chart
@@ -357,9 +433,13 @@ def build(write=False):
     text = render(charts, clamped, n_crit, n_neg)
     drops = collect_drop()
     dtext = render_drop(drops, n_crit, n_neg)
+    pcs = collect_pc()
+    ptext = render_pc(pcs)
     if write:
         OUT.write_text(text)
         DROP_OUT.write_text(dtext)
+        PC_OUT.write_text(ptext)
+        print(f"✓ ghi {PC_OUT.relative_to(ROOT)} — {len(pcs)} model")
         print(f"\n✓ ghi {OUT.relative_to(ROOT)} — {len(charts)} model, "
               f"{sum(len(c['series']) for c in charts)} đường")
         print(f"✓ ghi {DROP_OUT.relative_to(ROOT)} — {len(drops)} model, "

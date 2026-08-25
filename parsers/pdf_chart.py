@@ -265,6 +265,30 @@ def _axis_caption(ws, box, axis):
 #   flow_outlet   lưu lượng → áp ra      bộ điều áp AC/AR   giảm dần từ áp đặt
 #   flow_drop     lưu lượng → sụt áp     lọc AFM/AFD/AFF    tăng dần từ 0
 #   pressure_char áp vào   → áp ra       "Pressure Char."   tăng dần
+def _test_condition(ws):
+    """Điều kiện thử của đồ thị áp-vào→áp-ra, đọc từ CHỮ. Trả dict | None.
+
+    tr23 ghi: "Conditions: Inlet pressure of 0.7 MPa, Outlet pressure of 0.2 MPa,
+    Flow rate 20 L/min (ANR)". Số của đồ thị này chỉ có nghĩa KÈM điều kiện đó —
+    trôi 0,03 MPa ở lưu lượng 20 L/min không nói gì về hành vi ở 2000 L/min.
+    """
+    rows = {}
+    for wx0, wy0, wx1, wy1, t in ws:
+        rows.setdefault(round((wy0 + wy1) / 2 / 2.5), []).append(((wx0 + wx1) / 2, t))
+    for _, items in sorted(rows.items()):
+        line = " ".join(t for _, t in sorted(items))
+        if not re.search(r"(?i)condition", line):
+            continue
+        out = re.search(r"(?i)outlet\s+pressure\s*(?:of|:)\s*([\d.]+)\s*MPa", line)
+        flow = re.search(r"(?i)flow\s+rate\s*:?\s*([\d.]+)\s*L/min", line)
+        inl = re.search(r"(?i)inlet\s+pressure\s*(?:of|:)\s*([\d.]+)\s*MPa", line)
+        if out and flow:
+            return {"set_mpa": float(out.group(1)),
+                    "flow_lpm": float(flow.group(1)),
+                    "inlet_mpa": float(inl.group(1)) if inl else None}
+    return None
+
+
 def _single_inlet(ws):
     """Áp vào DUY NHẤT ghi bằng chữ trên trang, ví dụ 'Condition: Inlet pressure
     of 0.7 MPa'. Trả float, hoặc None nếu không có/không rõ.
@@ -722,7 +746,7 @@ def digitize(pdf, page, samples=10):
                             f"Y:{len(yt)} nhãn — cần ≥3 mỗi trục, thẳng hàng)")
             panels.append(pan)
             continue
-        if kind not in ("flow_outlet", "flow_drop"):
+        if kind not in ("flow_outlet", "flow_drop", "pressure_char"):
             # KHÔNG số hoá họ chưa có ground truth. Trang 23 từng báo "6/6 ô đạt"
             # trong khi trục X là ÁP VÀO [MPa] — ghi ra YAML là engine đọc áp
             # suất thành lưu lượng. Từ chối thì an toàn; lọc bằng luật tự nghĩ
@@ -811,7 +835,19 @@ def digitize(pdf, page, samples=10):
             if cut:
                 trimmed[0] += cut
             data = kept
-            if kind == "flow_drop":
+            if kind == "pressure_char":
+                # ── ĐỘ TRÔI ÁP RA THEO ÁP VÀO ────────────────────────────────
+                # Đồ thị này đo tại MỘT điểm làm việc cố định (tr23 ghi rõ:
+                # "Inlet pressure of 0.7 MPa, Outlet pressure of 0.2 MPa, Flow
+                # rate 20 L/min"), nên trục X là ÁP VÀO chứ không phải lưu lượng.
+                # Bất biến: áp ra phải nằm QUANH mức đặt — bộ điều áp mà trôi quá
+                # nửa mức đặt thì không còn là bộ điều áp. Đo được: trôi
+                # 0,024–0,033 MPa quanh mức 0,2 trên cả 6 ô.
+                ys = [y for _, y in data]
+                if max(ys) - min(ys) > 0.5 * (sum(ys) / len(ys)):
+                    dropped.append("áp ra trôi quá nửa mức đặt")
+                    continue
+            elif kind == "flow_drop":
                 # SỤT ÁP: tăng theo lưu lượng, và BẰNG 0 khi lưu lượng bằng 0.
                 # Mốc neo (0,0) là vật lý — không lọc gì thì khung và vạch lưới
                 # lọt vào, mà ở đây engine lấy ĐƯỜNG BAO TRÊN nên một đường lạ
@@ -859,6 +895,23 @@ def digitize(pdf, page, samples=10):
                              sorted(best.values(), key=lambda t: -t[1]["points"][0][1])]
         pan["dropped"] = dropped
         pan["trimmed_points"] = trimmed[0]
+        if kind == "pressure_char" and len(pan["series"]) > 1:
+            # MỘT ĐƯỜNG MỖI Ô: đồ thị này chỉ vẽ một đường (một điểm làm việc).
+            # Nét dày bị quét thành 2 đường gần trùng — giữ đường DÀI nhất, cùng
+            # cách đã dùng cho nhánh dò ảnh.
+            pan["series"] = [max(pan["series"], key=lambda s: len(s["points"]))]
+        if kind == "pressure_char":
+            # Điều kiện thử ghi bằng chữ trên trang, KHÔNG suy từ đường cong.
+            # Thiếu thì bỏ ô: số không kèm điều kiện thì không dùng được.
+            cond = _test_condition(ws)
+            if not cond:
+                pan["error"] = ("không đọc được điều kiện thử (áp ra đặt / lưu "
+                                "lượng) — số không kèm điều kiện thì vô nghĩa")
+                pan["series"] = []
+            else:
+                pan["condition"] = cond
+            panels.append(pan)
+            continue
         if kind == "flow_drop":
             # KHÔNG GÁN NHÃN CHO HỌ NÀY. Nhãn mỗi đường là áp vào P1, viết XOAY
             # bên trong ô, và pdftotext tách nó thành ký tự rời ('P','1','=','0',

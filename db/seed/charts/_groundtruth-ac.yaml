@@ -93,9 +93,14 @@ pages:
     kind: flow_outlet
     n_panels: 5
     titles: ["AW20(K)-D", "AW30(K)-D", "AW40(K)-D", "AW40(K)-06-D", "AW60(K)-D"]
-  - {page: 23,  kind: pressure_char}
-  - {page: 104, kind: pressure_char}
-  - {page: 129, kind: pressure_char}
+  # ── HỌ ÁP VÀO → ÁP RA (độ ổn định điều áp) ────────────────────────────────
+  # Đo tại MỘT điểm làm việc, ghi bằng chữ ngay trên trang: "Inlet pressure of
+  # 0.7 MPa, Outlet pressure of 0.2 MPa, Flow rate 20 L/min (ANR)". Trục X là ÁP
+  # VÀO. Số chỉ có nghĩa KÈM điều kiện đó — trôi 0,03 MPa ở 20 L/min không nói gì
+  # về hành vi ở 2000 L/min. Mỗi ô đúng MỘT đường.
+  - {page: 23,  kind: pressure_char, n_panels: 6, condition: {set_mpa: 0.2, flow_lpm: 20}}
+  - {page: 104, kind: pressure_char, n_panels: 6, condition: {set_mpa: 0.2, flow_lpm: 20}}
+  - {page: 129, kind: pressure_char, n_panels: 5, condition: {set_mpa: 0.2, flow_lpm: 20}}
   - page: 79
     kind: flow_drop
     n_panels: 6
@@ -174,7 +179,7 @@ pages:
       "1.0": [0.8, 0.7, 0.6, 0.5]
 
 # Họ nào ĐƯỢC số hoá. Họ ngoài danh sách này phải trả về 0 đường (C9).
-in_scope_kinds: [flow_outlet, flow_drop]
+in_scope_kinds: [flow_outlet, flow_drop, pressure_char]
 
 # ── VÒNG B: HỌ SỤT ÁP, KHÔNG CÓ NHÃN ĐỌC ĐƯỢC ───────────────────────────────
 # Mỗi ô vẽ 5 đường (tr92: 3) ứng với các ÁP VÀO P1 khác nhau. Nhãn viết XOAY bên
@@ -283,6 +288,15 @@ criteria:
     rule: "sụt áp KHÔNG giảm khi lưu lượng tăng"
     fail_means: "nối sai đoạn, hoặc lẫn đường của họ đồ thị khác"
 
+  - id: C19-độ-ổn-định-điều-áp
+    rule: >
+      mọi ô họ áp-vào→áp-ra: đúng n_panels, mỗi ô đúng MỘT đường, đọc được điều
+      kiện thử khớp `condition`, và áp ra nằm trong ±25% mức đặt trên toàn dải
+      áp vào.
+    fail_means: >
+      thiếu điều kiện thử thì số vô nghĩa (trôi 0,03 MPa ở 20 L/min không nói gì
+      về 2000 L/min). Áp ra trôi quá mức đặt nghĩa là đọc nhầm sang đồ thị khác.
+
   - id: C18-cỡ-cửa
     rule: >
       MỌI ô lưu lượng→áp ra đọc được cỡ cửa; 6 ô trang 22 khớp cột `port` trong
@@ -336,8 +350,10 @@ gaps:
      đường vector: dò ảnh không phân biệt được kiểu nét, và phải dùng bất biến
      'một đường cho mỗi áp đặt' để loại vạch lưới còn sót. 3 ô áp-vào→áp-ra cùng
      trang vẫn TỪ CHỐI như mọi trang khác."
-  - "pressure_char (tr23/104/129): nhận dạng được nhưng TỪ CHỐI số hoá — engine
-     chưa cần, và chưa có ground truth riêng."
+  - "pressure_char: 22/24 ô đã số hoá. HAI trang bị TỪ CHỐI vì không đọc được
+     điều kiện thử: es40-72-AR_M-D tr11 (3 ô) và ES40-60-AR10-A tr2 (1 ô). Số
+     của họ này chỉ có nghĩa KÈM điều kiện (áp ra đặt + lưu lượng), nên thiếu
+     điều kiện thì bỏ, không đoán."
   - "ES40-60-AR10-A.pdf tr2 (AR10-A, 1 ô): ĐƯỜNG CONG KHÔNG CÓ trong PDF dưới
      dạng vector. Đã truy: 0 ảnh raster nhúng, 41 đoạn trong vùng ô đều NẰM NGANG
      (lưới), và 0 path nhiều điểm ở cả lớp stroke lẫn lớp fill. Trục và tiêu đề

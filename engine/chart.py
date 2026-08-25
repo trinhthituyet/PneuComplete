@@ -307,6 +307,34 @@ def frl_min_size_for_port(code, family="AC"):
     return None, None
 
 
+def frl_regulation_drift(size, family="AC"):
+    """Độ TRÔI áp ra khi áp nguồn dao động. Trả (mpa, note) | (None, note).
+
+    Dùng để kiểm giả thiết của pick_frl_size: engine đặt điều áp một bậc (0,1 MPa)
+    trên mức cần, và bậc đó phải LỚN HƠN độ trôi do áp nguồn — nếu không thì áp
+    nguồn tụt là áp ra rơi xuống dưới mức cần dù cỡ thân đủ.
+
+    Số kèm ĐIỀU KIỆN: đo ở lưu lượng 20 L/min, mức đặt 0,2 MPa. Không ngoại suy
+    sang lưu lượng khác — chỉ dùng như một BIÊN THAM KHẢO, và note nói rõ vậy.
+    """
+    for cid, ch in load_all().items():
+        if not cid.startswith("frl_reg_"):
+            continue
+        m = re.match(r"([A-Z]+)(\d+)([A-Z]*)", ch.get("model_label") or "")
+        if not m or m.group(1) != family or m.group(3) or int(m.group(2)) != int(size):
+            continue
+        pts = (ch.get("series") or [{}])[0].get("points") or []
+        if len(pts) < 2:
+            continue
+        ys = [y for _, y in pts]
+        cond = ch.get("condition") or {}
+        return max(ys) - min(ys), (
+            f"trôi {max(ys) - min(ys):.3f} MPa khi áp vào {pts[0][0]:g}→{pts[-1][0]:g} "
+            f"MPa · ĐO Ở mức đặt {cond.get('set_mpa')} MPa, lưu lượng "
+            f"{cond.get('flow_lpm')} L/min — chỉ là BIÊN THAM KHẢO cho lưu lượng khác")
+    return None, f"chưa số hoá đồ thị độ ổn định của {family}{size}"
+
+
 def pick_frl_size(required_lpm, need_mpa, supply_mpa=None, family="AC",
                   lubricator=False, mist_separator=False):
     """Cỡ FRL nhỏ nhất giữ được áp ra ≥ need_mpa tại required_lpm.
@@ -394,11 +422,21 @@ def pick_frl_size(required_lpm, need_mpa, supply_mpa=None, family="AC",
                        + ", ".join(f"{l}={'ngoài dải' if v is None else v}"
                                    for l, v in tried[:-1])
                        if len(tried) > 1 else "")
+            drift, dnote = frl_regulation_drift(size_now, family)
+            step = set_mpa - need
+            drift_warn = ""
+            if drift is not None and drift > step:
+                # Bậc đặt thêm KHÔNG che nổi độ trôi do áp nguồn — nói ra, vì
+                # cỡ thân đủ mà áp ra vẫn rơi dưới mức cần thì người dùng sẽ
+                # tìm sai chỗ.
+                drift_warn = (f" ⚠ Bậc đặt thêm {step:.1f} MPa NHỎ HƠN độ trôi "
+                              f"theo áp nguồn ({dnote}) — áp nguồn dao động có "
+                              f"thể kéo áp ra xuống dưới {need:g} MPa.")
             return size, (
                 f"cần {round(float(required_lpm))} L/min ANR và giữ ≥{need:g} MPa. "
                 f"Áp nguồn {float(supply_mpa):g} MPa → dùng đường áp vào {inlet:g}, "
                 f"đặt {set_mpa:g} MPa (bậc kế tiếp trên mức cần). {lab} còn "
-                f"{y:.3f} MPa ở lưu lượng đó → đủ. {smaller} · {note}")
+                f"{y:.3f} MPa ở lưu lượng đó → đủ. {smaller} · {note}{drift_warn}")
     if addon_fail and len(addon_fail) == len(tried):
         # MỌI cỡ đều tắc vì phụ kiện, không phải vì bộ điều áp — nói đúng nguyên
         # nhân, nếu không người dùng đi tìm sai chỗ.

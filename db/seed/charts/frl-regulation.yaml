@@ -1,0 +1,200 @@
+# ĐỘ ỔN ĐỊNH ĐIỀU ÁP: áp vào → áp ra, của bộ điều áp FRL.
+#
+# ⚠ TỆP NÀY DO MÁY SINH — sửa tay sẽ bị ghi đè.
+#     python3 -m parsers.chart_yaml --write
+#
+# ── SỐ CHỈ CÓ NGHĨA KÈM ĐIỀU KIỆN ───────────────────────────────────────────
+# Đồ thị đo tại MỘT điểm làm việc, ghi bằng chữ ngay trên trang:
+#     "Inlet pressure of 0.7 MPa, Outlet pressure of 0.2 MPa, Flow rate 20 L/min"
+# Trôi 0,03 MPa ở lưu lượng 20 L/min KHÔNG nói gì về hành vi ở 2000 L/min. Nên
+# mỗi bảng mang theo `condition`, và engine phải từ chối nếu điều kiện không hợp.
+# Trang nào không đọc được điều kiện thì KHÔNG có trong tệp này (2 trang, 4 ô).
+#
+# ── DÙNG ĐỂ LÀM GÌ ──────────────────────────────────────────────────────────
+# Cho biết áp ra trôi bao nhiêu khi áp nguồn dao động. Đo được: trôi 0,024–0,033
+# MPa quanh mức đặt 0,2 khi áp vào đi từ 0,24 đến 0,99 MPa — tức bộ điều áp giữ
+# khá tốt, và áp nguồn tụt trong dải đó không làm hỏng áp làm việc.
+#
+#   điểm = [áp vào MPa, áp ra MPa]
+
+source:
+  catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+  pdf_page: "23 (AC), 104 (AR), 129 (AW)"
+  table: "Pressure Characteristics (Representative values)"
+confidence: 0.85
+digitized_by: "parsers/chart_yaml.py — tự động từ vector PDF, cổng tests/test_chart.py"
+axis:
+  x: {name: inlet_pressure, unit: MPa}
+  y: {name: outlet_pressure, unit: MPa}
+
+charts:
+  - chart_id: frl_reg_ac20_d
+    model_label: "AC20-D"
+    applies_to: [AC20-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 23
+    condition: {set_mpa: 0.2, flow_lpm: 20.0, inlet_mpa: 0.7}
+    kind: continuous
+    series:
+      - label: "outlet"
+        points: [[0.2, 0.22], [0.2, 0.221], [0.3, 0.222], [0.3, 0.223], [0.3, 0.223], [0.3, 0.223], [0.3, 0.223], [0.4, 0.222], [0.4, 0.221], [0.4, 0.22], [0.5, 0.219], [0.5, 0.217], [0.5, 0.216], [0.6, 0.213], [0.7, 0.208], [0.8, 0.203], [0.8, 0.2], [0.9, 0.198], [0.9, 0.195], [1, 0.192], [1, 0.191]]
+  - chart_id: frl_reg_ac30_d
+    model_label: "AC30-D"
+    applies_to: [AC30-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 23
+    condition: {set_mpa: 0.2, flow_lpm: 20.0, inlet_mpa: 0.7}
+    kind: continuous
+    series:
+      - label: "outlet"
+        points: [[0.2, 0.218], [0.2, 0.218], [0.3, 0.219], [0.3, 0.219], [0.3, 0.22], [0.3, 0.218], [0.4, 0.214], [0.4, 0.21], [0.5, 0.207], [0.5, 0.205], [0.5, 0.204], [0.6, 0.202], [0.6, 0.201], [0.6, 0.201], [0.7, 0.2], [0.7, 0.2], [0.7, 0.2], [0.7, 0.2], [0.7, 0.199], [0.8, 0.197], [0.8, 0.196], [0.9, 0.195], [0.9, 0.195], [1, 0.194], [1, 0.194]]
+  - chart_id: frl_reg_ac40_d
+    model_label: "AC40-D"
+    applies_to: [AC40-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 23
+    condition: {set_mpa: 0.2, flow_lpm: 20.0, inlet_mpa: 0.7}
+    kind: continuous
+    series:
+      - label: "outlet"
+        points: [[0.2, 0.22], [0.2, 0.22], [0.3, 0.22], [0.3, 0.22], [0.3, 0.219], [0.4, 0.216], [0.4, 0.212], [0.5, 0.208], [0.5, 0.206], [0.6, 0.204], [0.6, 0.202], [0.7, 0.201], [0.7, 0.2], [0.7, 0.2], [0.7, 0.2], [0.8, 0.199], [0.8, 0.198], [0.9, 0.197], [0.9, 0.196], [1, 0.196], [1, 0.196]]
+  - chart_id: frl_reg_ac40_06_d
+    model_label: "AC40-06-D"
+    applies_to: [AC40-06-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 23
+    condition: {set_mpa: 0.2, flow_lpm: 20.0, inlet_mpa: 0.7}
+    kind: continuous
+    series:
+      - label: "outlet"
+        points: [[0.2, 0.219], [0.3, 0.219], [0.3, 0.218], [0.3, 0.215], [0.4, 0.212], [0.4, 0.209], [0.5, 0.206], [0.5, 0.204], [0.6, 0.202], [0.6, 0.201], [0.7, 0.2], [0.7, 0.203], [0.8, 0.201], [0.9, 0.199], [0.9, 0.197], [1, 0.194], [1, 0.193]]
+  - chart_id: frl_reg_ac50_d
+    model_label: "AC50-D"
+    applies_to: [AC50-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 23
+    condition: {set_mpa: 0.2, flow_lpm: 20.0, inlet_mpa: 0.7}
+    kind: continuous
+    series:
+      - label: "outlet"
+        points: [[0.2, 0.222], [0.3, 0.222], [0.3, 0.221], [0.3, 0.22], [0.4, 0.215], [0.4, 0.212], [0.5, 0.208], [0.5, 0.206], [0.6, 0.203], [0.6, 0.202], [0.7, 0.2], [0.7, 0.202], [0.8, 0.199], [0.9, 0.197], [0.9, 0.195], [1, 0.193], [1, 0.192]]
+  - chart_id: frl_reg_ac60_d
+    model_label: "AC60-D"
+    applies_to: [AC60-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 23
+    condition: {set_mpa: 0.2, flow_lpm: 20.0, inlet_mpa: 0.7}
+    kind: continuous
+    series:
+      - label: "outlet"
+        points: [[0.2, 0.221], [0.3, 0.221], [0.3, 0.22], [0.3, 0.217], [0.4, 0.214], [0.4, 0.211], [0.5, 0.208], [0.5, 0.205], [0.6, 0.203], [0.6, 0.202], [0.7, 0.2], [0.7, 0.202], [0.8, 0.2], [0.9, 0.198], [0.9, 0.196], [1, 0.194], [1, 0.193]]
+  - chart_id: frl_reg_ar20_d
+    model_label: "AR20(K)-D"
+    applies_to: [AR20-D, AR20K-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 104
+    condition: {set_mpa: 0.2, flow_lpm: 20.0, inlet_mpa: 0.7}
+    kind: continuous
+    series:
+      - label: "outlet"
+        points: [[0.2, 0.221], [0.2, 0.221], [0.3, 0.222], [0.3, 0.223], [0.3, 0.223], [0.3, 0.221], [0.4, 0.217], [0.4, 0.212], [0.5, 0.208], [0.6, 0.205], [0.6, 0.203], [0.7, 0.201], [0.7, 0.2], [0.7, 0.199], [0.8, 0.198], [0.8, 0.196], [0.8, 0.195], [0.9, 0.194], [0.9, 0.192], [1, 0.191], [1, 0.19]]
+  - chart_id: frl_reg_ar30_d
+    model_label: "AR30(K)-D"
+    applies_to: [AR30-D, AR30K-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 104
+    condition: {set_mpa: 0.2, flow_lpm: 20.0, inlet_mpa: 0.7}
+    kind: continuous
+    series:
+      - label: "outlet"
+        points: [[0.2, 0.221], [0.2, 0.221], [0.3, 0.222], [0.3, 0.222], [0.3, 0.222], [0.3, 0.221], [0.4, 0.217], [0.4, 0.213], [0.5, 0.21], [0.5, 0.207], [0.6, 0.204], [0.6, 0.202], [0.7, 0.2], [0.8, 0.199], [0.8, 0.197], [0.9, 0.195], [1, 0.195]]
+  - chart_id: frl_reg_ar40_d
+    model_label: "AR40(K)-D"
+    applies_to: [AR40-D, AR40K-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 104
+    condition: {set_mpa: 0.2, flow_lpm: 20.0, inlet_mpa: 0.7}
+    kind: continuous
+    series:
+      - label: "outlet"
+        points: [[0.2, 0.217], [0.2, 0.217], [0.3, 0.217], [0.3, 0.217], [0.3, 0.216], [0.3, 0.214], [0.4, 0.211], [0.5, 0.208], [0.5, 0.206], [0.5, 0.205], [0.6, 0.203], [0.6, 0.202], [0.7, 0.201], [0.7, 0.201], [0.7, 0.201], [0.7, 0.201], [0.7, 0.201], [0.7, 0.2], [0.7, 0.199], [0.8, 0.198], [0.8, 0.197], [0.9, 0.196], [0.9, 0.196], [1, 0.196], [1, 0.196]]
+  - chart_id: frl_reg_ar40_06_d
+    model_label: "AR40(K)-06-D"
+    applies_to: [AR40-06-D, AR40K-06-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 104
+    condition: {set_mpa: 0.2, flow_lpm: 20.0, inlet_mpa: 0.7}
+    kind: continuous
+    series:
+      - label: "outlet"
+        points: [[0.2, 0.22], [0.3, 0.219], [0.3, 0.219], [0.3, 0.216], [0.4, 0.213], [0.4, 0.21], [0.5, 0.207], [0.5, 0.204], [0.6, 0.203], [0.6, 0.201], [0.7, 0.201], [0.7, 0.204], [0.8, 0.202], [0.8, 0.199], [0.9, 0.197], [1, 0.195], [1, 0.193]]
+  - chart_id: frl_reg_ar50_d
+    model_label: "AR50(K)-D"
+    applies_to: [AR50-D, AR50K-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 104
+    condition: {set_mpa: 0.2, flow_lpm: 20.0, inlet_mpa: 0.7}
+    kind: continuous
+    series:
+      - label: "outlet"
+        points: [[0.2, 0.223], [0.3, 0.223], [0.3, 0.222], [0.3, 0.219], [0.4, 0.216], [0.4, 0.212], [0.5, 0.209], [0.5, 0.212], [0.6, 0.204], [0.6, 0.202], [0.7, 0.201], [0.7, 0.202], [0.8, 0.2], [0.8, 0.198], [0.9, 0.196], [1, 0.194], [1, 0.192]]
+  - chart_id: frl_reg_ar60_d
+    model_label: "AR60(K)-D"
+    applies_to: [AR60-D, AR60K-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 104
+    condition: {set_mpa: 0.2, flow_lpm: 20.0, inlet_mpa: 0.7}
+    kind: continuous
+    series:
+      - label: "outlet"
+        points: [[0.2, 0.221], [0.3, 0.221], [0.3, 0.221], [0.3, 0.218], [0.4, 0.214], [0.4, 0.211], [0.5, 0.208], [0.5, 0.206], [0.6, 0.204], [0.6, 0.202], [0.7, 0.201], [0.7, 0.203], [0.8, 0.201], [0.8, 0.199], [0.9, 0.197], [1, 0.195], [1, 0.193]]
+  - chart_id: frl_reg_aw20_d
+    model_label: "AW20(K)-D"
+    applies_to: [AW20-D, AW20K-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 129
+    condition: {set_mpa: 0.2, flow_lpm: 20.0, inlet_mpa: 0.7}
+    kind: continuous
+    series:
+      - label: "outlet"
+        points: [[0.2, 0.21], [0.2, 0.211], [0.3, 0.212], [0.3, 0.213], [0.3, 0.213], [0.4, 0.211], [0.4, 0.207], [0.5, 0.204], [0.6, 0.201], [0.6, 0.201], [0.7, 0.2], [0.7, 0.2], [0.7, 0.2], [0.7, 0.2], [0.8, 0.199], [0.8, 0.199], [0.9, 0.198], [0.9, 0.198], [0.9, 0.197], [1, 0.197], [1, 0.197]]
+  - chart_id: frl_reg_aw30_d
+    model_label: "AW30(K)-D"
+    applies_to: [AW30-D, AW30K-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 129
+    condition: {set_mpa: 0.2, flow_lpm: 20.0, inlet_mpa: 0.7}
+    kind: continuous
+    series:
+      - label: "outlet"
+        points: [[0.2, 0.216], [0.2, 0.217], [0.3, 0.217], [0.3, 0.217], [0.3, 0.217], [0.3, 0.216], [0.3, 0.215], [0.3, 0.214], [0.4, 0.212], [0.4, 0.211], [0.4, 0.208], [0.5, 0.206], [0.5, 0.204], [0.6, 0.203], [0.6, 0.202], [0.7, 0.201], [0.7, 0.2], [0.7, 0.2], [0.7, 0.2], [0.8, 0.199], [0.8, 0.199], [0.8, 0.199], [0.9, 0.199], [1, 0.199], [1, 0.199]]
+  - chart_id: frl_reg_aw40_d
+    model_label: "AW40(K)-D"
+    applies_to: [AW40-D, AW40K-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 129
+    condition: {set_mpa: 0.2, flow_lpm: 20.0, inlet_mpa: 0.7}
+    kind: continuous
+    series:
+      - label: "outlet"
+        points: [[0.2, 0.218], [0.2, 0.218], [0.3, 0.218], [0.3, 0.217], [0.3, 0.217], [0.4, 0.215], [0.5, 0.212], [0.5, 0.21], [0.6, 0.208], [0.6, 0.206], [0.7, 0.204], [0.8, 0.202], [0.8, 0.2], [0.9, 0.199], [0.9, 0.198], [1, 0.196], [1, 0.195]]
+  - chart_id: frl_reg_aw40_06_d
+    model_label: "AW40(K)-06-D"
+    applies_to: [AW40-06-D, AW40K-06-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 129
+    condition: {set_mpa: 0.2, flow_lpm: 20.0, inlet_mpa: 0.7}
+    kind: continuous
+    series:
+      - label: "outlet"
+        points: [[0.2, 0.22], [0.3, 0.22], [0.3, 0.219], [0.3, 0.217], [0.4, 0.214], [0.4, 0.211], [0.5, 0.208], [0.5, 0.205], [0.6, 0.203], [0.6, 0.202], [0.7, 0.2], [0.7, 0.203], [0.8, 0.201], [0.8, 0.199], [0.9, 0.196], [1, 0.194], [1, 0.192]]
+  - chart_id: frl_reg_aw60_d
+    model_label: "AW60(K)-D"
+    applies_to: [AW60-D, AW60K-D]
+    catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
+    pdf_page: 129
+    condition: {set_mpa: 0.2, flow_lpm: 20.0, inlet_mpa: 0.7}
+    kind: continuous
+    series:
+      - label: "outlet"
+        points: [[0.2, 0.223], [0.3, 0.223], [0.3, 0.221], [0.3, 0.221], [0.4, 0.214], [0.4, 0.211], [0.5, 0.208], [0.5, 0.206], [0.6, 0.204], [0.6, 0.202], [0.7, 0.2], [0.7, 0.205], [0.8, 0.203], [0.9, 0.201], [0.9, 0.199], [1, 0.195], [1, 0.192]]

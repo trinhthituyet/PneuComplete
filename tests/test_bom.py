@@ -768,6 +768,33 @@ def test_moi_bang_do_thi_deu_khai_nguon_kieu():
             assert ch.get("source_kind") in ("vector", "raster"), (cid, ch.get("source_kind"))
 
 
+def test_do_troi_dieu_ap_kiem_duoc_gia_thiet_mot_bac():
+    """pick_frl_size giả định đặt thêm 1 bậc 0,1 MPa che được dao động áp nguồn.
+
+    Giờ có số thật để KIỂM giả thiết đó thay vì tin: trôi đo được 0,024–0,033 MPa
+    < 0,1 nên giả thiết đứng. Nếu catalog khác cho số lớn hơn, engine phải cảnh báo.
+    """
+    from engine import chart
+    for sz in ("20", "30", "40", "50", "60"):
+        d, note = chart.frl_regulation_drift(sz)
+        assert d is not None, note
+        assert 0 < d < 0.1, f"AC{sz} trôi {d} — bậc 0,1 MPa không còn che nổi"
+        assert "BIÊN THAM KHẢO" in note, note
+
+
+def test_bang_do_on_dinh_phai_kem_dieu_kien():
+    """Số của họ này vô nghĩa nếu thiếu điều kiện thử."""
+    from engine import chart
+    n = 0
+    for cid, ch in chart.load_all().items():
+        if not cid.startswith("frl_reg_"):
+            continue
+        n += 1
+        c = ch.get("condition") or {}
+        assert c.get("set_mpa") and c.get("flow_lpm"), (cid, c)
+    assert n >= 15, f"chỉ có {n} bảng độ ổn định"
+
+
 def test_khong_lan_series_AR_voi_AR_M():
     """'AR20M(K)-D' là series AR…M, KHÁC 'AR20(K)-D' — không được gộp một họ."""
     from engine import chart

@@ -332,6 +332,33 @@ def _criteria(got, gt):
         "cỡ lớn hơn sụt áp ít hơn · " + " ".join(det16)
         + (" · SAI " + "; ".join(bad16[:2]) if bad16 else ""))
 
+    # ── C19: họ áp-vào→áp-ra ───────────────────────────────────────────────
+    pc_pages = [p for p in pages if p["kind"] == "pressure_char"]
+    bad19, det19 = [], []
+    for w in pc_pages:
+        ps = [p for p in (_pg(got, gt, w).get("panels") or [])
+              if p.get("kind") == "pressure_char"]
+        n_ser = sum(1 for p in ps if p.get("series"))
+        tag = f"tr{w['page']}"
+        if len(ps) != w.get("n_panels") or n_ser != w.get("n_panels"):
+            bad19.append(f"{tag}:{n_ser}/{w.get('n_panels')}ô")
+        for p in ps:
+            if len(p.get("series") or []) > 1:
+                bad19.append(f"{tag}/{p.get('title')}: {len(p['series'])} đường")
+            c = p.get("condition") or {}
+            want_c = w.get("condition") or {}
+            if any(c.get(k) != v for k, v in want_c.items()):
+                bad19.append(f"{tag}/{p.get('title')}: điều kiện {c}≠{want_c}")
+            for sr in p.get("series") or []:
+                ys = [y for _, y in sr["points"]]
+                sp = want_c.get("set_mpa") or 0
+                if sp and (max(ys) > sp * 1.25 or min(ys) < sp * 0.75):
+                    bad19.append(f"{tag}/{p.get('title')}: áp ra {min(ys):.3f}"
+                                 f"..{max(ys):.3f} lệch >25% mức đặt {sp}")
+        det19.append(f"{tag}:{n_ser}/{w.get('n_panels')}ô")
+    rec("C19-độ-ổn-định-điều-áp", bool(pc_pages) and not bad19,
+        " ".join(det19) + (" · SAI " + "; ".join(bad19[:2]) if bad19 else ""))
+
     # ── C18: cỡ cửa của mỗi ô ──────────────────────────────────────────────
     # Đồ thị được đo ở MỘT cỡ cửa, nên cỡ cửa là một phần của kết luận chọn cỡ.
     # Ba phần: đọc được hết · khớp bản đọc tay ở tr22 · không giảm theo cỡ thân.
@@ -432,12 +459,29 @@ def negative_controls(got, gt):
     cases.append(("sai tỉ lệ trục X 10%", g, "C6-trong-khung"))
 
     g = copy.deepcopy(got)                                # 4. trộn họ đồ thị
-    for p in g[(AC_PDF, 23)]["panels"]:
-        p["kind"] = "flow_outlet"
-        p["series"] = [{"inlet_mpa": 1.0, "dashed": False,
-                        "points": [[0.0, 0.8], [100.0, 0.7], [200.0, 0.6]]}]
-    g[(AC_PDF, 23)]["kind"] = "flow_outlet"
-    cases.append(("coi trang áp-vào là lưu-lượng", g, "C9-an-toàn"))
+    # Gieo vào trang họ NGOÀI phạm vi. Trước đây gieo ở tr23 (áp-vào→áp-ra) và
+    # C9 bắt vì họ đó bị từ chối; giờ họ đó ĐÃ trong phạm vi nên phép gieo cũ
+    # không còn là lỗi — phải đổi sang một trang thật sự ngoài phạm vi, nếu
+    # không thì đối chứng này chỉ còn kiểm một tình huống không tồn tại.
+    out_pages = [w for w in gt["pages"]
+                 if w["kind"] not in (gt.get("in_scope_kinds") or [])]
+    if out_pages:
+        w0 = out_pages[0]
+        key = (w0.get("pdf", AC_PDF), w0["page"])
+        for p in g[key]["panels"]:
+            p["kind"] = "flow_outlet"
+            p["series"] = [{"inlet_mpa": 1.0, "dashed": False,
+                            "points": [[0.0, 0.8], [100.0, 0.7], [200.0, 0.6]]}]
+        cases.append((f"gán số cho họ ngoài phạm vi (tr{w0['page']})", g,
+                      "C9-an-toàn"))
+    else:
+        # KHÔNG còn họ nào ngoài phạm vi → nói ra, đừng lặng lẽ bỏ đối chứng.
+        g2 = copy.deepcopy(got)
+        for p in g2[(AC_PDF, 23)]["panels"]:
+            p["series"] = [{"inlet_mpa": None, "dashed": False,
+                            "points": [[0.2, 0.9], [1.0, 0.05]]}]
+        cases.append(("áp ra trôi gần hết dải ở trang áp-vào", g2,
+                      "C19-độ-ổn-định-điều-áp"))
 
     g = copy.deepcopy(got)                                # 5. mất một họ áp vào
     ps = g[(AC_PDF, 22)]["panels"]
@@ -497,6 +541,11 @@ def negative_controls(got, gt):
             ps[0]["series"] = ps[0]["series"] + [copy.deepcopy(src)]
             cases.append(("nhân đôi 1 đường của ô raster", g,
                           "C10-đủ-đúng-họ-áp-vào"))
+
+    g = copy.deepcopy(got)                                # 13. mất điều kiện thử
+    for p in g[(AC_PDF, 23)]["panels"]:
+        p.pop("condition", None)
+    cases.append(("bỏ điều kiện thử của trang áp-vào", g, "C19-độ-ổn-định-điều-áp"))
 
     print("\nĐỐI CHỨNG ÂM — cổng phải BẮT ĐƯỢC từng lỗi cố tình gieo")
     print("-" * 70)
