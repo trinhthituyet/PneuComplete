@@ -823,6 +823,31 @@ def test_KQ2_moi_ma_BOM_that_van_parse_duoc():
         con.close()
 
 
+def test_AS1_chan_cua_khong_co_o_co_than():
+    """Bảng How to Order khai thẳng: thân 1→M5/10-32UNF · 2→1/8,1/4 · 3→3/8 · 4→1/2."""
+    from engine import generate as G
+    con = db.connect()
+    sid = con.execute("select id from series where catalog_id='AS1-E'").fetchone()["id"]
+    base = {"shape": "2", "control": "1", "fitting": "1F", "push_lock": "A"}
+    try:
+        for want, exp in (
+                ({"body_size": "1", "port_size": "M5", "tube_od": "06"},
+                 "AS1211F-M5-06A"),
+                ({"body_size": "2", "port_size": "01", "tube_od": "06"},
+                 "AS2211F-01-06A"),
+                ({"body_size": "3", "port_size": "03", "tube_od": "08"},
+                 "AS3211F-03-08A")):
+            got = G.generate(con, sid, dict(base, **want)).get("part_number")
+            assert got == exp, f"{want} → {got}, cần {exp}"
+        for want, tag in (
+                ({"body_size": "1", "port_size": "04", "tube_od": "06"}, "thân1+1/2"),
+                ({"body_size": "4", "port_size": "M5", "tube_od": "06"}, "thân4+M5")):
+            g = G.generate(con, sid, dict(base, **want))
+            assert not g.get("ok"), f"{tag} không có trong bảng mà vẫn sinh: {g}"
+    finally:
+        con.close()
+
+
 def test_co_25_khong_con_trong_ngu_phap_AC_D():
     """Catalog -D không có AC25 (grep toàn PDF: 0 lần)."""
     con = db.connect()

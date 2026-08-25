@@ -59,11 +59,11 @@ slots:
     value_type: enum
     separator: "-"
     options:
-      - {code: "M5", label: "M5 x 0.8", attrs: {port_standard: "M", port_size: "M5"}}
-      - {code: "01", label: "R1/8",     attrs: {port_standard: "R", port_size: "1/8"}}
-      - {code: "02", label: "R1/4",     attrs: {port_standard: "R", port_size: "1/4"}}
-      - {code: "03", label: "R3/8",     attrs: {port_standard: "R", port_size: "3/8"}}
-      - {code: "04", label: "R1/2",     attrs: {port_standard: "R", port_size: "1/2"}}
+      - {code: "M5", label: "M5 x 0.8", attrs: {port_standard: "M", port_size: "M5"}, requires: {body_size: ["1"]}}
+      - {code: "01", label: "R1/8",     attrs: {port_standard: "R", port_size: "1/8"}, requires: {body_size: ["2"]}}
+      - {code: "02", label: "R1/4",     attrs: {port_standard: "R", port_size: "1/4"}, requires: {body_size: ["2"]}}
+      - {code: "03", label: "R3/8",     attrs: {port_standard: "R", port_size: "3/8"}, requires: {body_size: ["3"]}}
+      - {code: "04", label: "R1/2",     attrs: {port_standard: "R", port_size: "1/2"}, requires: {body_size: ["4"]}}
 
   - pos: 6
     name: tube_od

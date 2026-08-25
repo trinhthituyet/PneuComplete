@@ -64,12 +64,12 @@ slots:
     value_type: enum
     separator: "-"
     options:
-      - {code: "M5",     label: "M5 x 0.8",  attrs: {port_standard: "M",   port_size: "M5"}}
-      - {code: "U10/32", label: "10-32UNF",  attrs: {port_standard: "UNF", port_size: "U10/32"}}
-      - {code: "01",     label: "R1/8",      attrs: {port_standard: "R",   port_size: "1/8"}}
-      - {code: "02",     label: "R1/4",      attrs: {port_standard: "R",   port_size: "1/4"}}
-      - {code: "03",     label: "R3/8",      attrs: {port_standard: "R",   port_size: "3/8"}}
-      - {code: "04",     label: "R1/2",      attrs: {port_standard: "R",   port_size: "1/2"}}
+      - {code: "M5",     label: "M5 x 0.8",  attrs: {port_standard: "M",   port_size: "M5"}, requires: {body_size: ["1"]}}
+      - {code: "U10/32", label: "10-32UNF",  attrs: {port_standard: "UNF", port_size: "U10/32"}, requires: {body_size: ["1"]}}
+      - {code: "01",     label: "R1/8",      attrs: {port_standard: "R",   port_size: "1/8"}, requires: {body_size: ["2"]}}
+      - {code: "02",     label: "R1/4",      attrs: {port_standard: "R",   port_size: "1/4"}, requires: {body_size: ["2"]}}
+      - {code: "03",     label: "R3/8",      attrs: {port_standard: "R",   port_size: "3/8"}, requires: {body_size: ["3"]}}
+      - {code: "04",     label: "R1/2",      attrs: {port_standard: "R",   port_size: "1/2"}, requires: {body_size: ["4"]}}
 
   # chỉ có ở body size 1 (spine: AS 1 2 0 1 F  M5 E 06 A)
   - pos: 6
