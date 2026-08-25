@@ -786,6 +786,43 @@ def test_AR_D_chan_to_hop_khong_co_trong_bang():
         con.close()
 
 
+def test_KQ2_chan_to_hop_khong_co_trong_catalog():
+    """Ràng buộc rút từ 1366 mã KQ2 catalog LIỆT KÊ, không từ ma trận đánh dấu."""
+    from engine import generate as G
+    con = db.connect()
+    sid = con.execute("select id from series where catalog_id='KQ2-E'").fetchone()["id"]
+    base = {"port_standard": "R", "thread_material": "A"}
+    try:
+        for want, tag in (
+                ({"shape": "D", "tube_od": "23", "port_size": "1/4"}, "D ø3.2"),
+                ({"shape": "VF", "tube_od": "16", "port_size": "3/8"}, "VF ø16"),
+                ({"shape": "H", "tube_od": "02", "port_size": "3/8"}, "ø2 + cửa 3/8")):
+            g = G.generate(con, sid, dict(base, **want))
+            assert not g.get("ok"), f"{tag} không có trong catalog mà vẫn sinh: {g}"
+        for want, exp in (
+                ({"shape": "H", "tube_od": "06", "port_size": "1/4"}, "KQ2H06-02A1"),
+                ({"shape": "L", "tube_od": "06", "port_size": "1/8",
+                  "thread_material": "N"}, "KQ2L06-01N1")):
+            got = G.generate(con, sid, dict(base, **want)).get("part_number")
+            assert got == exp, f"{want} → {got}, cần {exp}"
+    finally:
+        con.close()
+
+
+def test_KQ2_moi_ma_BOM_that_van_parse_duoc():
+    """19 mã KQ2 khách hàng đã mua — ràng buộc không được loại mã nào."""
+    from engine import parser as P
+    con = db.connect()
+    try:
+        codes = [r["raw_code"] for r in con.execute(
+            "select distinct raw_code from bom_line where raw_code like 'KQ2%'")]
+        bad = [c for c in codes if not P.parse(con, c).get("ok")]
+        assert not bad, f"ràng buộc làm hỏng parse: {bad}"
+        assert len(codes) >= 15, len(codes)
+    finally:
+        con.close()
+
+
 def test_co_25_khong_con_trong_ngu_phap_AC_D():
     """Catalog -D không có AC25 (grep toàn PDF: 0 lần)."""
     con = db.connect()

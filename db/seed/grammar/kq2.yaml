@@ -54,19 +54,26 @@ slots:
       - {code: "TW", label: "Cross",                       attrs: {shape: cross, ends: 4}}
       - {code: "TX", label: "Different diameter cross",    attrs: {shape: cross_diff, ends: 4}}
 
+  # ── THIẾU: 7 CỠ ỐNG INCH ────────────────────────────────────────────────
+  # Catalog liệt kê cả cỡ inch, mã LẺ: 01=ø1/8 · 03=ø5/32 · 05=ø3/16 · 07=ø1/4
+  # · 09=ø5/16 · 11=ø3/8 · 13=ø1/2 (mã CHẴN là mét). Ngữ pháp dưới đây chỉ khai
+  # 8 cỡ mét, nên mã inch KHÔNG parse được — tệ hơn: 'KQ2H01-32' bị đọc SAI
+  # thành port_size='01' thay vì tube_od='01'.
+  # CHƯA SỬA vì BOM khách hàng hiện có 0 dòng inch. Thêm cỡ inch thì phải kèm
+  # cỡ cửa UNF/NPT tương ứng, và phải kiểm lại toàn bộ ràng buộc.
   - pos: 2
     name: tube_od
     value_type: enum
     separator: ""
     options:
-      - {code: "02", label: "ø2",   attrs: {tube_od_mm: 2.0}}
-      - {code: "23", label: "ø3.2", attrs: {tube_od_mm: 3.2}}
-      - {code: "04", label: "ø4",   attrs: {tube_od_mm: 4.0}}
-      - {code: "06", label: "ø6",   attrs: {tube_od_mm: 6.0}}
-      - {code: "08", label: "ø8",   attrs: {tube_od_mm: 8.0}}
-      - {code: "10", label: "ø10",  attrs: {tube_od_mm: 10.0}}
-      - {code: "12", label: "ø12",  attrs: {tube_od_mm: 12.0}}
-      - {code: "16", label: "ø16",  attrs: {tube_od_mm: 16.0}}
+      - {code: "02", label: "ø2",   attrs: {tube_od_mm: 2.0}, requires: {shape: ["E", "H", "L", "S", "T", "U", "W", "Y"]}}
+      - {code: "23", label: "ø3.2", attrs: {tube_od_mm: 3.2}, requires: {shape: ["E", "F", "H", "L", "S", "T", "U", "W", "Y"]}}
+      - {code: "04", label: "ø4",   attrs: {tube_od_mm: 4.0}, requires: {shape: ["D", "E", "F", "H", "K", "L", "LE", "LF", "N", "S", "T", "TW", "U", "V", "VD", "VF", "VS", "VT", "W", "Y"]}}
+      - {code: "06", label: "ø6",   attrs: {tube_od_mm: 6.0}, requires: {shape: ["D", "E", "F", "H", "K", "L", "LE", "LF", "N", "S", "T", "TW", "TX", "U", "V", "VD", "VF", "VS", "VT", "W", "Y"]}}
+      - {code: "08", label: "ø8",   attrs: {tube_od_mm: 8.0}, requires: {shape: ["D", "E", "F", "H", "K", "L", "LE", "LF", "N", "S", "T", "TW", "TX", "U", "V", "VD", "VF", "VS", "VT", "W", "Y"]}}
+      - {code: "10", label: "ø10",  attrs: {tube_od_mm: 10.0}, requires: {shape: ["D", "E", "F", "H", "K", "L", "LE", "LF", "N", "S", "T", "TW", "TX", "U", "V", "VD", "VF", "VS", "VT", "W", "Y"]}}
+      - {code: "12", label: "ø12",  attrs: {tube_od_mm: 12.0}, requires: {shape: ["D", "E", "F", "H", "K", "L", "LE", "LF", "N", "S", "T", "TW", "U", "V", "VD", "VF", "VS", "VT", "W", "Y"]}}
+      - {code: "16", label: "ø16",  attrs: {tube_od_mm: 16.0}, requires: {shape: ["E", "F", "H", "K", "L", "N", "S", "T", "U", "V", "W", "Y"]}}
 
   - pos: 3
     name: port_size
@@ -78,24 +85,24 @@ slots:
          attrs: {port_standard: none, threaded: false}}
       - {code: "99",  label: 'Plug-in "Y" (cắm vào đầu fitting)',
          attrs: {port_standard: none, threaded: false}}
-      - {code: "M3",  label: "M3 x 0.5",      attrs: {port_standard: "M",  port_size: "M3", threaded: true}}
-      - {code: "M5",  label: "M5 x 0.8",      attrs: {port_standard: "M",  port_size: "M5", threaded: true}}
-      - {code: "M6",  label: "M6 x 1.0",      attrs: {port_standard: "M",  port_size: "M6", threaded: true}}
-      - {code: "01",  label: "R1/8, Rc1/8",   attrs: {port_standard: "R",  port_size: "1/8", threaded: true}}
-      - {code: "02",  label: "R1/4, Rc1/4",   attrs: {port_standard: "R",  port_size: "1/4", threaded: true}}
-      - {code: "03",  label: "R3/8, Rc3/8",   attrs: {port_standard: "R",  port_size: "3/8", threaded: true}}
+      - {code: "M3",  label: "M3 x 0.5",      attrs: {port_standard: "M",  port_size: "M3", threaded: true}, requires: {tube_od: ["02", "04", "23"]}}
+      - {code: "M5",  label: "M5 x 0.8",      attrs: {port_standard: "M",  port_size: "M5", threaded: true}, requires: {tube_od: ["02", "04", "06", "23"]}}
+      - {code: "M6",  label: "M6 x 1.0",      attrs: {port_standard: "M",  port_size: "M6", threaded: true}, requires: {tube_od: ["04", "06"]}}
+      - {code: "01",  label: "R1/8, Rc1/8",   attrs: {port_standard: "R",  port_size: "1/8", threaded: true}, requires: {tube_od: ["04", "06", "08", "10", "23"]}}
+      - {code: "02",  label: "R1/4, Rc1/4",   attrs: {port_standard: "R",  port_size: "1/4", threaded: true}, requires: {tube_od: ["04", "06", "08", "10", "12", "16", "23"]}}
+      - {code: "03",  label: "R3/8, Rc3/8",   attrs: {port_standard: "R",  port_size: "3/8", threaded: true}, requires: {tube_od: ["04", "06", "08", "10", "12", "16"]}}
       # ren G viết liền trước cỡ — BOM có KQ2L08-G02N
-      - {code: "G01", label: "G1/8",          attrs: {port_standard: "G",  port_size: "1/8", threaded: true}}
-      - {code: "G02", label: "G1/4",          attrs: {port_standard: "G",  port_size: "1/4", threaded: true}}
-      - {code: "G03", label: "G3/8",          attrs: {port_standard: "G",  port_size: "3/8", threaded: true}}
+      - {code: "G01", label: "G1/8",          attrs: {port_standard: "G",  port_size: "1/8", threaded: true}, requires: {tube_od: ["04", "06", "08", "10"]}}
+      - {code: "G02", label: "G1/4",          attrs: {port_standard: "G",  port_size: "1/4", threaded: true}, requires: {tube_od: ["04", "06", "08", "10", "12"]}}
+      - {code: "G03", label: "G3/8",          attrs: {port_standard: "G",  port_size: "3/8", threaded: true}, requires: {tube_od: ["06", "08", "10", "12", "16"]}}
       # ── union khác đường kính: ô này là cỡ ống thứ hai (trang 126) ────────
-      - {code: "23x", label: "ống thứ hai ø3.2", attrs: {port_standard: none, threaded: false, tube_od2_mm: 3.2}}
-      - {code: "04x", label: "ống thứ hai ø4",   attrs: {port_standard: none, threaded: false, tube_od2_mm: 4.0}}
-      - {code: "06x", label: "ống thứ hai ø6",   attrs: {port_standard: none, threaded: false, tube_od2_mm: 6.0}}
-      - {code: "08x", label: "ống thứ hai ø8",   attrs: {port_standard: none, threaded: false, tube_od2_mm: 8.0}}
-      - {code: "10x", label: "ống thứ hai ø10",  attrs: {port_standard: none, threaded: false, tube_od2_mm: 10.0}}
-      - {code: "12x", label: "ống thứ hai ø12",  attrs: {port_standard: none, threaded: false, tube_od2_mm: 12.0}}
-      - {code: "16x", label: "ống thứ hai ø16",  attrs: {port_standard: none, threaded: false, tube_od2_mm: 16.0}}
+      - {code: "23x", label: "ống thứ hai ø3.2", attrs: {port_standard: none, threaded: false, tube_od2_mm: 3.2}, requires: {tube_od: ["02"]}}
+      - {code: "04x", label: "ống thứ hai ø4",   attrs: {port_standard: none, threaded: false, tube_od2_mm: 4.0}, requires: {tube_od: ["02", "06", "08", "10", "12", "16", "23"]}}
+      - {code: "06x", label: "ống thứ hai ø6",   attrs: {port_standard: none, threaded: false, tube_od2_mm: 6.0}, requires: {tube_od: ["04", "08", "10", "23"]}}
+      - {code: "08x", label: "ống thứ hai ø8",   attrs: {port_standard: none, threaded: false, tube_od2_mm: 8.0}, requires: {tube_od: ["04", "06", "10", "12"]}}
+      - {code: "10x", label: "ống thứ hai ø10",  attrs: {port_standard: none, threaded: false, tube_od2_mm: 10.0}, requires: {tube_od: ["06", "08", "12"]}}
+      - {code: "12x", label: "ống thứ hai ø12",  attrs: {port_standard: none, threaded: false, tube_od2_mm: 12.0}, requires: {tube_od: ["08", "10"]}}
+      - {code: "16x", label: "ống thứ hai ø16",  attrs: {port_standard: none, threaded: false, tube_od2_mm: 16.0}, requires: {tube_od: ["12"]}}
 
   # Union khác đường kính: ô port_size mang CỠ ỐNG THỨ HAI, không phải ren.
   # Bảng Dimensions trang 126 liệt kê rõ: KQ2U06-08A = ø6 → ø8, KQ2U06-10A = ø6 → ø10.
