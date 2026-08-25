@@ -187,7 +187,8 @@
     gây sụt áp khi nhiều xy-lanh chạy cùng lúc. Nhưng catalog AC chỉ cho lưu lượng
     dưới dạng ĐỒ THỊ (Flow Characteristics), không phải bảng số, nên engine không
     kiểm được bằng máy. Vì vậy engine đòi bạn khai cỡ cửa đường trục chính
-    (`main_line_port_size`); nếu cỡ đó có ở nhiều cỡ AC thì engine liệt kê các cỡ
+    (`main_line_port_size` — từ 2026-08-25 engine TỰ suy từ cỡ cửa mà đồ thị lưu
+    lượng được đo ở, xem R-FRL-02); nếu cỡ đó có ở nhiều cỡ AC thì engine liệt kê các cỡ
     ứng viên để bạn chọn thay vì tự đoán. Số liệu duy nhất đọc được dạng số là
     "Rated flow [AFM]" của biến thể C/D: AC20C=200, AC25C=450, AC30C=450,
     AC40C=1100 L/min (trang 23) và AC20D=150, AC30D=330, AC40D=800 (trang 27) —

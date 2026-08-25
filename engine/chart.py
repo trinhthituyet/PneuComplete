@@ -252,6 +252,56 @@ def frl_drop(size, flow_lpm, family="AF"):
     return None, note
 
 
+def frl_port(size, family="AC"):
+    """Cỡ cửa mà đồ thị lưu lượng của cỡ này ĐƯỢC ĐO Ở.
+
+    Trả (mã_cửa, text_ra, inch_ra, text_vào) — mã=None nếu chưa số hoá.
+
+    VÌ SAO ENGINE SUY ĐƯỢC CỠ CỬA: đồ thị đo ở một cỡ cửa xác định, nên khi engine
+    đã dùng đường cong đó để chọn cỡ thân thì cỡ cửa không còn tự do — lắp nhỏ hơn
+    là đường cong thành lạc quan. Đây KHÔNG phải "cỡ cửa duy nhất bán ra": catalog
+    có nhiều tuỳ chọn (BOM thật có AC40B-03DG-A, cửa 3/8 trên thân 40 trong khi đồ
+    thị AC40 đo ở 1/2). Nên engine đề xuất cửa của đồ thị, và nếu bạn khai nhỏ hơn
+    thì cảnh báo, chứ không âm thầm dùng số lạc quan.
+    """
+    for sz, cid, lab in frl_charts(family):
+        if int(sz) != int(size):
+            continue
+        ch = get(cid) or {}
+        return (ch.get("port_code"), ch.get("port_out"),
+                ch.get("port_inch"), ch.get("port_in"))
+    return None, None, None, None
+
+
+PORT_INCH = {"01": 0.125, "02": 0.25, "03": 0.375, "04": 0.5, "06": 0.75,
+             "10": 1.0, "M5": 0.1}
+
+
+def port_inch(code):
+    """Cỡ cửa dạng mã → inch, để SO LỚN NHỎ. None nếu không biết mã."""
+    return PORT_INCH.get(str(code).strip().upper())
+
+
+def frl_min_size_for_port(code, family="AC"):
+    """Cỡ thân NHỎ NHẤT mà đồ thị đo ở cỡ cửa ≥ `code`. Trả (cỡ, text) | (None,…).
+
+    VÌ SAO CẦN: ngữ pháp FRL trong DB có `requires` RỖNG cho cỡ cửa, nên engine
+    sinh được cả 'AC20B-10DG-D' — cửa Rc1 trên thân AC20, gần như chắc không tồn
+    tại. Chưa số hoá bảng How-to-Order để biết chính xác cửa nào lắp cỡ nào, nhưng
+    đồ thị cho một bản đồ cỡ thân → cỡ cửa TĂNG DẦN (đã kiểm ở C18), và bản đồ đó
+    đủ để nói "cửa này chỉ xuất hiện từ cỡ N trở lên". Cảnh báo có căn cứ còn hơn
+    im lặng xuất một mã không có thật.
+    """
+    want = port_inch(code)
+    if want is None:
+        return None, None
+    for sz, cid, lab in frl_charts(family):
+        ch = get(cid) or {}
+        if (ch.get("port_inch") or 0) >= want:
+            return int(sz), ch.get("port_out")
+    return None, None
+
+
 def pick_frl_size(required_lpm, need_mpa, supply_mpa=None, family="AC",
                   lubricator=False, mist_separator=False):
     """Cỡ FRL nhỏ nhất giữ được áp ra ≥ need_mpa tại required_lpm.

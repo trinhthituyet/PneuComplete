@@ -8,9 +8,9 @@
 # là VECTOR, nên trích trực tiếp: `pdftocairo -svg` cho đường cong, `pdftotext
 # -bbox-layout` cho nhãn trục kèm toạ độ. Nhãn trục hiệu chuẩn pixel → giá trị.
 #
-# Trước khi tệp này được ghi, bộ trích phải qua CỔNG 17 tiêu chí đối chiếu
+# Trước khi tệp này được ghi, bộ trích phải qua CỔNG 18 tiêu chí đối chiếu
 # ground truth ở db/seed/charts/_groundtruth-ac.yaml — ground truth lấy từ TEXT
-# của PDF nên ĐỘC LẬP với việc trích đường cong — cộng 11 đối chứng âm (cố tình
+# của PDF nên ĐỘC LẬP với việc trích đường cong — cộng 12 đối chứng âm (cố tình
 # làm sai, cổng phải bắt được). Bộ sinh TỰ GỌI cổng và từ chối ghi nếu chưa đạt:
 #
 #     python3 tests/test_chart.py
@@ -24,6 +24,9 @@
 #   label = "ÁP VÀO / ÁP ĐẶT" [MPa].  Ví dụ "1/0.8" = áp vào 1,0 · đặt 0,8.
 #   điểm = [lưu lượng L/min (ANR), áp ra MPa]
 #   applies_to: catalog ghi 'AR20(K)-D' nghĩa là dùng cho CẢ AR20-D và AR20K-D
+#   port_in/port_out: cỡ cửa mà đồ thị ĐƯỢC ĐO Ở. Không phải "cửa duy nhất bán ra"
+#     — nhưng lắp cửa NHỎ HƠN thì đường cong này thành lạc quan (sụt áp thật nhiều
+#     hơn), nên engine phải kiểm và nói ra. Series AR…M có vào ≠ ra.
 #
 # VÌ SAO PHẢI CÓ ÁP VÀO TRONG NHÃN: mỗi ô vẽ HAI họ đường theo chú giải cấp trang
 # ("Inlet pressure: 1.0 MPa" nét liền · "0.7 MPa" nét đứt), và áp đặt 0,5 MPa có
@@ -56,7 +59,7 @@ source:
     · es40-72-AR_M-D: 11 (AR…M). Mỗi bảng mang theo `catalog` + `pdf_page` riêng."
   table: "Flow Rate Characteristics (Representative values)"
   note: >
-    Trích tự động từ vector PDF, đã qua cổng 17 tiêu chí + 11 đối chứng âm.
+    Trích tự động từ vector PDF, đã qua cổng 18 tiêu chí + 12 đối chứng âm.
     Chi tiết tiêu chí: db/seed/charts/_groundtruth-ac.yaml
 confidence: 0.9
 digitized_by: >
@@ -73,6 +76,10 @@ charts:
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 22
     x_max: 2000
+    port_in: Rc1/4
+    port_out: Rc1/4
+    port_code: "02"
+    port_inch: 0.25
     kind: continuous
     series:
       - label: "1/0.8"   # áp vào 1 → đặt 0.8 MPa
@@ -117,6 +124,10 @@ charts:
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 22
     x_max: 4000
+    port_in: Rc3/8
+    port_out: Rc3/8
+    port_code: "03"
+    port_inch: 0.375
     kind: continuous
     series:
       - label: "1/0.8"   # áp vào 1 → đặt 0.8 MPa
@@ -161,6 +172,10 @@ charts:
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 22
     x_max: 7000
+    port_in: Rc1/2
+    port_out: Rc1/2
+    port_code: "04"
+    port_inch: 0.5
     kind: continuous
     series:
       - label: "1/0.8"   # áp vào 1 → đặt 0.8 MPa
@@ -205,6 +220,10 @@ charts:
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 22
     x_max: 7000
+    port_in: Rc3/4
+    port_out: Rc3/4
+    port_code: "06"
+    port_inch: 0.75
     kind: continuous
     series:
       - label: "1/0.8"   # áp vào 1 → đặt 0.8 MPa
@@ -249,6 +268,10 @@ charts:
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 22
     x_max: 20000
+    port_in: Rc1
+    port_out: Rc1
+    port_code: "10"
+    port_inch: 1
     kind: continuous
     series:
       - label: "1/0.8"   # áp vào 1 → đặt 0.8 MPa
@@ -293,6 +316,10 @@ charts:
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 22
     x_max: 20000
+    port_in: Rc1
+    port_out: Rc1
+    port_code: "10"
+    port_inch: 1
     kind: continuous
     series:
       - label: "1/0.8"   # áp vào 1 → đặt 0.8 MPa
@@ -337,6 +364,10 @@ charts:
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 103
     x_max: 2000
+    port_in: Rc1/4
+    port_out: Rc1/4
+    port_code: "02"
+    port_inch: 0.25
     kind: continuous
     series:
       - label: "1/0.8"   # áp vào 1 → đặt 0.8 MPa
@@ -381,6 +412,10 @@ charts:
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 103
     x_max: 4000
+    port_in: Rc3/8
+    port_out: Rc3/8
+    port_code: "03"
+    port_inch: 0.375
     kind: continuous
     series:
       - label: "1/0.8"   # áp vào 1 → đặt 0.8 MPa
@@ -425,6 +460,10 @@ charts:
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 103
     x_max: 7000
+    port_in: Rc1/2
+    port_out: Rc1/2
+    port_code: "04"
+    port_inch: 0.5
     kind: continuous
     series:
       - label: "1/0.8"   # áp vào 1 → đặt 0.8 MPa
@@ -469,6 +508,10 @@ charts:
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 103
     x_max: 7000
+    port_in: Rc3/4
+    port_out: Rc3/4
+    port_code: "06"
+    port_inch: 0.75
     kind: continuous
     series:
       - label: "1/0.8"   # áp vào 1 → đặt 0.8 MPa
@@ -513,6 +556,10 @@ charts:
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 103
     x_max: 20000
+    port_in: Rc1
+    port_out: Rc1
+    port_code: "10"
+    port_inch: 1
     kind: continuous
     series:
       - label: "1/0.8"   # áp vào 1 → đặt 0.8 MPa
@@ -557,6 +604,10 @@ charts:
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 103
     x_max: 20000
+    port_in: Rc1
+    port_out: Rc1
+    port_code: "10"
+    port_inch: 1
     kind: continuous
     series:
       - label: "1/0.8"   # áp vào 1 → đặt 0.8 MPa
@@ -601,6 +652,10 @@ charts:
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 128
     x_max: 2000
+    port_in: Rc1/4
+    port_out: Rc1/4
+    port_code: "02"
+    port_inch: 0.25
     kind: continuous
     series:
       - label: "1/0.8"   # áp vào 1 → đặt 0.8 MPa
@@ -645,6 +700,10 @@ charts:
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 128
     x_max: 4000
+    port_in: Rc3/8
+    port_out: Rc3/8
+    port_code: "03"
+    port_inch: 0.375
     kind: continuous
     series:
       - label: "1/0.8"   # áp vào 1 → đặt 0.8 MPa
@@ -689,6 +748,10 @@ charts:
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 128
     x_max: 7000
+    port_in: Rc1/2
+    port_out: Rc1/2
+    port_code: "04"
+    port_inch: 0.5
     kind: continuous
     series:
       - label: "1/0.8"   # áp vào 1 → đặt 0.8 MPa
@@ -733,6 +796,10 @@ charts:
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 128
     x_max: 7000
+    port_in: Rc3/4
+    port_out: Rc3/4
+    port_code: "06"
+    port_inch: 0.75
     kind: continuous
     series:
       - label: "1/0.8"   # áp vào 1 → đặt 0.8 MPa
@@ -777,6 +844,10 @@ charts:
     catalog: DOCUMENT/FRL/es40-69-AC-D.pdf
     pdf_page: 128
     x_max: 20000
+    port_in: Rc1
+    port_out: Rc1
+    port_code: "10"
+    port_inch: 1
     kind: continuous
     series:
       - label: "1/0.8"   # áp vào 1 → đặt 0.8 MPa
@@ -821,6 +892,10 @@ charts:
     catalog: DOCUMENT/FRL/es40-70-ARG-B.pdf
     pdf_page: 4
     x_max: 800
+    port_in: Rc1/4
+    port_out: Rc1/4
+    port_code: "02"
+    port_inch: 0.25
     kind: continuous
     series:
       - label: "0.7/0.6"   # áp vào 0.7 → đặt 0.6 MPa
@@ -853,6 +928,10 @@ charts:
     catalog: DOCUMENT/FRL/es40-70-ARG-B.pdf
     pdf_page: 4
     x_max: 1500
+    port_in: Rc3/8
+    port_out: Rc3/8
+    port_code: "03"
+    port_inch: 0.375
     kind: continuous
     series:
       - label: "0.7/0.6"   # áp vào 0.7 → đặt 0.6 MPa
@@ -885,6 +964,10 @@ charts:
     catalog: DOCUMENT/FRL/es40-70-ARG-B.pdf
     pdf_page: 4
     x_max: 3000
+    port_in: Rc1/2
+    port_out: Rc1/2
+    port_code: "04"
+    port_inch: 0.5
     kind: continuous
     series:
       - label: "0.7/0.6"   # áp vào 0.7 → đặt 0.6 MPa
@@ -917,6 +1000,10 @@ charts:
     catalog: DOCUMENT/FRL/es40-72-AR_M-D.pdf
     pdf_page: 11
     x_max: 2000
+    port_in: Rc1/4
+    port_out: Rc1/4
+    port_code: "02"
+    port_inch: 0.25
     kind: continuous
     series:
       - label: "1/0.8"   # áp vào 1 → đặt 0.8 MPa
@@ -961,6 +1048,10 @@ charts:
     catalog: DOCUMENT/FRL/es40-72-AR_M-D.pdf
     pdf_page: 11
     x_max: 3000
+    port_in: Rc3/8
+    port_out: Rc1/4
+    port_code: "02"
+    port_inch: 0.25
     kind: continuous
     series:
       - label: "1/0.8"   # áp vào 1 → đặt 0.8 MPa
@@ -1005,6 +1096,10 @@ charts:
     catalog: DOCUMENT/FRL/es40-72-AR_M-D.pdf
     pdf_page: 11
     x_max: 6000
+    port_in: Rc1/2
+    port_out: Rc3/8
+    port_code: "03"
+    port_inch: 0.375
     kind: continuous
     series:
       - label: "1/0.8"   # áp vào 1 → đặt 0.8 MPa

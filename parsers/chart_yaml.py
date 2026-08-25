@@ -8,8 +8,8 @@ ghi YAML". Cách chắc chắn nhất để giữ điều đó không phải là
 trước — mà là làm cho việc ghi KHÔNG THỂ xảy ra khi kiểm chưa đạt. Nên hàm
 build() gọi tests/test_chart.py trước, thất bại thì raise.
 
-Cổng gồm 17 tiêu chí đối chiếu ground truth (đọc từ TEXT của PDF, độc lập với việc
-trích đường cong) + 11 đối chứng âm. Xem db/seed/charts/_groundtruth-ac.yaml.
+Cổng gồm 18 tiêu chí đối chiếu ground truth (đọc từ TEXT của PDF, độc lập với việc
+trích đường cong) + 12 đối chứng âm. Xem db/seed/charts/_groundtruth-ac.yaml.
 """
 import re
 import sys
@@ -98,6 +98,10 @@ def collect():
                 "pdf": pdf,
                 "pdf_page": pg,
                 "x_max": x_max,
+                "port_in": p.get("port_in"),
+                "port_out": p.get("port"),
+                "port_code": p.get("port_code"),
+                "port_inch": p.get("port_inch"),
                 "kind": "continuous",
                 "series": series,
             })
@@ -227,6 +231,9 @@ HEAD = """\
 #   label = "ÁP VÀO / ÁP ĐẶT" [MPa].  Ví dụ "1/0.8" = áp vào 1,0 · đặt 0,8.
 #   điểm = [lưu lượng L/min (ANR), áp ra MPa]
 #   applies_to: catalog ghi 'AR20(K)-D' nghĩa là dùng cho CẢ AR20-D và AR20K-D
+#   port_in/port_out: cỡ cửa mà đồ thị ĐƯỢC ĐO Ở. Không phải "cửa duy nhất bán ra"
+#     — nhưng lắp cửa NHỎ HƠN thì đường cong này thành lạc quan (sụt áp thật nhiều
+#     hơn), nên engine phải kiểm và nói ra. Series AR…M có vào ≠ ra.
 #
 # VÌ SAO PHẢI CÓ ÁP VÀO TRONG NHÃN: mỗi ô vẽ HAI họ đường theo chú giải cấp trang
 # ("Inlet pressure: 1.0 MPa" nét liền · "0.7 MPa" nét đứt), và áp đặt 0,5 MPa có
@@ -284,6 +291,11 @@ def render(charts, clamped, n_crit, n_neg):
         out.append(f"    catalog: {c['pdf']}\n")
         out.append(f"    pdf_page: {c['pdf_page']}\n")
         out.append(f"    x_max: {c['x_max']:g}\n")
+        # Cỡ cửa mà đồ thị ĐƯỢC ĐO Ở: lắp cửa nhỏ hơn thì số lưu lượng lạc quan.
+        out.append(f"    port_in: {c['port_in']}\n")
+        out.append(f"    port_out: {c['port_out']}\n")
+        out.append(f"    port_code: \"{c['port_code']}\"\n")
+        out.append(f"    port_inch: {c['port_inch']:g}\n")
         out.append(f"    kind: {c['kind']}\n")
         out.append("    series:\n")
         for s in c["series"]:
@@ -329,8 +341,8 @@ def render_drop(charts, n_crit, n_neg):
 def build(write=False):
     """Trích + ghi. RAISE nếu cổng chưa đạt — đó là điểm chính của hàm này."""
     from tests import test_chart
-    n_crit = 17
-    n_neg = 11
+    n_crit = 18
+    n_neg = 12
     if test_chart.main() != 0:
         raise SystemExit(
             "CỔNG CHƯA ĐẠT → không ghi YAML. Số chưa kiểm chứng vào engine là "

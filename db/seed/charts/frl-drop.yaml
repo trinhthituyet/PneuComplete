@@ -17,7 +17,7 @@
 # Mốc neo VẬT LÝ của họ này: sụt áp = 0 khi lưu lượng = 0. Đo được 94 đường
 # đều bắt đầu ở gốc. Cộng với: mọi đường tăng đơn điệu, và cỡ thân lớn hơn sụt áp
 # ít hơn ở cùng lưu lượng — kiểm chứng ĐỘC LẬP với từng ô (tiêu chí C13–C16).
-# Cổng đầy đủ: tests/test_chart.py (17 tiêu chí + 11 đối chứng âm).
+# Cổng đầy đủ: tests/test_chart.py (18 tiêu chí + 12 đối chứng âm).
 #
 # ── ĐỌC THẾ NÀO ─────────────────────────────────────────────────────────────
 #   điểm = [lưu lượng L/min (ANR), sụt áp MPa]
@@ -39,7 +39,7 @@ source:
   table: "Flow Rate Characteristics — Pressure drop"
   note: >
     Đường bao trên của các áp vào P1 đã vẽ. Trích tự động từ vector PDF, qua cổng
-    17 tiêu chí + 11 đối chứng âm. Chi tiết: db/seed/charts/_groundtruth-ac.yaml
+    18 tiêu chí + 12 đối chứng âm. Chi tiết: db/seed/charts/_groundtruth-ac.yaml
 confidence: 0.85
 digitized_by: >
   parsers/chart_yaml.py — tự động từ vector PDF. Confidence thấp hơn bảng lưu

@@ -53,8 +53,6 @@ HERE = Path(__file__).resolve().parent
 NEEDS_INPUT = [
     ("tube_total_m", "Tổng mét ống cho cả máy",
      "Phụ thuộc layout máy, khoảng cách tủ van tới từng xy-lanh. Engine không suy được."),
-    ("main_line_port_size", "Cỡ cửa đường trục chính (FRL)",
-     "Cỡ FRL theo tổng lưu lượng, nhưng catalog chỉ cho lưu lượng dạng đồ thị."),
     ("supply_pressure_mpa", "Áp nguồn của xưởng (MPa)",
      "Áp khí máy nén cấp vào FRL. Engine cần nó để chọn cỡ AC: đồ thị catalog có "
      "hai họ đường theo áp vào (0,7 và 1,0 MPa) cho số khác nhau, mà không điều "
@@ -91,6 +89,11 @@ ENGINE_COMPUTED = [
     ("valve_function", "Loại van",
      "Suy theo tác động của TỪNG xy-lanh: kép → 5/2, đơn → 3/2. "
      "Cần dừng giữa hành trình thì đổi ở node van."),
+    ("main_line_port_size", "Cỡ cửa đường trục chính (FRL)",
+     "Đi kèm cỡ AC, không phải câu hỏi riêng: đồ thị lưu lượng được ĐO Ở một cỡ "
+     "cửa xác định, nên khi engine dùng đường cong đó để chọn cỡ thân thì cửa đã "
+     "bị quyết định theo. Khai cửa nhỏ hơn thì engine cảnh báo số lưu lượng là "
+     "lạc quan; khai cửa quá lớn so với thân thì cảnh báo cặp đó có thể không có."),
     ("frl_size", "Cỡ AC",
      "Tính từ tổng lưu lượng + áp nguồn, tra đồ thị lưu lượng→áp ra của catalog "
      "FRL đã số hoá (db/seed/charts/ac-flow.yaml). Đặt điều áp lên bậc kế tiếp "

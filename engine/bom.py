@@ -467,7 +467,9 @@ def build(con, inputs, project=None, project_name="demo"):
     # Cỡ FRL: trước đây bắt người dùng khai vì "catalog chỉ in dạng ĐỒ THỊ".
     # Đã số hoá (db/seed/charts/ac-flow.yaml, qua cổng tests/test_chart.py) nên
     # engine tự tra. Thiếu áp nguồn thì pick_frl_size trả gap nói rõ, không đoán.
-    if not project.get("frl_size"):
+    # Ghi nhớ TRƯỚC khi engine điền: dùng để biết cỡ là do bạn chốt hay engine suy.
+    user_frl_size = project.get("frl_size")
+    if not user_frl_size:
         fam = (project.get("frl_series") or "AC-A-E").split("-")[0]
         size, why = chart.pick_frl_size(
             need_lpm, project["pressure_mpa"],
@@ -479,10 +481,37 @@ def build(con, inputs, project=None, project_name="demo"):
         if size:
             project["frl_size"] = size
             auto["frl_size"] = (size, why)
+            # CỠ CỬA đi kèm kết luận, không phải câu hỏi riêng: đồ thị vừa dùng
+            # được đo ở một cỡ cửa xác định.
+            code, p_out, p_inch, p_in = chart.frl_port(size, fam)
+            if code and not project.get("main_line_port_size"):
+                project["main_line_port_size"] = code
+                auto["main_line_port_size"] = (
+                    code, f"cửa {p_out} — đúng cỡ cửa mà đồ thị lưu lượng của "
+                          f"{fam}{size} được đo ở"
+                          + (f" (cửa vào {p_in})" if p_in and p_in != p_out else ""))
         else:
             auto["_frl_size_failed"] = why
-    elif project.get("supply_pressure_mpa"):
+
+    # KIỂM CỠ CỬA người dùng khai — chạy dù cỡ thân do engine chọn hay bạn chốt.
+    if project.get("frl_size") and project.get("main_line_port_size"):
+        fam2 = (project.get("frl_series") or "AC-A-E").split("-")[0]
+        code, p_out, p_inch, p_in = chart.frl_port(project["frl_size"], fam2)
+        mine = chart.port_inch(project["main_line_port_size"])
+        if mine is not None and p_inch is not None:
+            if mine < p_inch:
+                auto["_port_smaller_than_chart"] = (
+                    project["main_line_port_size"], p_out, code)
+            elif mine > p_inch:
+                need_sz, need_port = chart.frl_min_size_for_port(
+                    project["main_line_port_size"], fam2)
+                if need_sz and need_sz > int(project["frl_size"]):
+                    auto["_port_too_big_for_body"] = (
+                        project["main_line_port_size"], project["frl_size"], need_sz)
+    if user_frl_size and project.get("supply_pressure_mpa"):
         # Người dùng ĐÃ chốt cỡ — không ghi đè, nhưng vẫn KIỂM được bằng đồ thị.
+        # PHẢI ĐỘC LẬP, không phải `elif` của khối kiểm cửa ở trên: gắn elif vào đó
+        # thì khai đủ cả cỡ và cửa là phần kiểm lưu lượng im lặng biến mất.
         # Trước đây engine chỉ nói "chưa kiểm được lưu lượng, bạn tự mở catalog";
         # giờ có số nên kiểm luôn: chọn thiếu cỡ là sụt áp khi nhiều xy-lanh chạy.
         need_size, why = chart.pick_frl_size(
@@ -667,6 +696,33 @@ def build(con, inputs, project=None, project_name="demo"):
             fix=("Khai áp nguồn của xưởng (MPa) — engine sẽ tự tra đồ thị"
                  if need_supply else "Chốt cỡ AC ở cấu hình"),
             detail=auto["_frl_size_failed"])))
+    if auto.get("main_line_port_size"):
+        code, why = auto["main_line_port_size"]
+        warns.append({"severity": "info", "code": "AUTO_MAIN_PORT",
+                      "rule_code": "R-FRL-02",
+                      "message": f"Cỡ cửa đường trục: {code}",
+                      "rationale": why, "detail": why})
+    if auto.get("_port_smaller_than_chart"):
+        mine, p_out, code = auto["_port_smaller_than_chart"]
+        msg = (f"Cỡ cửa bạn khai ({mine}) NHỎ HƠN cỡ cửa mà đồ thị lưu lượng được "
+               f"đo ở ({p_out} = {code}) — số lưu lượng engine dùng là LẠC QUAN")
+        warns.append({"severity": "warn", "code": "PORT_SMALLER_THAN_CHART",
+                      "rule_code": "R-FRL-02", "message": msg,
+                      "rationale": msg + ". Sụt áp thật sẽ nhiều hơn đồ thị vì cửa "
+                      "nhỏ hơn tự nó đã gây sụt. Muốn dùng đúng số thì lắp cửa "
+                      f"{p_out}, hoặc chấp nhận và kiểm lại bằng tay.",
+                      "detail": msg})
+    if auto.get("_port_too_big_for_body"):
+        mine, sz, need = auto["_port_too_big_for_body"]
+        msg = (f"Cửa {mine} trên thân cỡ {sz}: trong đồ thị catalog, cửa cỡ đó chỉ "
+               f"xuất hiện từ thân {need} trở lên — cặp này có thể KHÔNG TỒN TẠI")
+        warns.append({"severity": "warn", "code": "PORT_TOO_BIG_FOR_BODY",
+                      "rule_code": "R-FRL-02", "message": msg,
+                      "rationale": msg + ". Ngữ pháp FRL trong DB chưa có ràng buộc "
+                      "cửa↔cỡ (cột requires rỗng) nên engine không tự chặn được; "
+                      "đây là suy từ bản đồ cỡ thân→cỡ cửa của đồ thị. Hãy đối "
+                      "chiếu bảng How to Order trước khi đặt hàng.",
+                      "detail": msg})
     if auto.get("_frl_too_small"):
         got, need, why = auto["_frl_too_small"]
         warns.append({"severity": "warn", "code": "FRL_SIZE_TOO_SMALL",

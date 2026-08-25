@@ -653,6 +653,46 @@ def test_sut_ap_bao_tren_tang_don_dieu():
     assert not bad, f"bao trên GIẢM ở: {bad}"
 
 
+def test_co_cua_suy_tu_do_thi_khong_hoi_rieng():
+    """Cỡ cửa đi kèm kết luận chọn cỡ, vì đồ thị được đo ở một cỡ cửa xác định."""
+    cfg = dict(FRL_AUTO, frl_series="AC-D-E")
+    cfg.pop("main_line_port_size")
+    r = _build([("CDM2B40-150AZ", 4)], cfg)
+    w = next((x for x in r["warnings"] if x.get("code") == "AUTO_MAIN_PORT"), None)
+    assert w, f"phải tự suy cỡ cửa: {[x.get('code') for x in r['warnings']]}"
+    assert "đo ở" in w["rationale"], w["rationale"]
+    assert not any(g.get("field") == "main_line_port_size" for g in r["gaps"]), r["gaps"]
+
+
+def test_cua_nho_hon_do_thi_thi_canh_bao_lac_quan():
+    r = _build([("CDM2B40-150AZ", 4)],
+               dict(FRL_AUTO, frl_series="AC-D-E", frl_size="40",
+                    main_line_port_size="02"))
+    w = next((x for x in r["warnings"]
+              if x.get("code") == "PORT_SMALLER_THAN_CHART"), None)
+    assert w and w["severity"] == "warn", [x.get("code") for x in r["warnings"]]
+    assert "LẠC QUAN" in w["message"], w["message"]
+
+
+def test_cua_qua_lon_so_voi_than_thi_canh_bao_co_the_khong_ton_tai():
+    """requires của cỡ cửa đang RỖNG nên engine sinh được cặp không có thật."""
+    r = _build([("CDM2B40-150AZ", 4)],
+               dict(FRL_AUTO, frl_series="AC-D-E", main_line_port_size="10"))
+    w = next((x for x in r["warnings"]
+              if x.get("code") == "PORT_TOO_BIG_FOR_BODY"), None)
+    assert w and w["severity"] == "warn", [x.get("code") for x in r["warnings"]]
+    assert "KHÔNG TỒN TẠI" in w["message"], w["message"]
+
+
+def test_khai_du_ca_co_va_cua_thi_van_kiem_luu_luong():
+    """Hồi quy: nhánh kiểm lưu lượng từng bị gắn `elif` vào khối kiểm cửa."""
+    r = _build([("CDM2B40-150AZ", 8)],
+               dict(FRL_AUTO, frl_series="AC-D-E", frl_size="20",
+                    main_line_port_size="02"))
+    assert any(x.get("code") == "FRL_SIZE_TOO_SMALL" for x in r["warnings"]), \
+        [x.get("code") for x in r["warnings"]]
+
+
 def test_khong_lan_series_AR_voi_AR_M():
     """'AR20M(K)-D' là series AR…M, KHÁC 'AR20(K)-D' — không được gộp một họ."""
     from engine import chart

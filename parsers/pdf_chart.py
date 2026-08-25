@@ -12,7 +12,7 @@ hơn (không lệ thuộc tay người) và chạy được trên cả trăm đ�
 
     python3 -m parsers.pdf_chart <pdf> <trang>     # xem trích được gì
     python3 -m parsers.pdf_chart --scan <pdf>      # tìm trang có đồ thị
-    python3 tests/test_chart.py                    # CỔNG 12 tiêu chí + 7 đối chứng âm
+    python3 tests/test_chart.py                    # CỔNG 18 tiêu chí + 12 đối chứng âm
     python3 -m parsers.chart_yaml --write          # sinh YAML (tự gọi cổng)
 
 TRẠNG THÁI (đo được, 11 trang / 5 catalog trong ground truth):
@@ -24,8 +24,9 @@ TRẠNG THÁI (đo được, 11 trang / 5 catalog trong ground truth):
     chưa nhận dạng được         4           0
     ─ trang ẢNH RASTER          9           0   phương pháp này không đọc được
 
-engine.chart dùng chúng để tự chọn cỡ AC và cộng sụt áp của phụ kiện nối sau bộ
-điều áp. Cổng: tests/test_chart.py — 17 tiêu chí + 11 đối chứng âm.
+engine.chart dùng chúng để tự chọn cỡ AC, cộng sụt áp của phụ kiện nối sau bộ
+điều áp, và suy CỠ CỬA đường trục từ cỡ cửa mà đồ thị được đo ở.
+Cổng: tests/test_chart.py — 18 tiêu chí + 12 đối chứng âm.
 
 ── Ý CHÍNH VỀ THIẾT KẾ: NHÃN TRỤC ĐỊNH NGHĨA Ô, KHÔNG PHẢI ĐƯỜNG CONG ────────
 Bản đầu suy ô từ CỤM ĐƯỜNG CONG rồi cộng offset đo trên đúng một trang để tìm
@@ -568,6 +569,49 @@ def envelope(curves, thin=0.001):
     return keep
 
 
+PORT = re.compile(r"^(Rc|R|G|NPT|N)(\d+(?:/\d+)?)$")
+
+# Cỡ cửa → mã trong ngữ pháp FRL, kèm inch để SO LỚN NHỎ.
+# Không suy: đối chiếu mã thật trong BOM (AC40B-03DG-A → 03 = 3/8).
+PORT_CODE = {"1/8": ("01", 0.125), "1/4": ("02", 0.25), "3/8": ("03", 0.375),
+             "1/2": ("04", 0.5), "3/4": ("06", 0.75), "1": ("10", 1.0)}
+
+
+def _ports_for(ws, box):
+    """Cỡ cửa ghi trên đồ thị. Trả (vào, ra, mã_ra, inch_ra).
+
+    VÌ SAO CẦN: đồ thị lưu lượng được ĐO Ở MỘT CỠ CỬA xác định. Dùng đường cong
+    đó để chọn cỡ thân rồi lắp cửa NHỎ HƠN thì số lưu lượng thành lạc quan — sụt
+    áp thật nhiều hơn đồ thị. Nên khi engine đã dùng đồ thị để chọn cỡ, cỡ cửa
+    không còn là lựa chọn tự do: nó là một phần của kết luận.
+
+    ĐO trên tr22: nhãn cửa CÙNG HÀNG với tiêu đề (cy ≈ T-22) nhưng ở mép PHẢI
+    khung (cx ≈ R+3), không phải mép trái như tiêu đề.
+
+    HAI NHÃN, KHÔNG MỘT: series AR…M ghi 'IN: Rc3/8, OUT: Rc1/4' — cửa vào và ra
+    KHÁC nhau. Đọc theo thứ tự trái→phải cho ra đúng (vào, ra); đã đối chiếu với
+    text 'IN: …, OUT: …' của tr11. Chỉ lấy một nhãn thì mất cửa vào, mà cửa vào
+    nhỏ hơn cũng làm đường cong lưu lượng thành lạc quan.
+    Dấu phẩy cuối ('Rc1/4,') phải bỏ, nếu không regex trượt đúng nhãn cửa VÀO.
+    """
+    L, T, R, B = box[:4]
+    found = []
+    for wx0, wy0, wx1, wy1, t in ws:
+        m = PORT.match(t.rstrip(",;:"))
+        if not m:
+            continue
+        cx, cy = (wx0 + wx1) / 2, (wy0 + wy1) / 2
+        if not (T - 40 <= cy <= T + 2 and R - 60 <= cx <= R + 40):
+            continue
+        found.append((cx, t.rstrip(",;:"), m.group(2)))
+    if not found:
+        return None, None, None, None
+    found.sort()
+    p_in, p_out = found[0], found[-1]
+    code, inch = PORT_CODE.get(p_out[2], (None, None))
+    return p_in[1], p_out[1], code, inch
+
+
 def digitize(pdf, page, samples=10):
     """Trích MỌI ô đồ thị trên một trang, mỗi ô hiệu chuẩn riêng.
 
@@ -602,8 +646,11 @@ def digitize(pdf, page, samples=10):
         title = _title_for(ws, (L, T, R, B), used_titles)
         if title:
             used_titles.add(title)
+        port_in, port_out, port_code, port_inch = _ports_for(ws, (L, T, R, B))
         pan = {"title": title, "box": [round(v, 1) for v in (L, T, R, B)],
                "kind": kind,
+               "port_in": port_in, "port": port_out,
+               "port_code": port_code, "port_inch": port_inch,
                "x_ticks": [v for _, v in xt], "y_ticks": [v for _, v in yt],
                "x_caption": x_cap, "y_caption": y_cap, "series": []}
         if not fx or not fy:

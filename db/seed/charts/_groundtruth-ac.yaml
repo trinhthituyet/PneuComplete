@@ -259,6 +259,16 @@ criteria:
     rule: "sụt áp KHÔNG giảm khi lưu lượng tăng"
     fail_means: "nối sai đoạn, hoặc lẫn đường của họ đồ thị khác"
 
+  - id: C18-cỡ-cửa
+    rule: >
+      MỌI ô lưu lượng→áp ra đọc được cỡ cửa; 6 ô trang 22 khớp cột `port` trong
+      `panels` (tôi đọc tay từ vòng A); và trong cùng họ mã, cỡ cửa KHÔNG giảm
+      khi cỡ thân tăng.
+    fail_means: >
+      đồ thị lưu lượng được ĐO Ở MỘT CỠ CỬA. Lắp cửa nhỏ hơn thì số lưu lượng
+      thành lạc quan — sụt áp thật nhiều hơn đồ thị. Đọc sai cỡ cửa là engine kết
+      luận sai mà không có dấu hiệu gì.
+
   - id: C17-bao-trên-đơn-điệu
     rule: >
       ĐƯỜNG BAO TRÊN sẽ ghi ra YAML (pdf_chart.envelope) phải tăng đơn điệu, bắt

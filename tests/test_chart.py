@@ -325,6 +325,39 @@ def _criteria(got, gt):
         "cỡ lớn hơn sụt áp ít hơn · " + " ".join(det16)
         + (" · SAI " + "; ".join(bad16[:2]) if bad16 else ""))
 
+    # ── C18: cỡ cửa của mỗi ô ──────────────────────────────────────────────
+    # Đồ thị được đo ở MỘT cỡ cửa, nên cỡ cửa là một phần của kết luận chọn cỡ.
+    # Ba phần: đọc được hết · khớp bản đọc tay ở tr22 · không giảm theo cỡ thân.
+    import re as _re3
+    bad18, n18 = [], 0
+    want_port = {w["title"]: w.get("port") for w in want}
+    by_fam18 = {}
+    for w in flow_pages:
+        for p in _pg(got, gt, w).get("panels") or []:
+            if p.get("kind") != "flow_outlet" or not p.get("series"):
+                continue
+            n18 += 1
+            tag = f"tr{w['page']}/{p.get('title')}"
+            if not p.get("port") or p.get("port_inch") is None:
+                bad18.append(f"{tag} không đọc được cửa")
+                continue
+            exp = want_port.get(p.get("title"))
+            if exp and p["port"] != exp:
+                bad18.append(f"{tag} cửa {p['port']}≠{exp} (bản đọc tay)")
+            m = _re3.match(r"([A-Z]+)(\d+)([A-Z]*)", p.get("title") or "")
+            if m:
+                by_fam18.setdefault(m.group(1) + m.group(3), []).append(
+                    (int(m.group(2)) + (0.5 if "-06" in p["title"] else 0),
+                     p["title"], p["port_inch"]))
+    for fam, items in sorted(by_fam18.items()):
+        items.sort()
+        for a, b in zip(items, items[1:]):
+            if b[2] < a[2]:
+                bad18.append(f"{fam}: {a[1]}={a[2]} > {b[1]}={b[2]} (cửa giảm)")
+    rec("C18-cỡ-cửa", n18 > 0 and not bad18,
+        f"{n18} ô đọc được cửa, khớp bản đọc tay, không giảm theo cỡ thân"
+        + (" · SAI " + "; ".join(bad18[:2]) if bad18 else ""))
+
     # ── C17: đường bao TRÊN — đúng thứ sẽ ghi ra YAML ──────────────────────
     # Gọi C.envelope, tức HÀM MÀ BỘ SINH DÙNG. Bản trước tôi viết một _envelope
     # riêng trong test — cổng kiểm một thứ còn YAML ghi thứ khác, nên lỗi "bao
@@ -415,7 +448,13 @@ def negative_controls(got, gt):
     ps[0]["title"], ps[5]["title"] = ps[5]["title"], ps[0]["title"]
     cases.append(("đổi tiêu đề ô nhỏ nhất ↔ lớn nhất", g, "C12-đơn-điệu-liên-model"))
 
-    g = copy.deepcopy(got)                                # 8. thiếu một đường sụt áp
+    g = copy.deepcopy(got)                                # 8. đọc sai cỡ cửa
+    for p in g[(AC_PDF, 22)]["panels"]:
+        if p.get("kind") == "flow_outlet":
+            p["port"], p["port_code"], p["port_inch"] = "Rc1", "10", 1.0
+    cases.append(("gán mọi ô cỡ cửa Rc1", g, "C18-cỡ-cửa"))
+
+    g = copy.deepcopy(got)                                # 9. thiếu một đường sụt áp
     g[(AC_PDF, 79)]["panels"][0]["series"] = g[(AC_PDF, 79)]["panels"][0]["series"][:-1]
     cases.append(("bỏ 1 đường của ô sụt áp", g, "C13-sụt-áp-đủ-ô"))
 
