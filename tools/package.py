@@ -108,7 +108,7 @@ def run_checks(json_mode=False):
     """Không đóng gói bản hỏng: chạy test + dựng thử một BOM."""
     problems = []
     for t in ("tests/test_parser.py", "tests/test_bom.py", "tests/test_web.py",
-              "tests/test_graph.py", "tests/test_docker.py"):
+              "tests/test_graph.py", "tests/test_robots.py", "tests/test_docker.py"):
         r = subprocess.run([sys.executable, t], cwd=ROOT,
                            capture_output=True, text=True)
         tail = (r.stdout or "").strip().splitlines()[-1:] or [""]

@@ -36,12 +36,14 @@ python3 start.py
 ## Test
 
 ```sh
-python3 tests/test_parser.py     #  6 — parse mã hàng
-python3 tests/test_bom.py        # 26 — luật + dựng BOM
-python3 tests/test_web.py        #  7 — API web
-python3 tests/test_graph.py     # 32 — sơ đồ đấu nối (gồm test chấp nhận mục 8)
-node    tests/test_ui.js        # 16 — hình học cổng canvas (cần node, không bắt buộc)
-python3 tests/test_docker.py     # 61 — đóng gói Docker (không cần daemon)
+python3 tests/test_parser.py      #  11 — parse mã hàng
+python3 tests/test_bom.py         #  71 — luật + dựng BOM
+python3 tests/test_web.py         #   9 — API web
+python3 tests/test_graph.py       # 139 — sơ đồ, phân loại theo mã, liên kết chéo
+python3 tests/test_chart.py       #  19 — cổng số hoá đồ thị catalog + đối chứng âm
+python3 tests/test_robots.py      #  32 — tuân thủ robots.txt (chạy offline)
+node    tests/test_ui.js          #  63 — hình học sơ đồ + hợp đồng UI↔API
+python3 tests/test_docker.py      #  70 — đóng gói Docker (không cần daemon)
 ```
 
 ## Dòng lệnh

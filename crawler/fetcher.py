@@ -11,11 +11,11 @@ import hashlib
 import time
 import urllib.error
 import urllib.request
-import urllib.robotparser
 from pathlib import Path
 from urllib.parse import urlparse
 
 from . import db
+from . import robots as R
 
 UA = "PneuCompleteBot/0.1 (internal pneumatic BOM catalog; contact: tuyet@local)"
 MIN_INTERVAL = 1.0        # giây giữa 2 request cùng host
@@ -23,7 +23,7 @@ MAX_ATTEMPTS = 3
 TIMEOUT = 90
 
 _last_hit: dict[str, float] = {}
-_robots: dict[str, urllib.robotparser.RobotFileParser] = {}
+_robots: dict[str, dict] = {}
 
 
 class Blocked(Exception):
@@ -55,18 +55,31 @@ def _raw_get(url: str) -> tuple[int, str, bytes, int]:
 
 
 def robots_ok(url: str) -> bool:
-    """Kiểm tra robots.txt của host, cache kết quả parser theo host."""
+    """Kiểm tra robots.txt của host, cache theo host.
+
+    Dùng crawler/robots.py chứ KHÔNG dùng urllib.robotparser: stdlib bỏ khối
+    `User-agent: *` thứ hai VÀ url-encode dấu `*` trong đường dẫn, nên trên
+    smcworld.com nó trả CHO PHÉP cho cả ba đường dẫn chủ site đã chặn. Xem docstring
+    của crawler/robots.py — có số đo.
+    """
     p = urlparse(url)
     host = p.netloc
     if host not in _robots:
-        rp = urllib.robotparser.RobotFileParser()
         try:
             _, _, body, _ = _raw_get(f"{p.scheme}://{host}/robots.txt")
-            rp.parse(body.decode("utf-8", "replace").splitlines())
+            _robots[host] = R.parse(body.decode("utf-8", "replace"))
+        except urllib.error.HTTPError as e:
+            # RFC 9309 §2.3.1: 4xx = KHÔNG CÓ robots.txt → cho phép tất cả.
+            # 5xx = "unavailable" → coi như CHẶN HẾT, vì không biết chủ site cấm gì.
+            _robots[host] = {} if 400 <= e.code < 500 else R.DENY_ALL
         except Exception:
-            rp.allow_all = True     # không lấy được robots.txt → mặc định cho phép
-        _robots[host] = rp
-    return _robots[host].can_fetch(UA, url)
+            # KHÔNG với được robots.txt (mạng lỗi, proxy chặn, timeout) thì KHÔNG
+            # phải là được phép. Bản trước coi MỌI lỗi là cho phép, nên khi proxy
+            # trả 403 cho mssc.smcworld.com, robots_ok() vẫn nói CHO PHÉP — tức là
+            # crawler sẵn sàng tải một host mà nó chưa từng đọc được luật.
+            # Im lặng cho phép là hướng sai; thà không tải.
+            _robots[host] = R.DENY_ALL
+    return R.allowed(_robots[host], UA, url)
 
 
 def cache_path(sha: str, ext: str) -> Path:
