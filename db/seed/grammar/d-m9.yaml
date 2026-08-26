@@ -72,6 +72,15 @@ slots:
       - {code: "A34A",  label: "reed (có trong bảng CM2)", attrs: {switch_type: reed}}
       - {code: "A44A",  label: "reed (có trong bảng CM2)", attrs: {switch_type: reed}}
 
+  # ── KHÔNG CÓ RÀNG BUỘC RÚT ĐƯỢC, đã đo ──────────────────────────────────
+  # Bảng "Applicable Auto Switches" của catalog CM2 (ES20-269-CM2-Z1 tr6) có ma
+  # trận model × chiều dài dây (4 cột: 0,5m→Nil · 1m→M · 3m→L · 5m→Z, khớp đúng
+  # nhãn ở pos 2). Đọc được 24 model, và CẢ 24 đều dùng đủ bốn chiều dài — không
+  # có cặp nào bị loại nên không có gì để khai.
+  # Ô 'N' (loại connector, không có dây) không nằm trong bảng chiều dài, đúng
+  # theo nghĩa của nó.
+  # Lưu ý cho lần sau: dấu trong bảng là 'V' (có sẵn) và 'v' (đặt hàng), lệch
+  # 0,7px so với hàng model nên phải ghép theo dung sai chứ không theo cy đúng bằng.
   - pos: 2
     name: lead_wire
     value_type: enum

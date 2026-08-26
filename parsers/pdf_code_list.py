@@ -28,6 +28,24 @@ từ ô V/—.
    thành port_size='01'. Chưa sửa (BOM hiện tại 0 dòng inch), nhưng ghi ra đây
    để không ai tưởng bộ đọc bỏ sót.
 
+── HỌ ĐÃ ĐO NHƯNG KHÔNG CÓ RÀNG BUỘC RÚT ĐƯỢC ───────────────────────────────
+Ghi lại để lần sau khỏi dò lại, và để không ai tưởng là bỏ sót. Mỗi dòng là một
+KẾT LUẬN có căn cứ, không phải "chưa làm":
+
+  TU-E     bảng Color là danh sách PHẲNG 29 màu, không phân theo cỡ ống. Dòng
+           "— 20 m roll  — 100 m roll …" nhìn như ma trận cỡ×cuộn nhưng đọc theo
+           toạ độ ra là CHÚ GIẢI KÝ HIỆU, trải ngang chứ không thẳng cột model.
+  D-M9…    ma trận model × chiều dài dây ĐỌC ĐƯỢC (24 model × 4 cột), nhưng CẢ
+           24 model đều dùng đủ bốn chiều dài → không cặp nào bị loại.
+  MGP-Z-E  hành trình KHÔNG phải enum: catalog cho phép bước 1 mm (ø12–ø32) và
+           5 mm (ø40–ø100). Mã thật MGPM25-25Z không có trong bảng chuẩn.
+  CM2…Z-E  bảng "Mounting Brackets/Part Nos." là mã PHỤ KIỆN RỜI (CM-L020B…),
+           không phải ràng buộc mounting×bore của mã xy-lanh. Trang How to Order
+           không có chú thích giới hạn nào.
+  AR10-A-E chỉ MỘT cỡ thân nên bảng không có cột cỡ.
+  AC-A-E   DOCUMENT/ chỉ có catalog AC10, thiếu cỡ 20..40 của thế hệ -A.
+  AMC-E    chưa có catalog AMC trong DOCUMENT/.
+
 ── CỔNG ─────────────────────────────────────────────────────────────────────
 G1 đủ-mã     rút được ≥500 mã, phủ ≥80% hình dạng khai trong ngữ pháp
 G2 mã-thật   MỌI mã KQ2 trong BOM khách hàng phải thoả ràng buộc. Nguồn đối

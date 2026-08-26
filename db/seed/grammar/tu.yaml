@@ -26,6 +26,16 @@ slots:
       - {code: "1065", label: "OD ø10 / ID ø6.5", attrs: {tube_od_mm: 10.0, tube_id_mm: 6.5}}
       - {code: "1208", label: "OD ø12 / ID ø8",   attrs: {tube_od_mm: 12.0, tube_id_mm: 8.0}}
 
+  # ── KHÔNG CÓ RÀNG BUỘC RÚT ĐƯỢC, đã truy đến cùng ───────────────────────
+  # Catalog TU/TIUB (7-9-2-p0682-0683) không cho ràng buộc nào giữa các ô:
+  #   · bảng Color là danh sách PHẲNG 29 màu, không phân theo cỡ ống;
+  #   · dòng "— 20 m roll  — 100 m roll (TU1610 is reel.)  — 100 m roll, 200 m
+  #     roll" nhìn như ma trận cỡ×cuộn nhưng đọc theo toạ độ ra là CHÚ GIẢI KÝ
+  #     HIỆU của bảng (dấu — nghĩa là gì), trải ngang chứ không thẳng cột model;
+  #   · bảng "Part no. × Color" ở trang 2 là hàng ĐẶT RIÊNG (-X3/-X4/-X217/-X214),
+  #     không phải tổ hợp chuẩn.
+  # Ba mã TU thật trong BOM (TU0604B-200, TU1065B-100, TU0604BU-100) đều là màu
+  # cơ bản + cuộn chuẩn, không mâu thuẫn gì để suy ra ràng buộc.
   - pos: 2
     name: color
     value_type: enum
