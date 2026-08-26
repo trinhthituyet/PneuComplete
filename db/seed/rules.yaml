@@ -9,7 +9,18 @@
 #     want            : ràng buộc truyền cho engine/generate.py
 #         giá trị {from_ctx: k} / {from_project: k} được thay bằng giá trị thật
 #     mate            : {role: <role của item nguồn>} — kết quả phải ghép được
+#     item_vn         : tên vật tư tiếng Việt — hiện ở dòng BOM khi CHƯA CÓ MÃ
+#     node_type       : loại node trên SƠ ĐỒ mà vật tư này chiếm chỗ
 #   then.warn         : chỉ sinh cảnh báo, không sinh dòng BOM
+#
+# VÌ SAO CÓ node_type: sơ đồ phải liệt kê MỌI vật tư, kể cả chưa có mã. Trước đây
+# engine/tree.py suy loại node từ `layer` bằng một bảng ba dòng, nên:
+#   · van, manifold, gasket, end plate CÙNG layer 'valve' → không phân biệt được,
+#     và fill_codes() đã điền mã VAN (SY5220-5MZE-C6) vào node MANIFOLD vì tầng
+#     valve lúc đó chỉ có một dòng. Sơ đồ hiện mã sai, không phải chỉ thiếu.
+#   · floating joint (layer 'actuator'), đầu nối, ống, bộ AC không có dòng nào
+#     trong bảng đó nên KHÔNG BAO GIỜ xuất hiện trên sơ đồ.
+# Chính luật biết nó sinh ra vật tư gì, nên nó khai — không suy ngược từ layer.
 #
 # MỌI luật BẮT BUỘC có rationale: nó hiện lên UI cho người dùng đọc và tự phán xét.
 
@@ -23,6 +34,8 @@
   then:
     need:
       layer: accessory
+      node_type: speed_controller
+      item_vn: "Tiết lưu (speed controller)"
       # AS1-E = họ Push-lock (hậu tố A). BOM máy thật của bạn dùng loại này
       # (AS2201F-01-06SA ×8, AS1201F-M5-06A ×24), không phải loại núm thường.
       from_series: {from_project: speed_controller_series}
@@ -68,6 +81,8 @@
   then:
     need:
       layer: electrical
+      node_type: sensor
+      item_vn: "Cảm biến từ (auto switch)"
       from_series: D-M9-CM2-E
       qty: 2
       want:
@@ -95,6 +110,7 @@
   then:
     need:
       layer: piping
+      node_type: tubing
       from_series: TU-E
       qty: {from_ctx: tube_rolls_needed}
       unit: cuộn
@@ -124,6 +140,8 @@
   then:
     need:
       layer: valve
+      node_type: valve
+      item_vn: "Van điện từ"
       from_series: SY-5-E
       qty: 1
       requires_input: valve_function
@@ -167,6 +185,7 @@
   then:
     need:
       layer: air_prep
+      node_type: frl
       from_series: {from_project: frl_series}
       qty: 1
       requires_input: main_line_port_size
@@ -269,6 +288,8 @@
   then:
     need:
       layer: valve
+      node_type: manifold
+      item_vn: "Đế manifold"
       from_series: SS5Y-20-E
       qty: 1
       want:
@@ -314,6 +335,8 @@
   then:
     need:
       layer: actuator
+      node_type: joint
+      item_vn: "Khớp nối mềm (floating joint)"
       from_series: J-E
       qty: 1
       want:
@@ -338,6 +361,8 @@
   then:
     need:
       layer: valve
+      node_type: manifold_part
+      item_vn: "Gasket đế manifold"
       from_parts: SY-5-E
       qty: {from_ctx: valve_count}
       want:
@@ -360,6 +385,8 @@
   then:
     need:
       layer: valve
+      node_type: manifold_part
+      item_vn: "End plate đế manifold"
       from_parts: SY-5-E
       qty: 2
       requires_input: manifold_type

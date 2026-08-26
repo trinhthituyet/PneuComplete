@@ -393,6 +393,136 @@ def test_khoa_engine_tu_tinh_khong_con_bat_khai():
           "main_line_port_size" in comp and "main_line_port_size" not in keys)
 
 
+def test_moi_vat_tu_deu_co_node_tren_so_do():
+    """Vật tư engine sinh ra PHẢI có node trên sơ đồ, kể cả khi chưa có mã.
+
+    Yêu cầu của bạn: "chưa có mã do thiếu dữ liệu đầu vào nhưng phần mềm vẫn phải
+    liệt kê ra ở CẢ sơ đồ và BOM".
+
+    ĐO ĐƯỢC TRƯỚC KHI SỬA: nhập 1 mã xy-lanh, không khai cấu hình → BOM 8 dòng mà
+    cây chỉ 5 node. Thiếu: floating joint (CÓ mã, JA40-14-150), đầu nối, ống, bộ AC.
+    Nguyên nhân: tree.py suy loại node từ `layer` bằng bảng ba dòng, nên bốn thứ
+    này không có dòng nào để suy.
+    """
+    con = db.connect()
+    tree = _tree(["CDM2B40-150AZ"])
+    r = W.api_bom(con, {"tree": tree, "config": {}, "name": "liet-ke"})
+    con.close()
+    types = [n["type"] for n, _, _ in T.walk(r["tree"])]
+    for t in ("joint", "fitting", "tubing"):
+        check(f"sơ đồ có node {t}", t in types, str(types))
+    gapn = {n["type"]: n for n, _, _ in T.walk(r["tree"]) if n.get("gap_fields")}
+    check("node đầu nối đánh dấu chưa có mã", "fitting" in gapn, str(list(gapn)))
+    check("node ống đánh dấu chưa có mã", "tubing" in gapn, str(list(gapn)))
+    check("node FRL (gốc) đánh dấu chưa có mã", "frl" in gapn, str(list(gapn)))
+    frl = gapn.get("frl") or {}
+    check("dấu đó NÓI RA còn thiếu trường nào",
+          "supply_pressure_mpa" in (frl.get("gap_fields") or []),
+          str(frl.get("gap_fields")))
+    jo = [n for n, _, _ in T.walk(r["tree"]) if n["type"] == "joint"]
+    check("floating joint treo dưới XY-LANH (vặn vào ren đầu cần)",
+          jo and T.parent_of(r["tree"], jo[0]["id"])["type"] == "cylinder", str(jo))
+    check("joint có mã thật, không phải node rỗng",
+          jo and (jo[0].get("code") or "").startswith("JA"), str(jo))
+
+
+def test_node_manifold_khong_duoc_nhan_ma_VAN():
+    """Node manifold KHÔNG được nhận mã van.
+
+    LỖI THẬT, ĐO ĐƯỢC: fill_codes() gom dòng theo `layer`, mà layer 'valve' chứa
+    cả van, manifold, gasket, end plate. Nhánh "tầng này chỉ có một dòng thì gán"
+    điền SY5220-5MZE-C6 (mã VAN) vào node MANIFOLD. Sơ đồ hiện MÃ SAI — nặng hơn
+    hiện thiếu. Sửa bằng cách ghép theo `node_type` do luật khai.
+    """
+    con = db.connect()
+    tree = {"id": "frl", "type": "frl", "name": "FRL", "code": "", "qty": 1,
+            "attrs": {}, "children": [
+                {"id": "m1", "type": "manifold", "name": "Đế", "code": "", "qty": 1,
+                 "attrs": {}, "children": [_station(1, "CDM2B40-150AZ")]}]}
+    r = W.api_bom(con, {"tree": tree, "config": {}, "name": "mfd"})
+    con.close()
+    m1 = T.find(r["tree"], "m1")
+    v1 = T.find(r["tree"], "v1")
+    check("van vẫn được điền mã van", (v1.get("code") or "").startswith("SY"),
+          str(v1.get("code")))
+    check("manifold KHÔNG bị điền mã van",
+          not (m1.get("code") or "").startswith("SY"), str(m1.get("code")))
+    check("manifold chưa có mã thì NÓI RA", bool(m1.get("gap_fields")), str(m1))
+
+
+def test_van_dieu_khien_xylanh_chua_go_ma_thi_khong_doan():
+    """Van điều khiển xy-lanh CHƯA GÕ MÃ thì không được điền mã van của xy-lanh khác.
+
+    Cỡ van suy từ lưu lượng của chính xy-lanh nó điều khiển. Xy-lanh chưa biết thì
+    cỡ van chưa biết — điền vào là đoán im lặng. Đo được: nhánh "loại này chỉ có
+    một dòng" gán mã van của trạm 1 cho trạm 2.
+    """
+    con = db.connect()
+    tree = _tree(["CDM2B40-150AZ"])
+    tree["children"].append(_station(2, ""))
+    r = W.api_bom(con, {"tree": tree, "config": {}, "name": "doan"})
+    con.close()
+    v2 = T.find(r["tree"], "v2")
+    check("van của xy-lanh chưa gõ mã: để trống, không đoán",
+          not v2.get("code"), str(v2.get("code")))
+    items = [l.get("item") or "" for l in r["lines"] if l.get("status") == "gap"]
+    check("nhưng van đó VẪN có dòng trong BOM",
+          any("Van" in i for i in items), str(items))
+    check("xy-lanh chưa gõ mã cũng có dòng trong BOM",
+          any("Xy-lanh" in i for i in items), str(items))
+
+
+def test_node_tren_so_do_khong_bi_bien_mat_khoi_BOM():
+    """Node có trên sơ đồ mà chưa có mã PHẢI vào BOM — chiều ngược của fill_codes.
+
+    ĐO ĐƯỢC: resolve() có `if not code: continue`, nên node 'Giảm âm' người dùng
+    tạo mà chưa gõ mã thì KHÔNG có trong BOM, trong khi sơ đồ vẫn vẽ nó. Bảng và
+    sơ đồ nói hai chuyện khác nhau, và bảng là cái đem đi mua hàng.
+    """
+    con = db.connect()
+    tree = _tree(["CDM2B40-150AZ"])
+    tree["children"][0]["children"].append(
+        {"id": "sil1", "type": "silencer", "name": "Giảm âm xả", "code": "",
+         "qty": 2, "attrs": {}, "children": []})
+    r = W.api_bom(con, {"tree": tree, "config": dict(CFG), "name": "silen"})
+    con.close()
+    sil = [l for l in r["lines"] if "Giảm âm" in (l.get("item") or "")]
+    check("giảm âm chưa có mã vẫn có dòng BOM", len(sil) == 1,
+          str([l.get("item") for l in r["lines"]]))
+    check("dòng đó mang SỐ LƯỢNG người dùng khai", sil and sil[0]["qty"] == 2,
+          str(sil))
+    check("và nói rõ còn thiếu 'mã hàng'", sil and sil[0]["gap_fields"] == ["code"],
+          str(sil))
+
+
+def test_khai_du_du_lieu_thi_dau_chua_co_ma_phai_MAT():
+    """Khai đủ dữ liệu → dấu 'chưa có mã' phải biến mất, không dính lại.
+
+    Dấu đặt trên node CỦA NGƯỜI DÙNG (node gốc FRL), không phải node engine sinh,
+    nên drop_generated() phải xoá riêng — chỉ xoá con `from_bom` là dấu còn nguyên
+    và sơ đồ báo thiếu mãi.
+    """
+    con = db.connect()
+    tree = _tree(["CDM2B40-150AZ"])
+    r = W.api_bom(con, {"tree": tree, "config": {}, "name": "thieu"})
+    tree = r["tree"]
+    check("lúc thiếu: gốc FRL báo chưa có mã", bool(T.find(tree, "frl").get("gap_fields")))
+    cfg = dict(CFG)
+    cfg.update({"supply_pressure_mpa": 0.6, "fitting_points": [
+        {"shape": "L", "tube_od": "06", "port_size": "1/4", "thread_material": "N",
+         "port_standard": "R", "seal_method": "S", "qty": 4}]})
+    r = W.api_bom(con, {"tree": tree, "config": cfg, "name": "du"})
+    con.close()
+    frl = T.find(r["tree"], "frl")
+    check("khai đủ: gốc FRL có mã AC", (frl.get("code") or "").startswith("AC"),
+          str(frl.get("code")))
+    check("và dấu chưa-có-mã đã mất", not frl.get("gap_fields"),
+          str(frl.get("gap_fields")))
+    fit = [n for n, _, _ in T.walk(r["tree"]) if n["type"] == "fitting"]
+    check("đầu nối giờ là node CÓ MÃ", fit and (fit[0].get("code") or "").startswith("KQ2"),
+          str(fit))
+
+
 if __name__ == "__main__":
     print("Kiểm đồ thị đấu nối")
     print("=" * 60)
@@ -406,7 +536,12 @@ if __name__ == "__main__":
                test_ma_ban_go_khong_bi_ghi_de,
                test_phu_kien_treo_dung_cha_va_dung_so_luong,
                test_dung_lai_khong_cong_don_phu_kien,
-               test_khoa_engine_tu_tinh_khong_con_bat_khai):
+               test_khoa_engine_tu_tinh_khong_con_bat_khai,
+               test_moi_vat_tu_deu_co_node_tren_so_do,
+               test_node_manifold_khong_duoc_nhan_ma_VAN,
+               test_van_dieu_khien_xylanh_chua_go_ma_thi_khong_doan,
+               test_node_tren_so_do_khong_bi_bien_mat_khoi_BOM,
+               test_khai_du_du_lieu_thi_dau_chua_co_ma_phai_MAT):
         print(f"\n{fn.__name__}")
         fn()
     print("\n" + "=" * 60)

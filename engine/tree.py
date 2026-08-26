@@ -60,6 +60,14 @@ PARENT_OF = {
     "tubing":           (("valve", "manifold", "frl", "cylinder", None),
                          "ống nối giữa các cửa"),
     "sensor":           (("cylinder", None), "cảm biến gắn rãnh xy-lanh"),
+    # Floating joint vặn vào REN ĐẦU CẦN, nên chỉ có một cha hợp lệ: xy-lanh.
+    # Luật R-JOINT-01 chỉ áp cho xy-lanh ren đầu cần NGOÀI (rod_end_thread_male).
+    "joint":            (("cylinder",),
+                         "floating joint vặn vào ren đầu cần xy-lanh"),
+    # Gasket + end plate là phụ kiện CỦA ĐẾ, không của van: catalog ghi "When
+    # ordering a valve individually, the base gasket is not included".
+    "manifold_part":    (("manifold",),
+                         "gasket/end plate lắp trên đế manifold"),
     "regulator":        (("frl", "manifold", None), "điều áp trên đường khí"),
     "plc":              ((None,), "PLC đứng riêng, nối bằng tín hiệu điện"),
     "frl":              ((None,), "nguồn khí là gốc cây"),
@@ -281,64 +289,135 @@ def stats(root):
 # Dòng BOM mang `for_items` = sinh ra vì actuator nào; ở đây dịch ngược thành
 # "phụ kiện này treo dưới node nào".
 #
-# Layer của dòng → loại node con, và loại node đó có cha hợp lệ là ai (PARENT_OF).
-LINE_TO_TYPE = {
-    "accessory": "speed_controller",   # AS…F vặn vào cửa xy-lanh
-    "electrical": "sensor",            # D-M9 gắn rãnh xy-lanh
-    "piping": "tubing",
-}
+# LOẠI NODE LẤY TỪ DÒNG BOM (`node_type`, do luật khai trong rules.yaml), KHÔNG
+# suy từ `layer`. Bảng suy theo layer trước đây chỉ có ba dòng
+# (accessory→speed_controller · electrical→sensor · piping→tubing) nên:
+#   · van, manifold, gasket, end plate cùng layer 'valve' → không phân biệt được
+#   · floating joint, đầu nối, bộ AC KHÔNG có dòng nào → không bao giờ lên sơ đồ
+# Đo được: nhập 1 mã xy-lanh ra 8 dòng BOM mà cây chỉ hiện 5 node.
+
+
+def _hosts_for(root, ctype, line):
+    """Node nào được làm CHA của vật tư này? Trả danh sách (node, phần số lượng).
+
+    Ba đường, theo đúng thứ tự ưu tiên:
+      1. `for_items` — dòng sinh ra vì actuator nào thì treo dưới chính node đó
+         (mỗi xy-lanh thấy phần của mình, không chia đều tổng).
+      2. per_system, không có for_items → treo dưới node đầu tiên có loại nằm
+         trong PARENT_OF[ctype]. GỐC được ưu tiên vì gốc là nguồn khí: ống và đầu
+         nối thuộc MẠNG PHÂN PHỐI của cả máy, không thuộc một xy-lanh nào.
+      3. Không có cha hợp lệ nào → trả rỗng, và người gọi BỎ QUA. Không treo bừa:
+         cây sai quan hệ thì validate() báo lỗi cho chính vật tư engine tự sinh.
+    """
+    ok_parents = PARENT_OF.get(ctype, ((), ""))[0]
+    items = line.get("for_items") or {}
+    if items:
+        by_code = {}
+        for n, _, _ in walk(root):
+            if n.get("code"):
+                by_code.setdefault(n["code"], []).append(n)
+        per = {}
+        for item, q in items.items():
+            hits = by_code.get(item, [])
+            for h in hits:
+                # Cha phải HỢP LỆ: dòng van có for_items là mã xy-lanh, nhưng van
+                # KHÔNG phải con của xy-lanh (van là CHA). Không kiểm thì cây sinh
+                # ra van treo dưới xy-lanh.
+                if h.get("type") not in ok_parents:
+                    continue
+                cur = per.get(id(h), (h, 0))[1]
+                per[id(h)] = (h, cur + q / max(1, len(hits)))
+        return list(per.values())
+    if root.get("type") in ok_parents:
+        return [(root, float(line.get("qty") or 0))]
+    for n, _, _ in walk(root):
+        if n.get("type") in ok_parents:
+            return [(n, float(line.get("qty") or 0))]
+    return []
 
 
 def attach_lines(root, lines):
-    """Treo dòng BOM engine sinh vào đúng node cha. Trả số phụ kiện đã gắn.
+    """Treo dòng BOM engine sinh vào đúng node cha. Trả số node đã thêm.
 
-    Gắn theo `for_items` chứ không theo thứ tự: một mã tiết lưu có thể phục vụ
-    nhiều xy-lanh, mà mỗi xy-lanh phải thấy phần của mình.
+    DÒNG CHƯA CÓ MÃ CŨNG ĐƯỢC MỘT NODE. Đây là yêu cầu của bạn: "chưa có mã do
+    thiếu dữ liệu đầu vào nhưng phần mềm vẫn phải liệt kê ra ở CẢ sơ đồ và BOM".
+    Node đó mang `gap_fields` = còn thiếu gì, để sơ đồ hiện 'CHƯA CÓ MÃ' thay vì
+    biến mất — biến mất thì người đọc tưởng máy không cần thứ đó.
     """
-    by_code = {}
-    for n, _, _ in walk(root):
-        if n.get("code"):
-            by_code.setdefault(n["code"], []).append(n)
-
     n_new = 0
+    # Node đã có một dòng nhận làm "chính nó" — để dòng thứ hai cùng loại không
+    # tưởng mình cũng là node đó.
+    hosted = set()
     for l in lines:
         if l.get("source") == "manual":
             continue
-        ctype = LINE_TO_TYPE.get(l.get("layer"))
+        ctype = l.get("node_type")
         if not ctype:
             continue
-        # số lượng THEO TỪNG actuator, không chia đều tổng
-        per = {}
-        for item, q in (l.get("for_items") or {}).items():
-            for h in by_code.get(item, []):
-                per[id(h)] = (h, per.get(id(h), (h, 0))[1] + q / max(1, len(by_code[item])))
-        if not per:
-            continue
-        for h, share in per.values():
+        gap = not l.get("part_number")
+        # Node loại này ĐÃ CÓ trong cây và dòng thuộc cả hệ (không for_items) →
+        # vật tư đó CHÍNH LÀ node đó, không phải con của nó. Mã do fill_codes()
+        # điền; ở đây chỉ đánh dấu khi chưa có mã.
+        #
+        # CHỈ TÍNH NODE CỦA NGƯỜI DÙNG (không `from_bom`), và mỗi node chỉ nhận
+        # MỘT dòng. Không có hai điều kiện đó thì:
+        #   · gasket (sinh trước) chiếm chỗ 'manifold_part', và END PLATE — 2 cái
+        #     mỗi manifold, BOM thật có SY5000-26-20A ×4 — biến mất khỏi sơ đồ dù
+        #     ĐÃ có dòng trong BOM. Đo được đúng lỗi này.
+        #   · nhiều dòng cùng loại sẽ cùng trỏ về một node và chỉ hiện một cái.
+        if not l.get("for_items"):
+            same = [n for n, _, _ in walk(root)
+                    if n.get("type") == ctype and not n.get("from_bom")
+                    and id(n) not in hosted]
+            if same:
+                h = same[0]
+                hosted.add(id(h))
+                if gap and not h.get("code"):
+                    h["gap_item"] = l.get("item")
+                    h["gap_fields"] = list(l.get("gap_fields") or [])
+                    h["gap_fields_vn"] = list(l.get("gap_fields_vn") or [])
+                    h["gap_why"] = l.get("gap_why")
+                    h["gap_note"] = l.get("note")
+                continue
+        label = l.get("part_number") or l.get("item") or ctype
+        for h, share in _hosts_for(root, ctype, l):
             kids = h.setdefault("children", [])
-            ex = next((c for c in kids if c.get("code") == l["part_number"]), None)
+            ex = next((c for c in kids if (c.get("code") or c.get("gap_item"))
+                       == (l.get("part_number") or l.get("item"))), None)
             if ex:
                 ex["qty"] = share
                 ex["from_bom"] = True
                 continue
             kids.append({
-                "id": f"{h['id']}__{l['part_number']}",
-                "type": ctype, "name": l["part_number"],
-                "code": l["part_number"], "qty": share,
+                "id": f"{h['id']}__{label}",
+                "type": ctype, "name": label,
+                "code": l.get("part_number") or "", "qty": share,
                 "attrs": {}, "children": [],
                 # đánh dấu để lần dựng sau xoá đi rồi sinh lại — nếu giữ thì số
                 # lượng sẽ cộng dồn qua mỗi lần bấm Dựng BOM
                 "from_bom": True,
                 "rule_code": l.get("rule_code"),
                 "confidence": l.get("confidence"),
+                **({"gap_item": l.get("item"),
+                    "gap_fields": list(l.get("gap_fields") or []),
+                    "gap_fields_vn": list(l.get("gap_fields_vn") or []),
+                    "gap_why": l.get("gap_why"),
+                    "gap_note": l.get("note")} if gap else {}),
             })
             n_new += 1
     return n_new
 
 
 def drop_generated(root):
-    """Xoá phụ kiện do lần dựng trước sinh ra. Giữ node người dùng tự tạo."""
+    """Xoá phụ kiện do lần dựng trước sinh ra. Giữ node người dùng tự tạo.
+
+    Xoá luôn DẤU 'chưa có mã' trên node của người dùng: dấu đó do lần dựng trước
+    đặt, giữ lại thì đã khai đủ dữ liệu rồi mà sơ đồ vẫn báo thiếu.
+    """
     for n, _, _ in walk(root):
+        for k in ("gap_item", "gap_fields", "gap_fields_vn", "gap_why",
+                  "gap_note"):
+            n.pop(k, None)
         if n.get("children"):
             n["children"] = [c for c in n["children"] if not c.get("from_bom")]
     return root

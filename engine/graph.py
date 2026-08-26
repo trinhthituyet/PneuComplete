@@ -96,6 +96,25 @@ GROUPS = {
     "sensor": {
         "label": "Cảm biến", "layer": "electrical",
         "ports": [P("sig", "electrical", "out", "tín hiệu")]},
+    # ── BA NHÓM THÊM ĐỂ SƠ ĐỒ LIỆT KÊ ĐỦ VẬT TƯ ─────────────────────────────
+    # Không có ba nhóm này thì vật tư engine sinh ra KHÔNG CÓ CHỖ ĐỨNG trên sơ đồ:
+    #   · floating joint (JA/JB) — luật R-JOINT-01 sinh, layer 'actuator'
+    #   · gasket + end plate     — R-MFD-GASKET-01 / R-MFD-ENDPLATE-01
+    #   · giảm âm                — tree.PARENT_OF và tree.EDGE_FOR ĐÃ nhắc tới
+    #     'silencer' từ trước, nhưng GROUPS thì không, nên UI không tạo được node
+    #     đó và layerOf() trả về 'other'. Đây là thiếu sót, không phải cố ý.
+    "joint": {
+        "label": "Khớp nối mềm (floating joint)", "layer": "actuator",
+        # Mối nối CƠ KHÍ: joint vặn vào ren đầu cần, không phải đường khí. Khai
+        # 'pneumatic' ở đây là cho phép nối ống khí vào đầu cần — xem ROLE_DOMAIN.
+        "ports": [P("rod", "mechanical", "in", "ren đầu cần", side="l"),
+                  P("load", "mechanical", "out", "về tải", side="r")]},
+    "manifold_part": {
+        "label": "Phụ kiện đế manifold (gasket, end plate)", "layer": "valve",
+        "ports": [P("mnt", "mechanical", "bidirectional", "lắp lên đế", side="l")]},
+    "silencer": {
+        "label": "Giảm âm cửa xả", "layer": "piping",
+        "ports": [P("IN", "pneumatic", "in", "từ cửa xả")]},
     "plc": {
         "label": "PLC / bộ điều khiển", "layer": "electrical",
         "ports": [P("out", "electrical", "out", "ngõ ra")]},
@@ -394,6 +413,47 @@ def resolve(con, graph, templates=None):
             "manual_lines": manual_lines, "warnings": warns, "info": info}
 
 
+def uncovered_lines(graph, lines, fill):
+    """Node trên sơ đồ mà KHÔNG dòng BOM nào đại diện → dòng BOM 'chưa có mã'.
+
+    CHIỀU NGƯỢC của fill_codes, và là nửa còn lại của cùng một yêu cầu: vật tư
+    thiếu mã phải hiện ở CẢ sơ đồ và BOM. Đo được chiều này còn im lặng hơn chiều
+    kia: người dùng tạo node 'Manifold' trên sơ đồ, không gõ mã, không khai
+    `use_manifold` → resolve() gặp `if not code: continue` nên đế manifold KHÔNG
+    có trong BOM, mà sơ đồ vẫn vẽ nó. Bảng và sơ đồ nói hai chuyện khác nhau.
+
+    Node được coi là ĐÃ ĐẠI DIỆN khi:
+      · có mã (người dùng gõ, hoặc fill_codes vừa điền), hoặc
+      · loại node đó đã có một dòng phạm vi CẢ HỆ (dòng không có `for_items`) —
+        dòng đó CHÍNH LÀ node này, dù mã còn trống.
+    Còn lại thì nói ra, kèm đúng thứ đang thiếu là 'mã hàng'.
+    """
+    covered = {l["node_type"] for l in lines
+               if l.get("node_type") and not l.get("for_items")}
+    out = []
+    for n in graph.get("nodes") or []:
+        if n.get("manual") or (n.get("code") or "").strip() or fill.get(n.get("id")):
+            continue
+        grp = n.get("group") or ""
+        if grp in covered or grp not in GROUPS:
+            continue
+        g = GROUPS[grp]
+        out.append({
+            "layer": g.get("layer", "other"), "node_type": grp,
+            "part_number": None, "status": "gap",
+            "item": f"{g['label']} — {n.get('label') or n.get('id')}",
+            "qty": float(n.get("qty") or 1), "unit": "cái",
+            "rule_code": None, "confidence": None,
+            "gap_fields": ["code"], "gap_fields_vn": ["Mã hàng"],
+            "gap_why": "node có trên sơ đồ nhưng chưa có mã",
+            "note": "Gõ mã cho node này trên sơ đồ, hoặc bật 'Mã tự do'",
+            "rationale": "Node có trên sơ đồ nhưng chưa có mã, và không luật nào "
+                         "sinh ra mã cho nó. Liệt kê ở đây để BOM không thiếu vật "
+                         "tư mà bảng vẫn trông như đủ.",
+        })
+    return out
+
+
 # ── Lưu / đọc đồ thị ─────────────────────────────────────────────────────────
 
 def ensure_table(con):
@@ -429,10 +489,18 @@ def fill_codes(graph, lines):
     Mục tiêu: sơ đồ sau BOM thành as-built — nhìn sơ đồ biết ngay lắp mã gì,
     không phải tra chéo bảng BOM.
 
+    GHÉP THEO `node_type` CỦA DÒNG, KHÔNG THEO `layer`. Đây là sửa lỗi đo được,
+    không phải dọn dẹp: layer 'valve' gộp cả van, manifold, gasket và end plate,
+    nên nhánh "tầng này chỉ có một dòng thì gán" đã điền mã VAN SY5220-5MZE-C6 vào
+    node MANIFOLD. Sơ đồ hiện MÃ SAI — nặng hơn hiện thiếu, và chính docstring này
+    nói "thà để trống hơn điền sai mã vào sơ đồ".
+    Dòng không khai node_type (vd xy-lanh do người dùng nhập) thì KHÔNG gán cho ai:
+    đoán mã xy-lanh từ xy-lanh khác đúng là thứ phải tránh.
+
     Gán theo `for_items` (dòng BOM sinh ra vì actuator nào) chứ không theo thứ tự:
-      · node van  → dòng tầng 'valve' phục vụ đúng xy-lanh mà node này điều khiển
-      · node khác → nếu tầng đó chỉ có DUY NHẤT một dòng thì gán, nhiều hơn thì
-        không đoán (thà để trống hơn điền sai mã vào sơ đồ).
+      · node van  → dòng phục vụ đúng xy-lanh mà node này điều khiển
+      · node khác → nếu loại đó chỉ có DUY NHẤT một dòng thì gán, nhiều hơn thì
+        không đoán.
     """
     nodes = graph.get("nodes") or []
     edges = graph.get("edges") or []
@@ -448,18 +516,22 @@ def fill_codes(graph, lines):
         for vid, _, _ in vs:
             valve_serves.setdefault(vid, set()).add(code)
 
-    by_layer = {}
+    by_type = {}
     for l in lines:
-        if l.get("source") == "manual":
+        if l.get("source") == "manual" or not l.get("node_type"):
             continue
-        by_layer.setdefault(l.get("layer"), []).append(l)
+        # Dòng CHƯA CÓ MÃ không gán vào đây: `code=None` ghi vào node là xoá nhãn
+        # chứ không phải thông tin. Việc hiện "chưa có mã" trên sơ đồ do
+        # tree.attach_lines() làm, nơi có cả tên vật tư và danh sách thiếu.
+        if not l.get("part_number"):
+            continue
+        by_type.setdefault(l["node_type"], []).append(l)
 
     out = {}
     for n in nodes:
         if n.get("code") or n.get("manual"):
             continue
-        layer = GROUPS.get(n.get("group") or "", {}).get("layer")
-        cands = by_layer.get(layer) or []
+        cands = by_type.get(n.get("group") or "") or []
         if not cands:
             continue
         served = valve_serves.get(n["id"])
@@ -471,6 +543,13 @@ def fill_codes(graph, lines):
                                 "why": f"điều khiển {', '.join(sorted(served))}"}
                 continue
         if len(cands) == 1:
+            # DÒNG THEO TỪNG ACTUATOR chỉ được gán qua đường `served` ở trên.
+            # Đo được: hai node van, van thứ hai điều khiển xy-lanh CHƯA GÕ MÃ →
+            # nhánh "loại này chỉ có một dòng" gán mã van của xy-lanh KHÁC cho nó.
+            # Cỡ van suy từ lưu lượng của chính xy-lanh đó, nên xy-lanh chưa biết
+            # thì cỡ van cũng chưa biết — điền vào là đoán, và đoán im lặng.
+            if cands[0].get("for_items"):
+                continue
             out[n["id"]] = {"code": cands[0]["part_number"], "qty": cands[0]["qty"],
-                            "why": f"dòng duy nhất ở tầng {layer}"}
+                            "why": f"dòng duy nhất loại {n.get('group')}"}
     return out

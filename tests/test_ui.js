@@ -48,7 +48,7 @@ const check = (name, cond, detail = '') => {
 let S;
 try {
   S = new Function(stub + body + `
-    return {layoutTree, boxW, walk, statusOf, allowedChildren, addStation,
+    return {layoutTree, boxW, walk, statusOf, gapWhy, allowedChildren, addStation,
             BOXH, VGAP, HGAP, PADX, PADY,
             setTree: t => { TREE = t; }, getTree: () => TREE,
             setGroups: g => { GROUPS = g; },
@@ -203,6 +203,34 @@ console.log('\nmot_tram_toi_thieu');
   check('cả hai để trống mã — engine tự chọn van, người dùng chỉ nhập xy-lanh',
     !cyl.code && !val.code);
 })();
+
+// ── node CHƯA CÓ MÃ: sơ đồ phải NÓI RA, không vẽ mờ rồi thôi ───────────────
+// Yêu cầu của bạn: vật tư thiếu mã vẫn phải liệt kê ở CẢ sơ đồ và BOM. Trên sơ đồ
+// nó khác hẳn node "bạn chưa gõ gì": engine BIẾT máy cần thứ đó, chỉ thiếu đầu vào.
+console.log('\nnode_chua_co_ma_tren_so_do');
+const GAPN = { id: 'g1', type: 'fitting', name: 'Đầu nối one-touch (KQ2)', code: '',
+  attrs: {}, children: [], gap_item: 'Đầu nối one-touch (KQ2)',
+  gap_fields: ['fitting_points'],
+  gap_fields_vn: ['Danh sách điểm nối ống → ren'] };
+check('node thiếu dữ liệu có trạng thái riêng (gap), không lẫn với "trống"',
+  S.statusOf(GAPN) === 'gap', S.statusOf(GAPN));
+check('trống thật vẫn là empty', S.statusOf({ code: '', attrs: {} }) === 'empty');
+check('có mã rồi thì hết gap dù dấu cũ còn dính',
+  S.statusOf({ ...GAPN, code: 'KQ2L06-02NS' }) === 'specified');
+check('nói ra ĐANG THIẾU GÌ, bằng tiếng Việt',
+  S.gapWhy(GAPN) === 'Danh sách điểm nối ống → ren', S.gapWhy(GAPN));
+check('không có bản dịch thì in khoá kỹ thuật, không in rỗng',
+  S.gapWhy({ gap_fields: ['tube_total_m'] }) === 'tube_total_m');
+// Hộp phải đủ rộng cho dòng 'CHƯA CÓ MÃ — cần …', nếu không chữ bị cắt.
+check('bề rộng hộp tính theo dòng ĐANG HIỆN, không theo mã',
+  S.boxW(GAPN) > S.boxW({ ...GAPN, gap_fields: [], gap_fields_vn: [] }),
+  `${S.boxW(GAPN)} vs ${S.boxW({ ...GAPN, gap_fields: [], gap_fields_vn: [] })}`);
+check('sơ đồ tô node chưa có mã bằng màu --gap, cùng màu với dòng BOM',
+  /st===.gap.\?.var\(--gap\)./.test(html));
+// Dòng chưa có mã có part_number=null → khoá theo mã sẽ in HAI LẦN (một ở khối cây,
+// một ở khối 'dùng chung cả máy'). Khoá chung chặn đúng lỗi đó.
+check('BOM khớp dòng-với-node bằng khoá chung, không bằng part_number',
+  /const keyOf=/.test(html) && /inTree\.has\(keyOf\(l\)\)/.test(html));
 
 // ── giao diện: các tab không đè nhau ────────────────────────────────────────
 console.log('\ntab_khong_de_nhau');

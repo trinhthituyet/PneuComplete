@@ -45,6 +45,11 @@ FIELD_VN = {
     "voltage": "Điện áp coil",
     "rod_end_thread": "Ren đầu cần",
     "port_size": "Cỡ cửa khí",
+    # BA KHOÁ NÀY GIỜ HIỆN RA CHO NGƯỜI DÙNG ĐỌC: dòng BOM và node sơ đồ chưa có
+    # mã đều in "cần <tên trường>". Thiếu bản dịch thì UI in khoá kỹ thuật thô.
+    "supply_pressure_mpa": "Áp nguồn của xưởng (MPa)",
+    "fitting_points": "Danh sách điểm nối ống → ren",
+    "code": "Mã hàng",
 }
 
 
@@ -54,7 +59,7 @@ def field_vn(f):
 
 def problem(rule_code, what, *, field=None, fix=None, how=None, options=None,
             subject=None, detail=None, severity="gap", code=None,
-            layer=None, item=None, qty=None):
+            layer=None, item=None, qty=None, node_type=None):
     """Dựng một vấn đề theo đúng 3 phần.
 
     rule_code : mã luật, vd 'R-VLV-01'
@@ -69,13 +74,18 @@ def problem(rule_code, what, *, field=None, fix=None, how=None, options=None,
     layer     : lớp vật tư mà vấn đề này CHẶN, vd 'air_prep' | 'piping'
     item      : tên vật tư bằng tiếng Việt, vd 'Đầu nối one-touch'
     qty       : số lượng nếu biết, dù chưa có mã
+    node_type : loại node trên sơ đồ mà vật tư này chiếm chỗ, vd 'frl' | 'tubing'
 
-    ── VÌ SAO CẦN layer/item/qty ────────────────────────────────────────────
+    ── VÌ SAO CẦN layer/item/qty/node_type ──────────────────────────────────
     Thiếu dữ liệu KHÔNG có nghĩa là bỏ vật tư khỏi BOM. Đo được: nhập mã xy-lanh
     mà không khai cấu hình thì BOM ra 5 dòng trông như đủ, trong khi 3 nhóm vật tư
     (bộ AC, ống, đầu nối) nằm ở danh sách gap RIÊNG — người đọc BOM không thấy.
     Khai `layer`+`item` thì gap hiện thành MỘT DÒNG trong bảng BOM với mã để trống
     và trạng thái 'chưa có mã', nên không ai tưởng BOM đã đủ.
+
+    `node_type` làm điều tương tự cho SƠ ĐỒ: bạn yêu cầu vật tư thiếu mã phải hiện
+    ở CẢ hai chỗ. Không có nó thì tree.py phải suy loại node từ `layer`, mà layer
+    'valve' gộp cả van/manifold/gasket/end plate nên suy ra sai.
     """
     if fix is None and field:
         fix = f"Chọn {field_vn(field)}" + (f" cho {subject}" if subject else "")
@@ -98,6 +108,8 @@ def problem(rule_code, what, *, field=None, fix=None, how=None, options=None,
         "layer": layer,
         "item": item,
         "qty": qty,
+        # loại node sơ đồ — để vật tư chưa có mã vẫn có chỗ đứng trên sơ đồ
+        "node_type": node_type,
         "options": list(options) if options else None,
         # ── chỉ vào Chi tiết/Debug ──────────────────────────────────────────
         "detail": detail,

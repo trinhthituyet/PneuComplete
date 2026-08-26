@@ -259,7 +259,35 @@ def _options_for(con, field, project):
 
 
 def _resolve_need(con, need, ctx, project, src_part_id, templates):
-    """REQUIREMENT → dòng BOM cụ thể, hoặc gap kèm lý do."""
+    """REQUIREMENT → dòng BOM cụ thể, hoặc gap kèm lý do.
+
+    Vỏ bọc quanh _pick_part(): MỌI gap đều được gắn `layer` + `item` + `node_type`
+    + `qty` của luật, ở ĐÚNG MỘT CHỖ.
+
+    VÌ SAO KHÔNG SỬA TỪNG NHÁNH: _pick_part có MƯỜI MỘT chỗ `return {"gap": …}` và
+    chỉ một chỗ mang tên vật tư. Đo được hậu quả: R-MFD-ENDPLATE-01 báo "không mã
+    nào trong họ SY-5-E thoả yêu cầu" → end plate (2 cái cho mỗi manifold, BOM thật
+    có SY5000-26-20A ×4) BIẾN MẤT khỏi cả BOM lẫn sơ đồ. Luật đã kích hoạt nghĩa là
+    vật tư CÓ CẦN; không ra mã là chuyện khác, và phải nói ra chứ không bỏ đi.
+    Thêm nhánh gap mới trong tương lai cũng tự động có, không phải nhớ.
+    """
+    res = _pick_part(con, need, ctx, project, src_part_id, templates)
+    if "gap" in res:
+        res["layer"] = res.get("layer") or need.get("layer")
+        res["item"] = res.get("item") or need.get("item_vn")
+        res["node_type"] = res.get("node_type") or need.get("node_type")
+        if res.get("qty") is None:
+            # Số lượng thường ĐÃ BIẾT dù mã chưa ra: end plate là 2, gasket là số
+            # van. Bỏ trống thì BOM hiện '?' trong khi con số có sẵn.
+            try:
+                res["qty"] = float(_subst(need.get("qty", 1), ctx, project))
+            except (TypeError, ValueError):
+                res["qty"] = None
+    return res
+
+
+def _pick_part(con, need, ctx, project, src_part_id, templates):
+    """Chọn mã cụ thể cho một REQUIREMENT. Gọi qua _resolve_need, không gọi thẳng."""
     # luật có thể khai thông tin BẮT BUỘC người dùng cấp. Không có thì gap —
     # tuyệt đối không lấy giá trị mặc định do engine tự nghĩ ra (A3-5).
     ri = need.get("requires_input")
@@ -271,6 +299,7 @@ def _resolve_need(con, need, ctx, project, src_part_id, templates):
         # biến mất khỏi bảng và người đọc tưởng BOM đã đủ.
         return {"gap": f"thiếu {PB.field_vn(ri)}", "field": ri,
                 "layer": need.get("layer"), "item": need.get("item_vn"),
+                "node_type": need.get("node_type"),
                 "options": _options_for(con, ri, project)}
     want = {k: v for k, v in (_subst(need.get("want", {}), ctx, project) or {}).items()
             if v is not None}
@@ -665,12 +694,17 @@ def build(con, inputs, project=None, project_name="demo"):
                     r["code"], res["gap"], subject=code,
                     field=res.get("field"), options=res.get("options"),
                     layer=res.get("layer"), item=res.get("item"),
+                    node_type=res.get("node_type"),
+                    # ×count như dòng BOM thật: gap của luật per_actuator là số
+                    # lượng CHO MỖI xy-lanh, mà BOM cần tổng.
+                    qty=(res.get("qty") or 0) * count or None,
                     detail=f"{res.get('detail') or ''} {r['rationale'] or ''}".strip())))
                 continue
             conf_line = res["confidence"]
             if vf_guessed and need.get("layer") == "valve" and conf_line:
                 conf_line = min(conf_line, 0.5)
-            lines.append({"layer": need["layer"], "part_number": res["part_number"],
+            lines.append({"layer": need["layer"], "node_type": need.get("node_type"),
+                          "part_number": res["part_number"],
                           "qty": res["qty"] * count, "rule_code": r["code"],
                           "rationale": r["rationale"], "confidence": conf_line,
                           "note": res.get("note"),
@@ -718,13 +752,21 @@ def build(con, inputs, project=None, project_name="demo"):
                     "R-FIT-01",
                     f"điểm nối #{i + 1}: không có đầu nối nào thoả",
                     field="fitting_points",
+                    # MỘT DÒNG RIÊNG cho mỗi điểm nối trượt: người dùng đã khai
+                    # điểm nối đó nên vật tư CÓ THẬT và số lượng ĐÃ BIẾT — chỉ
+                    # thiếu mã. Gộp chung một dòng là mất số lượng của các điểm
+                    # còn lại.
+                    layer="piping", node_type="fitting",
+                    item=f"Đầu nối one-touch (KQ2) — điểm nối #{i + 1}",
+                    qty=float(pt.get("qty") or 1),
                     options=g.get("options"),
                     subject=", ".join(f"{k}={v}" for k, v in sorted(want.items())),
                     detail=g.get("gap") or g.get("error"))))
                 continue
             mm = materialize.materialize(con, g["part_number"], templates)
             lines.append({
-                "layer": "piping", "part_number": g["part_number"],
+                "layer": "piping", "node_type": "fitting",
+                "part_number": g["part_number"],
                 "qty": float(pt.get("qty") or 1), "rule_code": "R-FIT-01",
                 "rationale": "đầu nối cho điểm nối bạn khai; engine chọn mã theo "
                              "cỡ ống + cỡ ren, kiểm bằng ràng buộc từ catalog",
@@ -736,6 +778,7 @@ def build(con, inputs, project=None, project_name="demo"):
         gaps.append(PB.as_gap(PB.problem(
             "R-FIT-01", "chưa khai điểm nối ống → ren nên BOM thiếu đầu nối",
             field="fitting_points", layer="piping", item="Đầu nối one-touch (KQ2)",
+            node_type="fitting",
             fix="Khai danh sách điểm nối: kiểu (L/H/U/F/E) · cỡ ống · cỡ ren · số lượng",
             detail="Engine KHÔNG suy được số lượng đầu nối: đo trên hai máy thật, "
                    "tỉ lệ cút vuông trên mỗi thiết bị là 1,42 và 2,74 (chênh gấp "
@@ -790,7 +833,7 @@ def build(con, inputs, project=None, project_name="demo"):
         gaps.append(PB.as_gap(PB.problem(
             "R-FRL-02",
             "chưa chọn được cỡ AC từ lưu lượng",
-            layer="air_prep", item="Bộ xử lý khí FRL (AC)", qty=1,
+            layer="air_prep", item="Bộ xử lý khí FRL (AC)", qty=1, node_type="frl",
             field="supply_pressure_mpa" if need_supply else "frl_size",
             fix=("Khai áp nguồn của xưởng (MPa) — engine sẽ tự tra đồ thị"
                  if need_supply else "Chốt cỡ AC ở cấu hình"),
@@ -911,13 +954,15 @@ def build(con, inputs, project=None, project_name="demo"):
                     r["code"], res["gap"], field=res.get("field"),
                     options=res.get("options"),
                     layer=res.get("layer"), item=res.get("item"),
+                    node_type=res.get("node_type"), qty=res.get("qty"),
                     detail=f"{res.get('detail') or ''} {r['rationale'] or ''}".strip())))
                 continue
             note = res.get("note")
             if od:
                 note = ((note + " · ") if note else "") + \
                     f"ø{od}: {int(onetouch_by_od.get(od,0))} đầu one-touch trong hệ"
-            lines.append({"layer": need["layer"], "part_number": res["part_number"],
+            lines.append({"layer": need["layer"], "node_type": need.get("node_type"),
+                          "part_number": res["part_number"],
                           "qty": res["qty"], "rule_code": r["code"],
                           "rationale": r["rationale"], "confidence": res["confidence"],
                           "note": note, "unit": need.get("unit")})
@@ -984,15 +1029,28 @@ def build(con, inputs, project=None, project_name="demo"):
         if cur is None:
             by_item[key] = {
                 "layer": g["layer"], "part_number": None,
+                # node_type để SƠ ĐỒ cũng có chỗ cho vật tư chưa có mã
+                "node_type": g.get("node_type"),
                 "item": g.get("item"), "status": "gap",
                 "qty": g.get("qty") or 0,
                 "rule_code": g.get("rule_code"),
                 "rationale": g.get("detail") or g.get("what") or "",
                 "confidence": None, "unit": None,
                 "gap_fields": [g.get("field")],
+                # TÊN TIẾNG VIỆT đi kèm: UI in danh sách này cho người dùng đọc,
+                # nên dịch ở đây — chỗ duy nhất có bảng FIELD_VN — thay vì để UI
+                # tự đoán nghĩa của khoá kỹ thuật.
+                "gap_fields_vn": [PB.field_vn(g["field"]) if g.get("field") else None],
+                # KHÔNG PHẢI GAP NÀO CŨNG CHỈ VÀO MỘT TRƯỜNG. 'không mã nào trong
+                # họ SY-5-E thoả yêu cầu' (end plate) không có `field` nào để khai,
+                # nên nếu chỉ liệt kê trường thì UI in "cần —" và người dùng không
+                # biết vướng ở đâu. `gap_why` giữ chính câu mô tả.
+                "gap_why": g.get("what"),
                 "note": g.get("fix")}
         else:
             cur["gap_fields"].append(g.get("field"))
+            cur["gap_fields_vn"].append(
+                PB.field_vn(g["field"]) if g.get("field") else None)
             cur["qty"] = cur["qty"] or g.get("qty") or 0
             if g.get("fix"):
                 cur["note"] = f"{cur['note']} · {g['fix']}" if cur["note"] else g["fix"]

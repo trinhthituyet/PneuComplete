@@ -295,6 +295,10 @@ def api_bom_graph(con, payload, gr, tree=None):
         if f:
             n["code"] = f["code"]
             n["filled_by_bom"] = True
+    # Nửa còn lại: node có trên sơ đồ mà không dòng nào đại diện → vào BOM với mã
+    # để trống. Phải làm SAU fill_codes (mã vừa điền tính là đã đại diện) và TRƯỚC
+    # attach_lines (để chính node đó được đánh dấu 'chưa có mã' trên sơ đồ).
+    lines += G.uncovered_lines(gr, lines, fill)
     if tree is not None:
         # điền mã vào chính CÂY (nguồn sự thật khi nhập bằng cây), rồi lưu cây
         for n, _, _ in T.walk(tree):

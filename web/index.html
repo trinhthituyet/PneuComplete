@@ -81,6 +81,7 @@ input:focus,select:focus{outline:2px solid var(--acc);outline-offset:-1px}
        max-width:96px;overflow:hidden;text-overflow:ellipsis}
 .chip{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .chip.specified{background:var(--ok)} .chip.type_only{background:var(--warn)}
+.chip.gap{background:var(--gap)} .badge.gap{background:rgba(242,99,122,.14);color:var(--gap);border:1px solid var(--gap)}
 .chip.empty{background:var(--err)}
 .kids{margin-left:18px;border-left:1px solid var(--line);padding-left:4px}
 .kids.hid{display:none}
@@ -219,7 +220,18 @@ function* walk(n,p=null,d=0){ yield [n,p,d];
 const findN=id=>{ for(const [n] of walk(TREE)) if(n.id===id) return n; return null; };
 const parentOf=id=>{ for(const [n,p] of walk(TREE)) if(n.id===id) return p; return null; };
 const layerOf=t=>(GROUPS[t]||{}).layer||'other';
-const statusOf=n=>n.code?'specified':(Object.keys(n.attrs||{}).length?'type_only':'empty');
+/* 'gap' = engine BIẾT cần vật tư này nhưng chưa ra mã (thiếu dữ liệu đầu vào).
+   Khác hẳn 'empty' (bạn chưa gõ gì): gap là VIỆC CỦA PHẦN MỀM còn thiếu đầu vào,
+   nên phải hiện tên vật tư + đang thiếu trường nào, không chỉ vẽ nét mờ.
+   Xếp TRƯỚC code: node gốc FRL có thể vừa có mã cũ vừa mang dấu gap thì gap thắng. */
+const statusOf=n=>(n.gap_fields&&n.gap_fields.length&&!n.code)?'gap'
+  :n.code?'specified':(Object.keys(n.attrs||{}).length?'type_only':'empty');
+const gapWhy=n=>((n.gap_fields_vn&&n.gap_fields_vn.length?n.gap_fields_vn:n.gap_fields)||[])
+  .filter(Boolean).join(' · ');
+/* Có gap KHÔNG chỉ vào trường nào (vd 'không mã nào trong họ SY-5-E thoả yêu cầu').
+   In "cần —" là bắt người dùng đoán, nên rơi về chính câu mô tả. */
+const gapText=n=>{ const w=gapWhy(n);
+  return 'CHƯA CÓ MÃ — '+(w?'cần '+w:(n.gap_why||'thiếu dữ liệu đầu vào')); };
 function snap(){ undoStack.push(JSON.stringify({TREE,seq})); if(undoStack.length>50) undoStack.shift(); }
 function undo(){ if(!undoStack.length) return; const d=JSON.parse(undoStack.pop());
   TREE=d.TREE; seq=d.seq; sel=null; render(); }
@@ -259,6 +271,11 @@ function renderNode(n){
   row.appendChild(ic);
   row.appendChild(el('div','nlabel',n.name||(GROUPS[n.type]||{}).label||n.type));
   if(n.code) row.appendChild(el('div','ncode',n.code));
+  else if(statusOf(n)==='gap'){
+    const b=el('div','badge gap','CHƯA CÓ MÃ');
+    b.title=gapText(n)+(n.gap_note?' · '+n.gap_note:'');
+    row.appendChild(b);
+  }
   row.appendChild(el('div','chip '+statusOf(n)));
   wrap.appendChild(row);
   if(kids.length){
@@ -615,7 +632,12 @@ function renderBom(r){
   tb.appendChild(th);
   const tbody=el('tbody');
   const inTree=new Set();
-  const lineOf={}; lines.forEach(l=>{ (lineOf[l.part_number]||=[]).push(l); });
+  // KHOÁ CHUNG cho cả hai loại dòng. Dòng chưa có mã có part_number=null, nên nếu
+  // chỉ khoá theo mã thì nó KHÔNG khớp được với node trên cây và bị in HAI LẦN:
+  // một lần ở khối cây (mờ, không lý do) và một lần ở khối 'dùng chung cả máy'.
+  const keyOf=l=>l.part_number||('#'+(l.item||''));
+  const keyOfNode=n=>n.code||('#'+(n.gap_item||''));
+  const lineOf={}; lines.forEach(l=>{ (lineOf[keyOf(l)]||=[]).push(l); });
 
   function bomRow(node,depth){
     const tr=el('tr');
@@ -625,28 +647,35 @@ function renderBom(r){
     const L=layerOf(node.type);
     const badge=el('span','pill',(GROUPS[node.type]||{}).label||node.type);
     badge.style.borderColor=`var(--l-${L})`; badge.style.color=`var(--l-${L})`;
-    const code=el('span','mono',node.code||'(chưa có mã)');
-    if(!node.code) code.style.color='var(--faint)';
-    w.appendChild(code); w.appendChild(badge);
-    if(node.name && node.name!==node.code) w.appendChild(el('span','why',node.name));
+    const gp=statusOf(node)==='gap';
+    const code=el('span','mono',gp?(node.gap_item||node.name):(node.code||'(chưa có mã)'));
+    code.style.color=gp?'var(--gap)':(node.code?'':'var(--faint)');
+    w.appendChild(code);
+    if(gp){ const g=el('span','pill','CHƯA CÓ MÃ');
+      g.style.borderColor='var(--gap)'; g.style.color='var(--gap)'; w.appendChild(g); }
+    w.appendChild(badge);
+    if(node.name && node.name!==node.code && !gp)
+      w.appendChild(el('span','why',node.name));
     c1.appendChild(w); tr.appendChild(c1);
-    const ln=(lineOf[node.code]||[])[0];
+    const ln=(lineOf[keyOfNode(node)]||[])[0];
     const c2=el('td','why');
-    if(ln){ inTree.add(node.code);
+    if(ln){ inTree.add(keyOfNode(node));
       c2.textContent=(ln.rule_code?ln.rule_code+': ':'')+String(ln.rationale||'').slice(0,100);
       if(ln.confidence!=null&&ln.confidence<0.9)
         c2.appendChild(el('div','pill',`tin cậy ${Math.round(ln.confidence*100)}% — kiểm lại`));
     } else if(node.manual) c2.textContent='nhập tay, không qua kiểm tra kỹ thuật';
     tr.appendChild(c2);
     const c3=el('td','mono'); c3.style.textAlign='right';
-    c3.textContent=node.qty!=null?(+node.qty).toLocaleString('vi'):'';
+    // SL 0 ở dòng chưa có mã đọc thành "không cần" — '?' là "chưa tính được".
+    c3.textContent=gp&&!node.qty?'?':(node.qty!=null?(+node.qty).toLocaleString('vi'):'');
+    if(gp) c3.style.color='var(--gap)';
     tr.appendChild(c3);
     tbody.appendChild(tr);
     (node.children||[]).forEach(c=>bomRow(c,depth+1));
   }
   if(TREE) bomRow(TREE,0);
 
-  const rest=lines.filter(l=>!inTree.has(l.part_number));
+  const rest=lines.filter(l=>!inTree.has(keyOf(l)));
   if(rest.length){
     const hr=el('tr'); const hd=el('td'); hd.colSpan=3;
     hd.style.cssText='color:var(--faint);font-size:11px;font-weight:600;padding-top:14px';
@@ -703,7 +732,10 @@ function renderBom(r){
    và hàng phụ kiện rộng 210px nhét trong cột 176px). */
 const BOXH=44, VGAP=10, HGAP=48, PADX=16, PADY=16, CHARW=6.4;
 function boxW(n){
-  const a=(n.name||n.type||'').length, b=(n.code||'').length;
+  // dòng dưới có thể là mã hàng HOẶC 'CHƯA CÓ MÃ — cần …' — đo cái đang hiện thật,
+  // không đo mã: hộp tính theo mã thì dòng thiếu-dữ-liệu bị cắt mất chữ.
+  const sub=n.code||(statusOf(n)==='gap'?gapText(n):'');
+  const a=(n.name||n.type||'').length, b=sub.length;
   return Math.max(126, Math.min(268, Math.round(Math.max(a,b*0.95)*CHARW)+24));
 }
 function layoutTree(root){
@@ -739,16 +771,19 @@ function renderDiagram(){
   }
   for(const [n] of walk(TREE)){
     const p=pos.get(n.id), L=layerOf(n.type), st=statusOf(n);
+    /* Node CHƯA CÓ MÃ vẽ viền đỏ như dòng BOM tương ứng — hai chỗ nói cùng một
+       chuyện thì phải cùng màu, nếu không người dùng không nối được sơ đồ với bảng. */
     svg.appendChild(sv('rect',{x:p.x,y:p.y,width:p.w,height:BOXH,rx:6,
-      fill:'#1C202B',stroke:`var(--l-${L})`,'stroke-width':1.6,
+      fill:'#1C202B',stroke: st==='gap'?'var(--gap)':`var(--l-${L})`,'stroke-width':1.6,
       'stroke-dasharray': st==='specified'?'':st==='type_only'?'5,3':'2,3'}));
     const cap=Math.floor((p.w-20)/CHARW);
     const t1=sv('text',{x:p.x+10,y:p.y+18,'font-size':11,fill:'#E8EAF0','font-weight':600});
     t1.textContent=(n.name||n.type).slice(0,cap);
     svg.appendChild(t1);
-    const t2=sv('text',{x:p.x+10,y:p.y+33,'font-size':10,fill:`var(--l-${L})`,
-      'font-family':'monospace'});
-    t2.textContent=(n.code||(st==='type_only'?'(chưa chọn mã)':'(chưa nhập)')).slice(0,cap);
+    const t2=sv('text',{x:p.x+10,y:p.y+33,'font-size':10,
+      fill: st==='gap'?'var(--gap)':`var(--l-${L})`,'font-family':'monospace'});
+    t2.textContent=(n.code||(st==='gap'?gapText(n)
+      :st==='type_only'?'(chưa chọn mã)':'(chưa nhập)')).slice(0,cap);
     svg.appendChild(t2);
   }
   v.innerHTML='';
