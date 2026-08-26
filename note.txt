@@ -1,88 +1,72 @@
-Vòng A xong. Tóm lại:
+Xong yêu cầu 3. Câu trả lời ngắn: không dùng được, và lý do không phải kỹ 
+  thuật.
 
-  Cổng trước, số sau
+  Cổng đăng nhập
 
-  tests/test_chart.py — 12 tiêu chí + 7 đối chứng âm, tất cả đạt.
-  Ground truth (db/seed/charts/_groundtruth-ac.yaml) lấy từ textcủa
-  PDF nên độc lập với việc trích đường cong. Bộ sinh YAML tự gọi
-  cổng và raise nếu chưa đạt, nên "không đoán số rồi ghi YAML" là
-  ràng buộc trong code, không phải việc tôi phải nhớ.
+  Nguyên văn trên trang từng công cụ:
 
-  Đối chứng âm quan trọng ngang bộ tiêu chí: tôi gieo 7 lỗi (saitỉ
-  lệ X/Y, xoay tiêu đề, trộn họ đồ thị, bỏ một họ áp vào, ghép nét
-  ngược, đổi tiêu đề hai ô) — cổng bắt được cả 7. Không có phần này
-  thì "12/12" không chứng minh gì.
+  ▎ This service is for registered users only. Please log in to use it.
+  ▎ NOTICE — Effective from the end of February 2026, user registration will 
+  ▎ be mandatory for using the selection software.
 
-  Hai lỗi nặng ground truth bắt được, cả hai đều im lặng
+  Hôm nay là 26/8/2026, nên quy định đó đã có hiệu lực. Toàn bộ phần tính toán
+  nằm ở host riêng mssc.smcworld.com sau cổng đăng nhập; trang công khai chỉ
+  còn danh sách công cụ, 0 bảng số liệu. Tôi không tạo tài khoản và không đăng
+  nhập thay bạn — việc đó cần thông tin cá nhân của bạn và đồng ý điều khoản
+  dịch vụ nhân danh bạn.
 
-  Trang 23 báo "6/6 ô đạt" nhưng trục X là áp vào [MPa], không phải
-  lưu lượng. Catalog có ba họ đồ thị, không một. Vào YAML thì engine
-  đọc áp suất thành lưu lượng, không dấu hiệu gì.
+  Tải 5 request, ≤1 req/s, UA PneuCompleteBot/0.1. Ghi đủ trong
+  docs/smc-selection-software.md: 12 công cụ tính toán đọc được tên; 18 công
+  cụ chọn model có tên nằm trong ảnh (alt rỗng) nên tôi chỉ ghi slug — không
+  suy tên từ chữ viết tắt.
 
-  Mỗi ô vẽ hai họ đường theo áp vào (chú giải cấp trang: nét liền
-  1,0 MPa · nét đứt 0,7 MPa), nên áp đặt 0,5 MPa có ở cả hai họ.Bản
-  YAML đầu tiên của tôi có hai đường trùng nhãn 0,5 ở mọi ô —
-  lookup lấy đường nào là ngẫu nhiên. Tôi đã xoá tệp đó ngay và ghi
-  lại với nhãn "áp vào/áp đặt".
+  Nếu bạn tự đăng nhập, ba phép kiểm đáng làm
 
-  Lỗi thiết kế tôi tự mắc ba lần
+  Không phải để lấy dữ liệu hàng loạt, mà để kiểm chéo độc lập — mỗi phép chỉ
+  cần vài số:
 
-  Ô được suy từ cụm đường cong, rồi cộng offset đo trên đúng một
-  trang. Mỗi lần sửa bộ lọc đường cong là bbox đổi, mọi vùng nhãn
-  lệch, cả trang mất nhãn — đúng lớp lỗi "mainY=380 cứng" tôi đãphê
-  phán ở prototype. Đảo chiều phụ thuộc: nhãn trục định nghĩa ô,
-  đường cong được gán vào ô theo điểm đầu. Không còn hằng số nào
-  theo trang.
+  ┌───────────┬─────────────┬────────────────────────────────────────────┐
+  │  công cụ  │    nhập     │                   so với                   │
+  ├───────────┼─────────────┼────────────────────────────────────────────┤
+  │ fccs (dẫn │ SY5000, 0,5 │ ngưỡng cỡ van trong R-VLV-02 → có thể bỏ   │
+  │  nạp âm   │  MPa        │ được câu hỏi valve_series_size             │
+  │ C)        │             │                                            │
+  ├───────────┼─────────────┼────────────────────────────────────────────┤
+  │           │ lưu lượng + │ chart.pick_frl_size() đọc từ đồ thị đã số  │
+  │ acmss     │  áp nguồn   │ hoá — phép kiểm mạnh nhất cho cả vòng số   │
+  │           │             │ hoá                                        │
+  ├───────────┼─────────────┼────────────────────────────────────────────┤
+  │ accs      │ ø40 × 150,  │ engine/calc.py                             │
+  │           │ 30 ck/ph    │                                            │
+  └───────────┴─────────────┴────────────────────────────────────────────┘
 
-  Kết quả
-
-  17 model AC/AR/AW × 9 điều kiện = 153 đường. Kiểm chứng vật lýđộc
-  lập với mọi tiêu chí trong một ô: cỡ lớn hơn giữ áp tốt hơn, đúng
-  ở cả ba họ mã.
-
-  frl_size chuyển sang engine tự tính. Đổi lại phải khai áp nguồn
-  của xưởng — catalog không có thông số này, và thiếu nó thì khôn
-  Bản YAML đầu tiên của tôi có hai đường trùng nhãn 0,5 ở mọi ô
-  — lookup lấy đường nào là ngẫu nhiên. Tôi đã xoá tệp đó ngay và
-  ghi lại với nhãn "áp vào/áp đặt".
-
-  Lỗi thiết kế tôi tự mắc ba lần
-
-  Ô được suy từ cụm đường cong, rồi cộng offset đo trên đúng một
-  trang. Mỗi lần sửa bộ lọc đường cong là bbox đổi, mọi vùng nhãn
-  lệch, cả trang mất nhãn — đúng lớp lỗi "mainY=380 cứng" tôi đã
-  phê phán ở prototype. Đảo chiều phụ thuộc: nhãn trục định
-  nghĩa ô, đường cong được gán vào ô theo điểm đầu. Không còn
-
-  Mỗi ô vẽ hai họ đường theo áp vào (chú giải cấp trang: nét liền 1,0 MPa · nét đứt 0,7 MPa), nên áp đặt 0,5 MPa
-  có ở cả hai họ. Bản YAML đầu tiên của tôi có hai đường trùng nhãn 0,5 ở mọi ô — lookup lấy đường nào là ngẫu
-  nhiên. Tôi đã xoá tệp đó ngay và ghi lại với nhãn "áp vào/áp đặt".
-
-  Lỗi thiết kế tôi tự mắc ba lần
-
-  Ô được suy từ cụm đường cong, rồi cộng offset đo trên đúng một trang. Mỗi lần sửa bộ lọc đường cong là bbox
-  đổi, mọi vùng nhãn lệch, cả trang mất nhãn — đúng lớp lỗi "mainY=380 cứng" tôi đã phê phán ở prototype. Đảo
-  chiều phụ thuộc: nhãn trục định nghĩa ô, đường cong được gán vào ô theo điểm đầu. Không còn hằng số nào theo
+  Đưa tôi con số là tôi thêm vào ground truth và cổng kiểm, không cần vào
   trang.
 
-  Kết quả
+  Kết quả dùng được nhất: ba lỗi tuân thủ robots.txt
 
-  17 model AC/AR/AW × 9 điều kiện = 153 đường. Kiểm chứng vật lý độc lập với mọi tiêu chí trong một ô: cỡ lớn
-  hơn giữ áp tốt hơn, đúng ở cả ba họ mã.
+  robots.txt của smcworld.com có hai khối User-agent: * — một do Cloudflare
+  chèn (Allow: /), một của chính SMC (3 dòng Disallow).
 
-  frl_size chuyển sang engine tự tính. Đổi lại phải khai áp nguồn của xưởng — catalog không có thông số này, và
-  thiếu nó thì không chọn được họ đường. Không có hằng số tự đặt: đặt điều áp lên bậc kế tiếp trên áp làm việc
-  (bậc 0,1 MPa do catalog vẽ) rồi chọn cỡ nhỏ nhất còn giữ đủ áp.
+  1. urllib.robotparser bỏ khối * thứ hai — CPython _add_entry() ghi rõ "the 
+  first default entry wins".
+  2. Stdlib URL-encode dấu * thành %2A, nên mọi luật có * vô hiệu im lặng. Gộp
+  khối xong vẫn không chặn được vì lỗi này.
+  3. robots_ok() coi mọi lỗi là "mặc định cho phép" — proxy trả 403 cho
+  mssc.smcworld.com mà hàm vẫn nói CHO PHÉP, tức crawler sẵn sàng tải một host
+  nó chưa từng đọc được luật.
 
-  Ba chỗ tôi phải nói ra
+  Hậu quả: crawler tưởng được phép tải ba đường dẫn chủ site đã chặn. Đã kiểm 
+  DB: 0/2718 URL đã tải thuộc các đường đó — chưa từng vi phạm, nhưng đó là
+  may, không phải do luật đang chạy đúng.
 
-  - Đồ thị là catalog thế hệ -D, mã mặc định là -A; DOCUMENT/ không có đồ thị -A cho cỡ 20–60 → cảnh báo warn,
-  không phải info.
-  - Luật V-FRL-FLOW-01 vẫn nói "engine không kiểm được lưu lượng, hãy tự mở PDF trang 10" — đã sai kể từ khi số
-  hoá xong. Giờ chỉ hiện khi thiếu áp nguồn.
-  - Chưa có người mở catalog đối chiếu bằng mắt. Cổng chứng minh phép trích tự nhất quán với nhãn trục, không
-  chứng minh catalog in đúng → confidence 0.9.
+  Sửa bằng crawler/robots.py (stdlib-only) + tests/test_robots.py (32 kiểm,
+  fixture là robots.txt thật nên chạy offline). Có test khẳng định stdlib sai
+  ở đúng hai chỗ — ngày nào stdlib sửa thì test đỏ và bỏ được bộ đọc riêng. Đã
+  thêm test_robots.py vào cổng của tools/package.py: mã tuân thủ không được
+  hỏng lặng lẽ.
 
-  Chưa làm: hai họ đồ thị kia (sụt áp của lọc AFM/AFD; áp vào→áp ra) nhận dạng được nhưng từ chối số hoá. Các
-  catalog FRL khác đọc được tiêu đề ô nhưng chưa gán được đường cong — ví dụ es40-74-AWM-AWD-D.pdf có ô ở hàng
-  y≈467–535 mà _axes chưa nhận ra. Đó là vòng B; tôi không vá nửa vời.
+  Một điều bạn nên biết: robots.txt chặn ClaudeBot, GPTBot, CCBot và 5 bot AI
+  khác toàn site. Crawler của dự án khai đúng danh tính riêng nên rơi vào nhóm
+  *; tôi giữ nguyên nguyên tắc không giả dạng trình duyệt và không mượn tên
+  bot khác — có test khoá điều này.
