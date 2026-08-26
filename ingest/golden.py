@@ -157,9 +157,17 @@ def compare(con, machine):
 
     # gộp theo mã
     got = Counter()
+    gap_items = []
     for l in res["lines"]:
-        if l["layer"] != "actuator" or not ACTUATOR.match(l["part_number"]):
-            got[l["part_number"].upper()] += l["qty"]
+        pn = l.get("part_number")
+        if not pn:
+            # DÒNG CHƯA CÓ MÃ: engine đã liệt kê vật tư nhưng thiếu dữ liệu để
+            # chọn mã. KHÔNG tính là "đúng", cũng KHÔNG bỏ im — đếm riêng để báo,
+            # vì bỏ im là che mất việc engine biết còn thiếu gì.
+            gap_items.append(l.get("item") or l.get("layer"))
+            continue
+        if l["layer"] != "actuator" or not ACTUATOR.match(pn):
+            got[pn.upper()] += l["qty"]
     want = Counter()
     for l in lines:
         c = l["raw_code"].upper()

@@ -266,7 +266,11 @@ def _resolve_need(con, need, ctx, project, src_part_id, templates):
     if ri and project.get(ri) in (None, ""):
         # 3 phần ngắn (Prompt sửa cách báo lỗi): sai ở đâu · sửa gì · sửa thế nào.
         # rationale dài của luật KHÔNG vào đây, nó đi vào detail.
+        # LỚP + TÊN VẬT TƯ đi kèm: chính luật này biết nó định sinh vật tư gì, nên
+        # gap phải mang thông tin đó ra để hiện thành dòng BOM. Thiếu nó thì vật tư
+        # biến mất khỏi bảng và người đọc tưởng BOM đã đủ.
         return {"gap": f"thiếu {PB.field_vn(ri)}", "field": ri,
+                "layer": need.get("layer"), "item": need.get("item_vn"),
                 "options": _options_for(con, ri, project)}
     want = {k: v for k, v in (_subst(need.get("want", {}), ctx, project) or {}).items()
             if v is not None}
@@ -660,6 +664,7 @@ def build(con, inputs, project=None, project_name="demo"):
                 gaps.append(PB.as_gap(PB.problem(
                     r["code"], res["gap"], subject=code,
                     field=res.get("field"), options=res.get("options"),
+                    layer=res.get("layer"), item=res.get("item"),
                     detail=f"{res.get('detail') or ''} {r['rationale'] or ''}".strip())))
                 continue
             conf_line = res["confidence"]
@@ -730,7 +735,7 @@ def build(con, inputs, project=None, project_name="demo"):
         # ai biết. Báo gap kèm lý do vì sao engine không tự đếm được.
         gaps.append(PB.as_gap(PB.problem(
             "R-FIT-01", "chưa khai điểm nối ống → ren nên BOM thiếu đầu nối",
-            field="fitting_points",
+            field="fitting_points", layer="piping", item="Đầu nối one-touch (KQ2)",
             fix="Khai danh sách điểm nối: kiểu (L/H/U/F/E) · cỡ ống · cỡ ren · số lượng",
             detail="Engine KHÔNG suy được số lượng đầu nối: đo trên hai máy thật, "
                    "tỉ lệ cút vuông trên mỗi thiết bị là 1,42 và 2,74 (chênh gấp "
@@ -785,6 +790,7 @@ def build(con, inputs, project=None, project_name="demo"):
         gaps.append(PB.as_gap(PB.problem(
             "R-FRL-02",
             "chưa chọn được cỡ AC từ lưu lượng",
+            layer="air_prep", item="Bộ xử lý khí FRL (AC)", qty=1,
             field="supply_pressure_mpa" if need_supply else "frl_size",
             fix=("Khai áp nguồn của xưởng (MPa) — engine sẽ tự tra đồ thị"
                  if need_supply else "Chốt cỡ AC ở cấu hình"),
@@ -904,6 +910,7 @@ def build(con, inputs, project=None, project_name="demo"):
                 gaps.append(PB.as_gap(PB.problem(
                     r["code"], res["gap"], field=res.get("field"),
                     options=res.get("options"),
+                    layer=res.get("layer"), item=res.get("item"),
                     detail=f"{res.get('detail') or ''} {r['rationale'] or ''}".strip())))
                 continue
             note = res.get("note")
@@ -957,6 +964,40 @@ def build(con, inputs, project=None, project_name="demo"):
             (pid, p["id"] if p else None, l["part_number"], l["qty"], l["layer"],
              l.get("rule_code"), l["rationale"], l.get("confidence"), "suggested",
              json.dumps(l.get("alternatives") or [], ensure_ascii=False)))
+    # ── GAP CHẶN VẬT TƯ → HIỆN THÀNH DÒNG BOM ───────────────────────────────
+    # Thiếu dữ liệu KHÔNG có nghĩa là bỏ vật tư khỏi BOM. Trước đây gap nằm ở danh
+    # sách RIÊNG nên bảng BOM trông như đủ: nhập mã xy-lanh mà không khai cấu hình
+    # thì ra 5 dòng, còn bộ AC / ống / đầu nối biến mất hoàn toàn.
+    # Mỗi gap có khai `layer`+`item` thành một dòng, mã để trống, status='gap'.
+    #
+    # PHẢI ĐẶT SAU MỌI VÒNG SINH GAP: luật per_system thêm gap ở cuối, nên đặt
+    # chỗ khác là ống và FRL bị bỏ sót — đã mắc đúng lỗi đó một lần.
+    # GỘP theo (lớp, vật tư): nhiều gap có thể chặn CÙNG một vật tư — bộ AC bị
+    # chặn bởi cả 'thiếu áp nguồn' lẫn 'thiếu cỡ cửa trục chính'. Một vật tư thì
+    # một dòng, liệt kê đủ các thứ còn thiếu ở cột ghi chú.
+    by_item = {}
+    for g in gaps:
+        if not g.get("layer"):
+            continue                    # gap về cấu hình thuần, không phải vật tư
+        key = (g["layer"], g.get("item") or g.get("field"))
+        cur = by_item.get(key)
+        if cur is None:
+            by_item[key] = {
+                "layer": g["layer"], "part_number": None,
+                "item": g.get("item"), "status": "gap",
+                "qty": g.get("qty") or 0,
+                "rule_code": g.get("rule_code"),
+                "rationale": g.get("detail") or g.get("what") or "",
+                "confidence": None, "unit": None,
+                "gap_fields": [g.get("field")],
+                "note": g.get("fix")}
+        else:
+            cur["gap_fields"].append(g.get("field"))
+            cur["qty"] = cur["qty"] or g.get("qty") or 0
+            if g.get("fix"):
+                cur["note"] = f"{cur['note']} · {g['fix']}" if cur["note"] else g["fix"]
+    lines.extend(by_item.values())
+
     for g in gaps:
         con.execute(
             """insert into project_output (project_id, qty, layer, rule_code, rationale,

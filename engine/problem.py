@@ -53,7 +53,8 @@ def field_vn(f):
 
 
 def problem(rule_code, what, *, field=None, fix=None, how=None, options=None,
-            subject=None, detail=None, severity="gap", code=None):
+            subject=None, detail=None, severity="gap", code=None,
+            layer=None, item=None, qty=None):
     """Dựng một vấn đề theo đúng 3 phần.
 
     rule_code : mã luật, vd 'R-VLV-01'
@@ -65,6 +66,16 @@ def problem(rule_code, what, *, field=None, fix=None, how=None, options=None,
     subject   : thiết bị liên quan, vd 'CDM2L32-500Z' hoặc nhãn node 'C01'
     detail    : mọi thứ dài dòng — catalog, Cv, số trang, rationale gốc
     severity  : 'gap' | 'warn' | 'error' | 'info'
+    layer     : lớp vật tư mà vấn đề này CHẶN, vd 'air_prep' | 'piping'
+    item      : tên vật tư bằng tiếng Việt, vd 'Đầu nối one-touch'
+    qty       : số lượng nếu biết, dù chưa có mã
+
+    ── VÌ SAO CẦN layer/item/qty ────────────────────────────────────────────
+    Thiếu dữ liệu KHÔNG có nghĩa là bỏ vật tư khỏi BOM. Đo được: nhập mã xy-lanh
+    mà không khai cấu hình thì BOM ra 5 dòng trông như đủ, trong khi 3 nhóm vật tư
+    (bộ AC, ống, đầu nối) nằm ở danh sách gap RIÊNG — người đọc BOM không thấy.
+    Khai `layer`+`item` thì gap hiện thành MỘT DÒNG trong bảng BOM với mã để trống
+    và trạng thái 'chưa có mã', nên không ai tưởng BOM đã đủ.
     """
     if fix is None and field:
         fix = f"Chọn {field_vn(field)}" + (f" cho {subject}" if subject else "")
@@ -83,6 +94,10 @@ def problem(rule_code, what, *, field=None, fix=None, how=None, options=None,
         "field": field,
         "fix": fix,
         "how": how,
+        # vật tư bị chặn — để gap hiện được thành dòng BOM
+        "layer": layer,
+        "item": item,
+        "qty": qty,
         "options": list(options) if options else None,
         # ── chỉ vào Chi tiết/Debug ──────────────────────────────────────────
         "detail": detail,

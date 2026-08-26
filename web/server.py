@@ -154,7 +154,8 @@ def api_codes(con, group):
             "electrical": ("D-M9", "ISE", "ZS"),
             }.get(layer, ())
     out = [r["part_number"] for r in rows
-           if not want or r["part_number"].upper().startswith(want)]
+           if r["part_number"] and (not want
+                                    or r["part_number"].upper().startswith(want))]
     return {"codes": out[:60], "layer": layer}
 
 

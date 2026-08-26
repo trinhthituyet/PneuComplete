@@ -82,4 +82,6 @@ yeu-cau/
 # Catalog SMC tiếng Việt — CÓ BẢN QUYỀN, không phát hành lại.
 # Cùng luật với DOCUMENT/: dùng để trích dữ liệu nội bộ, không đóng gói, không commit.
 Catalog_Tieng_Viet/
+/PH*n*t*ch*.txt
+/Ph*n*t*ch*.txt
 *.rar

@@ -18,7 +18,7 @@ def _build(inputs, project=None):
 
 
 def _line(res, pn):
-    return next((l for l in res["lines"] if l["part_number"] == pn), None)
+    return next((l for l in res["lines"] if l.get("part_number") == pn), None)
 
 
 def test_bom_5_xylanh():
@@ -167,16 +167,24 @@ def test_sealant_la_so_thich_khong_phai_rang_buoc():
 def test_joint_bo_qua_xylanh_co_dan_huong():
     """MGP có dẫn hướng sẵn → không đề xuất floating joint (suy diễn, chờ xác nhận)."""
     r = _build([("MGPM25-200Z-M9BL", 4)], {"tube_total_m": 20})
-    assert not any(l["part_number"].startswith("JA") for l in r["lines"])
+    assert not any((l.get("part_number") or "").startswith("JA") for l in r["lines"])
     # còn CM2 không dẫn hướng thì vẫn đề xuất
     r2 = _build([("CDM2L32-500Z", 2)], {"tube_total_m": 20})
     assert _line(r2, "JA30-10-125"), "CM2 vẫn phải có joint"
 
 
 def test_frl_can_khai_co_cua():
-    """Chưa khai main_line_port_size → gap, không tự chọn cỡ FRL."""
+    """Chưa khai main_line_port_size → gap, không tự chọn cỡ FRL.
+
+    Nhưng VẪN phải có DÒNG air_prep với mã để trống: thiếu dữ liệu không có nghĩa
+    là bỏ vật tư khỏi BOM. Test này trước đây đòi KHÔNG có dòng nào — đúng hành vi
+    cũ, và đó chính là lý do bảng BOM trông như đủ khi thật ra thiếu cả bộ AC.
+    """
     r = _build([("CDM2L32-500Z", 5)], {"tube_total_m": 60})
-    assert not any(l["layer"] == "air_prep" for l in r["lines"])
+    ap = [l for l in r["lines"] if l["layer"] == "air_prep"]
+    assert len(ap) == 1, ap
+    assert ap[0].get("status") == "gap" and not ap[0].get("part_number"), ap[0]
+    assert ap[0].get("item"), "dòng gap phải có TÊN vật tư để người đọc hiểu"
     g = next(g for g in r["gaps"] if g.get("rule_code") == "R-FRL-01")
     assert g["field"] == "main_line_port_size", g
     assert g.get("options"), "phải liệt kê cỡ cửa hợp lệ, không bắt tra catalog"
@@ -799,6 +807,34 @@ FIT_PTS = [
 ]
 
 
+def test_thieu_du_lieu_van_LIET_KE_vat_tu_trong_BOM():
+    """Thiếu dữ liệu KHÔNG có nghĩa là bỏ vật tư khỏi BOM.
+
+    Đo được hành vi cũ: nhập mã xy-lanh mà không khai cấu hình thì BOM ra 5 dòng
+    trông như đủ, còn bộ AC / ống / đầu nối nằm ở danh sách gap RIÊNG — người đọc
+    bảng BOM không thấy. Giờ mỗi vật tư bị chặn phải có MỘT dòng, mã để trống.
+    """
+    r = _build([("CDM2B40-150AZ", 4)], {})
+    gapl = [l for l in r["lines"] if l.get("status") == "gap"]
+    items = {l.get("item") for l in gapl}
+    assert len(gapl) >= 3, gapl
+    assert any("AC" in (i or "") for i in items), items       # bộ xử lý khí
+    assert any("Ống" in (i or "") for i in items), items      # ống
+    assert any("nối" in (i or "") for i in items), items      # đầu nối
+    for l in gapl:
+        assert l.get("part_number") is None, l
+        assert l.get("item"), f"dòng gap phải có TÊN vật tư: {l}"
+        assert l.get("gap_fields"), f"phải nói rõ còn thiếu gì: {l}"
+
+
+def test_mot_vat_tu_mot_dong_du_bi_chan_boi_nhieu_thu():
+    """Bộ AC bị chặn bởi CẢ 'thiếu áp nguồn' lẫn 'thiếu cỡ cửa trục' → 1 dòng."""
+    r = _build([("CDM2B40-150AZ", 4)], {})
+    ap = [l for l in r["lines"] if l["layer"] == "air_prep"]
+    assert len(ap) == 1, ap
+    assert len(ap[0].get("gap_fields") or []) >= 2, ap[0]
+
+
 def test_dau_noi_sinh_dung_ma_BOM_that():
     """Engine không đếm được số đầu nối, nhưng phải chọn ĐÚNG MÃ.
 
@@ -807,7 +843,7 @@ def test_dau_noi_sinh_dung_ma_BOM_that():
     r = _build([("CDM2B40-150AZ", 4)],
                dict(FRL_AUTO, frl_series="AC-D-E", fitting_points=FIT_PTS))
     got = {l["part_number"]: l["qty"] for l in r["lines"]
-           if l["layer"] == "piping" and l["part_number"].startswith("KQ2")}
+           if l["layer"] == "piping" and (l.get("part_number") or "").startswith("KQ2")}
     assert got == {"KQ2L06-02NS": 28, "KQ2L10-02AS": 26, "KQ2U06-00A": 64}, got
 
 
@@ -826,7 +862,7 @@ def test_diem_noi_khong_ton_tai_thi_bao_chu_khong_bia_ma():
             "thread_material": "A", "port_standard": "R", "qty": 2}]
     r = _build([("CDM2B40-150AZ", 4)],
                dict(FRL_AUTO, frl_series="AC-D-E", fitting_points=bad))
-    assert not [l for l in r["lines"] if l["part_number"].startswith("KQ2")], r["lines"]
+    assert not [l for l in r["lines"] if (l.get("part_number") or "").startswith("KQ2")], r["lines"]
     g = next((x for x in r["gaps"] if x.get("field") == "fitting_points"), None)
     assert g and g.get("options"), g
 

@@ -9,7 +9,8 @@
 :root{
   --bg:#0D0F13; --panel:#151821; --panel2:#1C202B; --hover:#20242F;
   --line:#262B37; --line-soft:#1E222C;
-  --tx:#E8EAF0; --dim:#8D95A8; --faint:#565D6D;
+  --tx:#E8EAF0; --dim:#8D95A8; --gap:#F2637A;
+  --faint:#565D6D;
   --ok:#35D4AA; --ok-bg:#173C33; --warn:#F0A947; --warn-bg:#3A2D14;
   --err:#F2637A; --err-bg:#3A1B22; --acc:#6E8CFF; --acc-bg:#1B2440;
   --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
@@ -655,7 +656,17 @@ function renderBom(r){
       const tr=el('tr');
       const c1=el('td'); const w=el('div');
       w.style.cssText='display:flex;gap:7px;align-items:center';
-      w.appendChild(el('span','mono',l.part_number));
+      // VẬT TƯ CHƯA CÓ MÃ vẫn phải hiện thành DÒNG. Thiếu dữ liệu không có nghĩa
+      // là bỏ vật tư khỏi BOM — bỏ đi thì người đọc tưởng BOM đã đủ.
+      if(l.status==='gap'){
+        const nm=el('span','mono', l.item||'(chưa rõ)');
+        nm.style.color='var(--gap)'; w.appendChild(nm);
+        const g=el('span','pill','CHƯA CÓ MÃ');
+        g.style.borderColor='var(--gap)'; g.style.color='var(--gap)';
+        w.appendChild(g);
+      } else {
+        w.appendChild(el('span','mono',l.part_number));
+      }
       const b=el('span','pill',LAYER_VN[l.layer]||l.layer);
       b.style.borderColor=`var(--l-${l.layer})`; b.style.color=`var(--l-${l.layer})`;
       w.appendChild(b);
@@ -664,7 +675,10 @@ function renderBom(r){
       const c2=el('td','why');
       c2.textContent=(l.rule_code?l.rule_code+': ':'')+String(l.rationale||'').slice(0,100);
       tr.appendChild(c2);
-      const c3=el('td','mono'); c3.style.textAlign='right'; c3.textContent=l.qty;
+      const c3=el('td','mono'); c3.style.textAlign='right';
+      // SL = 0 với vật tư chưa có mã nghĩa là "chưa tính được", không phải "không cần"
+      c3.textContent = (l.status==='gap' && !l.qty) ? '?' : l.qty;
+      if(l.status==='gap') c3.style.color='var(--gap)';
       tr.appendChild(c3); tbody.appendChild(tr);
     });
   }

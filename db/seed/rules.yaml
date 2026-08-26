@@ -100,6 +100,7 @@
       unit: cuộn
       per_tube_od: true
       requires_input: tube_total_m
+      item_vn: "Ống khí (TU)"
       want:
         tube_od_mm: {from_project: tube_od_mm}
         color: {from_project: tube_color}
@@ -169,6 +170,7 @@
       from_series: {from_project: frl_series}
       qty: 1
       requires_input: main_line_port_size
+      item_vn: "Bộ xử lý khí FRL (AC)"
       want:
         port_size:      {from_project: main_line_port_size}
         port_standard:  {from_project: thread_standard}
