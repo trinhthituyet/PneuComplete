@@ -1,0 +1,73 @@
+# Ngữ pháp mã hàng nhập tay — Floating Joint họ JB (loại nhỏ gọn)
+#
+# NGUỒN: Catalog_Tieng_Viet/Xylanh Khi.pdf trang 210, bảng "Model / Kích thước nòng
+# phù hợp / Cỡ ren thông dụng". Catalog tiếng Việt do bạn cung cấp — CÓ BẢN QUYỀN,
+# đã chặn commit trong .gitignore.
+#
+# VÌ SAO CẦN: BOM máy thật dùng JB20-5-080-X11 (4 cái) mà engine KHÔNG parse được.
+# db/seed/grammar/ja.yaml ghi ở dòng cuối "Họ JB … CHƯA encode" — giờ có nguồn.
+#
+# ── HAI ĐƯỜNG ĐỌC ĐỘC LẬP, CÙNG KẾT QUẢ ─────────────────────────────────────
+# Mã JB tự mã hoá ren: JB<cỡ thân>-<đường kính ren>-<bước ren ×100>.
+#   JB20-5-080  →  M5 × 0.80
+# Đối chiếu với cột "Cỡ ren thông dụng" in trong bảng: 10/10 model KHỚP.
+#   JB12-3-050 → M3x0.5 = M3 x 0.5   ·  JB160-24-300 → M24x3 = M24 x 3
+# Nên `rod_end_thread` dưới đây suy từ MÃ (chắc chắn, không phụ thuộc việc đọc ô
+# bảng có thể trượt), và đã được cột bảng xác nhận.
+#
+# ── CHỌN THẾ NÀO ────────────────────────────────────────────────────────────
+# Khớp `rod_end_thread` của xy-lanh với ren của joint, giống họ JA. Cột "Kích thước
+# nòng phù hợp" ghi ở đây trong `bore_mm` để engine kiểm chéo:
+#   JB40-8-125 dùng cho nòng 32 VÀ 40 · JB63-10-150 cho 50 và 63 · JB140 cho 125, 140
+#
+# JA hay JB? Cả hai đều là floating joint. BOM thật dùng CẢ HAI (JA30-10-125 ×5,
+# JB20-5-080-X11 ×4) nên engine KHÔNG tự chọn giữa hai họ — luật R-JOINT-01 đề xuất
+# JA (tin cậy 0.6) và người dùng đổi sang JB khi cần loại nhỏ gọn.
+#
+# HẬU TỐ -X11 trong mã BOM là bản đặt riêng (made-to-order). Không encode thành ô:
+# catalog không cho danh sách hậu tố, và parser đã có cơ chế bỏ hậu tố đơn hàng.
+
+series_catalog_id: JB-E
+create_series:
+  code: JB
+  name: "Floating Joint JB (nhỏ gọn)"
+part_prefix: "JB"
+source: >
+  Catalog_Tieng_Viet/Xylanh Khi.pdf trang 210, bảng Model/Kích thước nòng/Cỡ ren.
+  Ren đối chiếu chéo: suy từ mã hàng khớp 10/10 với cột ren in trong bảng.
+entered_by: "đọc từ PDF tiếng Việt, 2026-08-26"
+
+slots:
+  - pos: 1
+    name: model
+    value_type: enum
+    separator: ""
+    # Mã gộp cả ba phần (cỡ thân - đường kính ren - bước ren) thành một chuỗi
+    # không tách được thành ô độc lập, nên để nguyên 1 ô — cùng cách với ja.yaml.
+    options:
+      - {code: "12-3-050",   label: "M3×0.5",   attrs: {rod_end_thread: "M3x0.5",   bore_mm: [12]}}
+      - {code: "16-4-070",   label: "M4×0.7",   attrs: {rod_end_thread: "M4x0.7",   bore_mm: [16]}}
+      - {code: "20-5-080",   label: "M5×0.8",   attrs: {rod_end_thread: "M5x0.8",   bore_mm: [20]}}
+      - {code: "25-6-100",   label: "M6×1",     attrs: {rod_end_thread: "M6x1",     bore_mm: [25]}}
+      - {code: "40-8-125",   label: "M8×1.25",  attrs: {rod_end_thread: "M8x1.25",  bore_mm: [32, 40]}}
+      - {code: "63-10-150",  label: "M10×1.5",  attrs: {rod_end_thread: "M10x1.5",  bore_mm: [50, 63]}}
+      - {code: "80-16-200",  label: "M16×2",    attrs: {rod_end_thread: "M16x2",    bore_mm: [80]}}
+      - {code: "100-20-250", label: "M20×2.5",  attrs: {rod_end_thread: "M20x2.5",  bore_mm: [100]}}
+      - {code: "140-22-250", label: "M22×2.5",  attrs: {rod_end_thread: "M22x2.5",  bore_mm: [125, 140]}}
+      - {code: "160-24-300", label: "M24×3",    attrs: {rod_end_thread: "M24x3",    bore_mm: [160]}}
+
+# ── ĐÃ TRA, KHÔNG ENCODE ĐƯỢC từ bộ catalog tiếng Việt ──────────────────────
+# Ghi ở đây vì cùng đợt trích, để lần sau khỏi dò lại:
+#   ISE20-N-M-C6L-B (4 cái)  Cam Bien.pdf chỉ có ISE20B — THẾ HỆ KHÁC. 'ISE20'
+#                            trơn xuất hiện đúng 1 lần, trong ghi chú so sánh.
+#   VT307-5D1-02N (2 cái)    Van Dinh Huong 5 cong.pdf tr124 chỉ là trang CỤM ĐẾ
+#                            (VV3Q…), không có bảng mã van VT307.
+#   VQ31A1-5G-C10-F (3 cái)  Cam Bien.pdf tr205/207 là cụm đế VV2Q cho VQ20/VQ30,
+#                            không phải mã van VQ31.
+#   KSL08-03S (4 cái)        không xuất hiện trong bất kỳ catalog nào của bộ này.
+#   AMC320-02B (1 cái)       Ong Day.pdf tr76 có 'Cách đặt hàng' nhưng spine là
+#                            'AMC 5 1 0' (ba vị trí) — KHÔNG giải thích được
+#                            'AMC320'. Không đoán. Xem thêm: ngữ pháp AMC-E hiện
+#                            có trong DB là bản MÁY TRÍCH LỖI — hai ô cùng tên
+#                            'numeric' và một ô 'stroke' (bộ xả khí không có hành
+#                            trình). Cần đọc tay khi có nguồn rõ.

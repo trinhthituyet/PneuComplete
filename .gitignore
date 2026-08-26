@@ -78,3 +78,8 @@ __pycache__/
 # phải thêm mẫu mỗi lần đặt tên mới. Đuổi theo từng tên file đã sót 2 lần
 # ("chỉnh sửa.txt" lọt vào commit 8a4d740 và phải amend).
 yeu-cau/
+
+# Catalog SMC tiếng Việt — CÓ BẢN QUYỀN, không phát hành lại.
+# Cùng luật với DOCUMENT/: dùng để trích dữ liệu nội bộ, không đóng gói, không commit.
+Catalog_Tieng_Viet/
+*.rar

@@ -164,6 +164,45 @@ def test_hau_to_don_hang_NA():
     con.close()
 
 
+def test_khop_noi_JB_parse_duoc_ma_BOM_that():
+    """JB20-5-080-X11 (4 cái trong BOM) trước đây KHÔNG parse được.
+
+    Ren suy từ chính mã (JB<thân>-<đường kính>-<bước×100>) và đã đối chiếu 10/10
+    với cột ren in trong catalog — hai đường đọc độc lập.
+    """
+    con = db.connect()
+    try:
+        r = parser.parse(con, "JB20-5-080-X11")
+        assert r.get("ok"), r
+        a = r.get("attrs") or {}
+        assert a.get("rod_end_thread") == "M5x0.8", a
+        assert 20 in (a.get("bore_mm") or []), a
+        # JB40 dùng cho CẢ nòng 32 và 40 — catalog ghi "32, 40"
+        b = (parser.parse(con, "JB40-8-125").get("attrs") or {}).get("bore_mm") or []
+        assert set(b) == {32, 40}, b
+    finally:
+        con.close()
+
+
+def test_hau_to_luoc_bo_phai_duoc_GHI_LAI():
+    """Bỏ hậu tố im lặng là để người dùng không biết engine đã cắt gì.
+
+    Lỗi đã mắc: nhánh bảng tra ghi `order_suffix`, nhánh NGỮ PHÁP thì không —
+    nên 'JB20-5-080-X11' parse thành 'JB20-5-080' mà không ai hay.
+    """
+    con = db.connect()
+    try:
+        for code, sfx in (("JB20-5-080-X11", "X11"), ("SY5100-5UE1-NA", "NA")):
+            r = parser.parse(con, code)
+            assert r.get("ok"), (code, r)
+            assert r.get("order_suffix") == sfx, (code, r.get("order_suffix"))
+            assert (r.get("attrs") or {}).get("order_suffix") == sfx, code
+        # mã không có hậu tố thì KHÔNG được bịa ra
+        assert parser.parse(con, "JB20-5-080").get("order_suffix") is None
+    finally:
+        con.close()
+
+
 if __name__ == "__main__":
     ok = fail = 0
     for name, fn in sorted(globals().items()):

@@ -110,8 +110,14 @@ def parse(con, part_number: str):
     # → Đây là hậu tố áp cho CẢ ĐƠN HÀNG, không phải một ô mã. Tách ra để đọc
     # được phần thân, và GHI LẠI trong attrs thay vì bỏ im lặng — người dùng phải
     # biết engine đã lược bỏ cái gì.
+    # `-X<số>` là hậu tố ĐẶT RIÊNG (made-to-order) của SMC. Catalog CÓ liệt kê
+    # -X7/-X12/-X50… cho một số họ, nhưng KHÔNG có bảng nào giải nghĩa -X11 cho họ
+    # JB (mã BOM thật JB20-5-080-X11) — hai chỗ nhắc -X11 trong catalog thuộc họ
+    # MXS và bộ xoay. Nên xử như -NA: tách ra để đọc được phần thân, và GHI LẠI
+    # trong attrs. Đã kiểm: không ô ngữ pháp nào có mã bắt đầu bằng 'X', nên việc
+    # tách này không ăn vào ô thật.
     order_suffix = None
-    m_sfx = re.match(r"^(.*?)-(NA)$", pn)
+    m_sfx = re.match(r"^(.*?)-(NA|X\d{1,3})$", pn)
     if m_sfx and len(m_sfx.group(1)) >= 4:
         pn, order_suffix = m_sfx.group(1), m_sfx.group(2)
 
@@ -226,12 +232,19 @@ def parse(con, part_number: str):
         if got.get("auto_switch"):
             attrs["auto_switch"] = got["auto_switch"]
 
+        # HẬU TỐ ĐÃ LƯỢC phải theo ra tới kết quả. Nhánh bảng tra ở trên có ghi
+        # `order_suffix`, nhánh NGỮ PHÁP này thì trước đây không — nên mã
+        # 'JB20-5-080-X11' parse thành 'JB20-5-080' mà không ai biết engine đã bỏ
+        # mất '-X11'. Chính comment ở đầu hàm nói "GHI LẠI thay vì bỏ im lặng";
+        # nhánh này đã vi phạm điều đó.
+        if order_suffix:
+            attrs["order_suffix"] = order_suffix
         attempts.append({
             "ok": rest == "" and not missing,
             "missing": missing or None,
             "series_id": cand["series_id"], "series": cand["code"],
             "series_name": cand["name"], "prefix": cand["prefix"],
-            "has_magnet": cand["has_magnet"],
+            "has_magnet": cand["has_magnet"], "order_suffix": order_suffix,
             "slots": got, "attrs": attrs, "trace": trace,
             "unparsed": rest or None,
         })
