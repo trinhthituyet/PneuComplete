@@ -127,6 +127,34 @@ def test_valve_function_theo_tung_xylanh():
     con.close()
 
 
+def test_duong_dan_api_classify_co_that():
+    """Route /api/classify phải được đăng ký trong do_POST.
+
+    Môi trường này CHẶN BIND nên không dựng được server thật (tests/test_docker.py
+    ghi cùng điều đó ở dòng 257), mà mọi test khác gọi hàm api_* trực tiếp — nên
+    hàm chạy đúng vẫn không chứng minh UI gọi được. Kiểm ngay trên mã nguồn của
+    do_POST: thiếu dòng route là UI bấm '+ Thêm theo mã' nhận 404.
+    """
+    import inspect
+    src = inspect.getsource(W.Handler.do_POST)
+    assert '"/api/classify"' in src, src
+    assert "api_classify(" in src, src
+
+
+def test_classify_tra_ve_du_thu_UI_can():
+    """Hợp đồng với UI: đủ node_type + label + allowed_parents + placements."""
+    con = db.connect()
+    tree = {"id": "frl", "type": "frl", "name": "FRL", "children": [
+        {"id": "v1", "type": "valve", "name": "SV1", "children": []}]}
+    r = W.api_classify(con, "AN15-02", tree)
+    con.close()
+    for k in ("ok", "node_type", "label", "layer", "allowed_parents",
+              "placements", "why"):
+        assert k in r, f"thiếu khoá {k}: {r}"
+    assert r["node_type"] == "silencer", r
+    assert [p["id"] for p in r["placements"]] == ["v1"], r["placements"]
+
+
 if __name__ == "__main__":
     ok = fail = 0
     for name, fn in sorted(globals().items()):

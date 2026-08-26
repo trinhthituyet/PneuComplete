@@ -28,6 +28,9 @@ Thực tế có ba khoảng trống, tệp này lấp tường minh trong ports_
 import json
 
 from engine import materialize
+# KHÔNG đặt tên là P: tệp này đã có hàm P() dựng cổng, và `import parser as P` sẽ
+# che nó — đã mắc, lỗi hiện ra là "'function' object has no attribute 'parse'".
+from engine import parser as PARSE
 from engine import problem as PB
 
 # ── Nhóm thiết bị ────────────────────────────────────────────────────────────
@@ -113,7 +116,9 @@ GROUPS = {
         "label": "Phụ kiện đế manifold (gasket, end plate)", "layer": "valve",
         "ports": [P("mnt", "mechanical", "bidirectional", "lắp lên đế", side="l")]},
     "silencer": {
-        "label": "Giảm âm cửa xả", "layer": "piping",
+        # Gồm cả bộ xả khí AMC: cùng gắn ở cửa xả, cùng tập cha hợp lệ, nên dùng
+        # chung một loại node thay vì thêm nhóm gần trùng (xem engine/classify.py).
+        "label": "Giảm âm / bộ xả khí (AN, AMC)", "layer": "piping",
         "ports": [P("IN", "pneumatic", "in", "từ cửa xả")]},
     "plc": {
         "label": "PLC / bộ điều khiển", "layer": "electrical",
@@ -356,7 +361,7 @@ def resolve(con, graph, templates=None):
                     info.setdefault("plc_voltage", {})[b["id"]] = v
 
     # ── dựng inputs cho engine ───────────────────────────────────────────────
-    inputs, manual_lines = [], []
+    inputs, manual_lines, own_lines = [], [], []
     for n in nodes:
         g = GROUPS.get(n.get("group") or "", {})
         code = (n.get("code") or "").strip()
@@ -393,6 +398,38 @@ def resolve(con, graph, templates=None):
                         over["valve_function"] = vf
                         break
             inputs.append((code, qty, over))
+            continue
+
+        # ── THIẾT BỊ BẠN TỰ THÊM (không phải actuator) CŨNG PHẢI VÀO BOM ─────
+        # ĐO ĐƯỢC: thêm node giảm âm 'AN15-02' ×2 vào sơ đồ → BOM KHÔNG hề nhắc
+        # tới nó. Hàm này chỉ biến node actuator thành `inputs`, node 'Mã tự do'
+        # thành `manual_lines`, còn mọi node khác CÓ MÃ thì rơi vào khoảng trống:
+        # bảng BOM vẽ được nó theo cây, nhưng `lines` không có nên CSV, project_output
+        # và mọi thống kê đều thiếu.
+        # Cùng nguyên tắc với việc vật tư thiếu mã vẫn phải liệt kê: thiết bị CÓ MẶT
+        # trên sơ đồ thì phải có trong BOM.
+        # Khác `manual_lines`: mã này ĐƯỢC parse và kiểm, nên không dán nhãn
+        # "không qua kiểm tra kỹ thuật".
+        if n.get("filled_by_bom"):
+            continue                  # mã do engine điền lần trước, không phải bạn gõ
+        pr = PARSE.parse(con, code)
+        if not pr.get("ok"):
+            warns.append(PB.as_warning(PB.problem(
+                "R-PARSE-00", f"mã '{code}' không đọc được nhưng vẫn đưa vào BOM",
+                code="NODE_CODE_UNPARSED", field="code", severity="warn",
+                subject=n.get("label") or n.get("id"),
+                fix="Sửa mã, hoặc bật 'Mã tự do' cho node này",
+                detail="Engine không kiểm được thông số kỹ thuật của mã này. "
+                       "Bỏ nó khỏi BOM thì tệ hơn: thiết bị có trên sơ đồ mà "
+                       "không có trong bảng mua hàng.")))
+        own_lines.append({
+            "layer": g.get("layer", "other"), "node_type": n.get("group"),
+            "part_number": code, "qty": float(qty), "unit": "cái",
+            "rule_code": None, "source": "user_node",
+            "rationale": "bạn thêm thiết bị này trên sơ đồ"
+                         + ("" if pr.get("ok") else " (mã CHƯA đọc được)"),
+            "confidence": 1.0 if pr.get("ok") else None,
+            "node_id": n.get("id")})
 
     # điện áp: nếu MỌI van nhận cùng một điện áp từ PLC thì đưa vào config
     config_extra = {}
@@ -410,7 +447,8 @@ def resolve(con, graph, templates=None):
             detail="Luật chọn van hiện dùng một giá trị voltage cho cả hệ.")))
 
     return {"inputs": inputs, "config_extra": config_extra,
-            "manual_lines": manual_lines, "warnings": warns, "info": info}
+            "manual_lines": manual_lines, "own_lines": own_lines,
+            "warnings": warns, "info": info}
 
 
 def uncovered_lines(graph, lines, fill):

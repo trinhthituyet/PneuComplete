@@ -49,20 +49,32 @@ PARENT_OF = {
                          "van cắm lên manifold, hoặc đi rời lấy khí từ nguồn"),
     "cylinder":         (("valve",),
                          "van điều khiển xy-lanh — cạnh pneumatic_control"),
-    "speed_controller": (("cylinder",),
+    "speed_controller": (("cylinder", "custom"),
                          "AS…F air_in ren MALE R1/8 vặn vào air_port xy-lanh "
                          "ren FEMALE Rc1/8 — đo từ interfaces.yaml"),
-    "silencer":         (("manifold", "valve"),
+    "silencer":         (("manifold", "valve", "custom"),
                          "BOM thật AN15-02 ×2 cho 11 van → gắn cửa xả CHUNG của "
                          "manifold; chỉ gắn lên van khi van đi rời"),
-    "fitting":          (("cylinder", "valve", "manifold", "frl", "regulator", None),
-                         "đầu nối vào bất cứ cửa ren nào"),
-    "tubing":           (("valve", "manifold", "frl", "cylinder", None),
-                         "ống nối giữa các cửa"),
-    "sensor":           (("cylinder", None), "cảm biến gắn rãnh xy-lanh"),
+    # ── QUAN HỆ THẬT CÒN THIẾU ──────────────────────────────────────────────
+    # Bạn báo "quá ít lựa chọn khi thêm con". Đo được: 8/14 loại node KHÔNG thêm
+    # được gì. Trong đó có những mối nối vật lý hiển nhiên đang bị chặn:
+    #   · ống cắm vào ĐẦU ONE-TOUCH của tiết lưu (AS…F có sẵn one-touch) và của
+    #     đầu nối KQ2 — đo từ part_interface: kind='onetouch'
+    #   · đầu nối ở ĐẦU KIA của đoạn ống
+    #   · thiết bị ngoài catalog ('custom') có thể có phụ kiện riêng của nó; chặn
+    #     nó là buộc người dùng đặt phụ kiện sai chỗ rồi normalize() lại dịch đi
+    "fitting":          (("cylinder", "valve", "manifold", "frl", "regulator",
+                          "tubing", "speed_controller", "custom", None),
+                         "đầu nối vào bất cứ cửa ren nào, hoặc nối tiếp đoạn ống"),
+    "tubing":           (("valve", "manifold", "frl", "cylinder",
+                          "speed_controller", "fitting", "custom", None),
+                         "ống cắm vào cửa one-touch của tiết lưu/đầu nối, hoặc "
+                         "nối giữa các cửa"),
+    "sensor":           (("cylinder", "custom", None),
+                         "cảm biến gắn rãnh xy-lanh"),
     # Floating joint vặn vào REN ĐẦU CẦN, nên chỉ có một cha hợp lệ: xy-lanh.
     # Luật R-JOINT-01 chỉ áp cho xy-lanh ren đầu cần NGOÀI (rod_end_thread_male).
-    "joint":            (("cylinder",),
+    "joint":            (("cylinder", "custom"),
                          "floating joint vặn vào ren đầu cần xy-lanh"),
     # Gasket + end plate là phụ kiện CỦA ĐẾ, không của van: catalog ghi "When
     # ordering a valve individually, the base gasket is not included".
@@ -71,7 +83,7 @@ PARENT_OF = {
     "regulator":        (("frl", "manifold", None), "điều áp trên đường khí"),
     "plc":              ((None,), "PLC đứng riêng, nối bằng tín hiệu điện"),
     "frl":              ((None,), "nguồn khí là gốc cây"),
-    "custom":           (("cylinder", "valve", "manifold", "frl", None),
+    "custom":           (("cylinder", "valve", "manifold", "frl", "custom", None),
                          "thiết bị ngoài catalog — gắn đâu cũng được"),
 }
 

@@ -396,23 +396,69 @@ function renderDetail(){
     r.appendChild(el('div','cd',c.code||'chưa có mã'));
     c4.appendChild(r);
   });
+  /* ── THÊM THEO MÃ: gõ mã, phần mềm tự phân loại ────────────────────────────
+     Yêu cầu của bạn: "tôi muốn thêm mã rồi phần mềm tự phân loại". Đặt Ô MÃ LÊN
+     TRƯỚC ô chọn loại, vì chọn loại là bắt người dùng biết trước KQ2 là đầu nối
+     hay ống — đúng cái phần mềm phải biết hộ. Chọn loại vẫn giữ, cho thiết bị
+     chưa có ngữ pháp. */
+  const cr=el('div','addrow');
+  const acIn=el('input'); acIn.placeholder='Gõ mã hàng rồi Enter — vd KQ2L06-02NS';
+  acIn.style.flex='1'; cr.appendChild(acIn);
+  const acBtn=el('button','ghost','+ Thêm theo mã');
+  const say=el('div','hint');
+  const addByCode=async()=>{
+    const code=(acIn.value||'').trim();
+    if(!code) return;
+    acBtn.disabled=true; say.textContent='đang tra mã…';
+    let r;
+    try{ r=await (await fetch('/api/classify',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({code:code,tree:TREE})})).json(); }
+    catch(e){ r={ok:false,reason:'không gọi được máy chủ: '+e.message}; }
+    acBtn.disabled=false;
+    if(!r.ok){ say.innerHTML=''; say.appendChild(el('div',null,'✗ '+r.reason));
+      if(r.how) say.appendChild(el('div',null,r.how)); return; }
+    const ty=r.node_type;
+    // Chỗ đang chọn có nhận loại này không? Nếu không thì KHÔNG tự dịch đi —
+    // hiện thẳng những chỗ nhận được để bạn chọn. Tự dịch là quyết định hộ.
+    const okHere=(PARENT_OF[ty]||{allowed:[]}).allowed.includes(n.type);
+    if(!okHere){
+      say.innerHTML='';
+      say.appendChild(el('div',null,`${code} là ${r.label} — không lắp vào `
+        +`${n.name||n.type} được.`));
+      if(!(r.placements||[]).length)
+        say.appendChild(el('div',null,'Cây hiện chưa có chỗ nào nhận nó: cần '
+          +(PARENT_OF[ty]||{}).allowed.map(a=>(GROUPS[a]||{}).label||a||'gốc cây').join(' hoặc ')));
+      (r.placements||[]).forEach(pl=>{
+        const bb=el('button','ghost','→ đặt dưới '+pl.label);
+        bb.onclick=()=>{ addNode(findN(pl.id),ty,code,r); };
+        say.appendChild(bb); });
+      return; }
+    addNode(n,ty,code,r);
+  };
+  function addNode(host,ty,code,r){
+    if(SINGLETON.includes(ty) && [...walk(TREE)].some(([x])=>x.type===ty)){
+      $('#sub').textContent='chỉ nên có 1 '+ty+' — BOM thật dùng 1 manifold nhiều station';
+      return; }
+    snap();
+    const k={id:'n'+(seq++),type:ty,name:code||(GROUPS[ty]||{}).label||ty,
+             code:code||'',qty:1,attrs:{},children:[]};
+    host.children=host.children||[]; host.children.push(k);
+    expanded.add(host.id); sel=k.id; render();
+    if(r) $('#sub').textContent=`${code} → ${r.label} (${r.why})`;
+  }
+  acBtn.onclick=addByCode;
+  acIn.addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault(); addByCode();} });
+  cr.appendChild(acBtn); c4.appendChild(cr); c4.appendChild(say);
+
   const allow=allowedChildren(n.type);
   if(allow.length){
     const ar=el('div','addrow');
     const sl=el('select');
     allow.forEach(k=>sl.appendChild(new Option((GROUPS[k]||{}).label||k,k)));
     ar.appendChild(sl);
-    const b=el('button','ghost','+ Thêm');
-    b.onclick=()=>{
-      const ty=sl.value;
-      if(SINGLETON.includes(ty) && [...walk(TREE)].some(([x])=>x.type===ty)){
-        $('#sub').textContent='chỉ nên có 1 '+ty+' — BOM thật dùng 1 manifold nhiều station';
-        return; }
-      snap();
-      const k={id:'n'+(seq++),type:ty,name:(GROUPS[ty]||{}).label||ty,code:'',qty:1,
-               attrs:{},children:[]};
-      n.children=n.children||[]; n.children.push(k);
-      expanded.add(n.id); sel=k.id; render();};
+    const b=el('button','ghost','+ Thêm loại rỗng');
+    b.onclick=()=>addNode(n,sl.value,'',null);
     ar.appendChild(b); c4.appendChild(ar);
     const why=(PARENT_OF[allow[0]]||{}).why;
     if(why) c4.appendChild(el('div','hint','Chỉ hiện loại lắp được vào đây. '+why));

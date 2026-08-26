@@ -17,6 +17,7 @@ API:
     GET  /api/groups           nhóm thiết bị + cổng mặc định (cho palette canvas)
     GET  /api/ports?code=X&group=Y  cổng THẬT của một mã hàng
     GET  /api/codes?group=X    mã hàng gợi ý cho một nhóm (đọc DB, không hard-code)
+    POST /api/classify         {code, tree} → loại thiết bị + chỗ gắn được
     GET  /api/graph?project=N  đọc lại sơ đồ đã lưu
     POST /api/bom              nhận CẢ HAI: {inputs,config} phẳng, hoặc {graph,config}
 
@@ -41,6 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from crawler import db                      # noqa: E402
 from engine import bom                      # noqa: E402
+from engine import classify as CL           # noqa: E402
 from engine import graph as G               # noqa: E402
 from engine import materialize              # noqa: E402
 from engine import parser as P              # noqa: E402
@@ -132,31 +134,48 @@ def api_ports(con, code, group):
 
 
 def api_codes(con, group):
-    """Mã hàng gợi ý cho một nhóm thiết bị — đọc từ DB, KHÔNG hard-code.
+    """Mã hàng gợi ý cho một LOẠI thiết bị — lọc theo bảng phân loại, không theo
+    tiền tố mã.
 
-    Lấy các mã đã có trong bảng `part` thuộc đúng layer của nhóm. Chỉ là GỢI Ý:
-    người dùng vẫn gõ mã tự do được, và /api/parse mới là chỗ kiểm.
+    ĐÃ SỬA: bản trước lọc bằng danh sách tiền tố viết tay theo `layer`
+    ({"valve": ("SY","SS5Y","VT"), …}). Hai chỗ sai:
+      · layer gộp nhiều loại, nên chọn "Đế manifold" vẫn nhận cả mã VAN SY5220 —
+        đúng thứ vừa phải sửa ở fill_codes().
+      · SY5000-GS-1 (gasket) khớp tiền tố 'SY' nên hiện trong danh sách van.
+    Giờ dùng engine/classify.py: mã nào phân loại ra ĐÚNG loại này thì mới hiện.
+    Vẫn chỉ là GỢI Ý — người dùng gõ mã tự do được, /api/classify mới là chỗ kiểm.
     """
-    layer = (G.GROUPS.get(group) or {}).get("layer")
-    if not layer:
+    if group not in G.GROUPS:
         return {"codes": []}
-    # part không mang layer, nên lần theo series → catalog_id của các họ đã biết
     rows = con.execute(
         """select distinct p.part_number from part p
            join series s on s.id = p.series_id
            where exists (select 1 from code_slot cs where cs.series_id = s.id)
-           order by p.part_number limit 400""").fetchall()
-    want = {"actuator": ("CDM2", "CM2", "MGP", "CDQS", "CQS", "CDG", "CJ2", "MHZ"),
-            "valve": ("SY", "SS5Y", "VT"),
-            "air_prep": ("AC", "AR", "AF", "AW"),
-            "accessory": ("AS",),
-            "piping": ("TU", "KQ2", "KSL"),
-            "electrical": ("D-M9", "ISE", "ZS"),
-            }.get(layer, ())
-    out = [r["part_number"] for r in rows
-           if r["part_number"] and (not want
-                                    or r["part_number"].upper().startswith(want))]
-    return {"codes": out[:60], "layer": layer}
+           order by p.part_number limit 800""").fetchall()
+    out = []
+    for r in rows:
+        pn = r["part_number"]
+        if not pn:
+            continue
+        c = CL.classify(con, pn)
+        if c.get("ok") and c["node_type"] == group:
+            out.append(pn)
+        if len(out) >= 60:
+            break
+    return {"codes": out, "layer": (G.GROUPS[group] or {}).get("layer")}
+
+
+def api_classify(con, code, tree=None):
+    """Gõ MÃ → loại thiết bị + chỗ gắn được. Yêu cầu (2) của bạn.
+
+    Trả kèm `placements` (các node trong cây nhận được nó làm con) để UI khỏi bắt
+    người dùng tự dò xem đặt được ở đâu.
+    """
+    r = CL.classify(con, code)
+    if r.get("ok") and tree:
+        r["placements"] = [{"id": i, "label": l}
+                           for i, l in CL.placements(tree, r["node_type"])]
+    return r
 
 
 def api_parse(con, code):
@@ -269,7 +288,7 @@ def api_bom_tree(con, payload, root):
 
 def api_bom_graph(con, payload, gr, tree=None):
     res_g = G.resolve(con, gr)
-    if not res_g["inputs"] and not res_g["manual_lines"]:
+    if not res_g["inputs"] and not res_g["manual_lines"] and not res_g["own_lines"]:
         return {"error": "sơ đồ chưa có thiết bị nào dựng được BOM "
                          "(cần ít nhất 1 node xy-lanh có mã, hoặc 1 node tự do)"}
 
@@ -284,6 +303,18 @@ def api_bom_graph(con, payload, gr, tree=None):
         if res_g["inputs"] else _empty_result(con, cfg, payload)
 
     lines = list(res["lines"]) + res_g["manual_lines"]
+    # Thiết bị bạn tự thêm trên sơ đồ. BỎ dòng mà engine ĐÃ đề xuất đúng mã đó:
+    # dòng của engine có luật, lý do và số lượng tính được, nên nó thắng — nếu
+    # không thì mỗi lần dựng lại sẽ có hai dòng cùng mã (một do engine điền vào
+    # node ở lần trước, một do node đó giờ có mã).
+    have = {l.get("part_number") for l in lines}
+    extra = [l for l in res_g.get("own_lines") or [] if l["part_number"] not in have]
+    lines += extra
+    # Ghi vào DB những dòng cộng thêm SAU build(): thiết bị bạn tự thêm và dòng
+    # 'Mã tự do'. Không ghi thì CSV xuất ra thiếu đúng những thứ đó — UI đọc `lines`
+    # trả về nên vẫn thấy, còn CSV đọc project_output nên không.
+    if extra or res_g["manual_lines"]:
+        bom.save_lines(con, res["project_id"], extra + res_g["manual_lines"])
     warnings = list(res["warnings"]) + res_g["warnings"]
 
     # Mục 5 của spec: điền mã hàng ngược lại vào sơ đồ → as-built diagram.
@@ -347,16 +378,29 @@ def _clean_config(raw):
 
 
 def api_csv(con, project_id):
+    """BOM → CSV. Cột VẬT TƯ để dòng chưa có mã vẫn đọc được là cái gì.
+
+    Không có cột đó thì dòng thiếu mã xuất ra chỉ còn ô trống — người nhận CSV
+    không biết đang thiếu bộ AC hay thiếu ống.
+    """
     rows = con.execute(
         """select po.layer, po.proposed_code, po.qty, po.rule_code, po.rationale,
-                  po.confidence, po.status
+                  po.confidence, po.status, po.requirement
            from project_output po where po.project_id=? order by po.layer, po.id""",
         (project_id,)).fetchall()
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["Tầng", "Mã hàng", "Số lượng", "Luật", "Độ tin cậy", "Trạng thái", "Lý do"])
+    w.writerow(["Tầng", "Mã hàng", "Vật tư", "Số lượng", "Luật", "Độ tin cậy",
+                "Trạng thái", "Lý do"])
     for r in rows:
-        w.writerow([r["layer"], r["proposed_code"] or "", r["qty"], r["rule_code"] or "",
+        item = ""
+        if r["status"] == "gap" and r["requirement"]:
+            try:
+                item = (json.loads(r["requirement"]) or {}).get("item") or ""
+            except (ValueError, TypeError):
+                item = ""
+        w.writerow([r["layer"], r["proposed_code"] or "", item, r["qty"],
+                    r["rule_code"] or "",
                     f"{r['confidence']:.0%}" if r["confidence"] else "",
                     r["status"], (r["rationale"] or "").replace("\n", " ")])
     return buf.getvalue()
@@ -427,6 +471,11 @@ class Handler(BaseHTTPRequestHandler):
             payload = json.loads(raw.decode("utf-8") or "{}")
             if u.path == "/api/bom":
                 self._send(200, api_bom(con, payload))
+            elif u.path == "/api/classify":
+                # POST vì cần gửi kèm CÂY để trả về chỗ gắn được. GET thì cây phải
+                # nhồi vào query string.
+                self._send(200, api_classify(con, payload.get("code"),
+                                             payload.get("tree")))
             else:
                 self._send(404, {"error": "không có đường dẫn này"})
         except Exception as e:

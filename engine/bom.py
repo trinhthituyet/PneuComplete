@@ -258,6 +258,35 @@ def _options_for(con, field, project):
     return None
 
 
+def save_lines(con, pid, lines):
+    """Ghi dòng BOM vào project_output. Dùng CHUNG cho dòng engine sinh và dòng
+    thêm vào SAU build() (thiết bị bạn tự thêm trên sơ đồ, dòng 'Mã tự do').
+
+    VÌ SAO PHẢI DÙNG CHUNG: đo được — thêm node giảm âm AN15-02 ×2 trên sơ đồ thì
+    UI hiện đủ (UI đọc `lines` trả về qua HTTP) nhưng CSV và project_output KHÔNG
+    có, vì những dòng đó được cộng vào sau khi build() đã ghi DB xong. Người dùng
+    xuất CSV đi mua hàng là mất thiết bị.
+    """
+    for l in lines:
+        p = con.execute("select id from part where part_number=?",
+                        (l.get("part_number"),)).fetchone() if l.get("part_number") else None
+        con.execute(
+            """insert into project_output (project_id, part_id, proposed_code, qty, layer,
+                                           rule_code, rationale, confidence, status,
+                                           alternatives, requirement)
+               values (?,?,?,?,?,?,?,?,?,?,?)""",
+            (pid, p["id"] if p else None, l.get("part_number"), l["qty"], l["layer"],
+             l.get("rule_code"), l.get("rationale") or "", l.get("confidence"),
+             l.get("status") or "suggested",
+             json.dumps(l.get("alternatives") or [], ensure_ascii=False),
+             # Vật tư chưa có mã: TÊN nằm ở đây, để CSV và mọi chỗ đọc DB biết đó
+             # là cái gì thay vì chỉ thấy ô mã trống.
+             json.dumps({"item": l.get("item"), "gap_fields": l.get("gap_fields"),
+                         "note": l.get("note")}, ensure_ascii=False)
+             if l.get("status") == "gap" else None))
+    con.commit()
+
+
 def _resolve_need(con, need, ctx, project, src_part_id, templates):
     """REQUIREMENT → dòng BOM cụ thể, hoặc gap kèm lý do.
 
@@ -997,18 +1026,6 @@ def build(con, inputs, project=None, project_name="demo"):
             merged[k] = dict(l)
     lines = list(merged.values())
 
-    # ── ghi DB ──────────────────────────────────────────────────────────────
-    for l in lines:
-        p = con.execute("select id from part where part_number=?",
-                        (l["part_number"],)).fetchone()
-        con.execute(
-            """insert into project_output (project_id, part_id, proposed_code, qty, layer,
-                                           rule_code, rationale, confidence, status,
-                                           alternatives)
-               values (?,?,?,?,?,?,?,?,?,?)""",
-            (pid, p["id"] if p else None, l["part_number"], l["qty"], l["layer"],
-             l.get("rule_code"), l["rationale"], l.get("confidence"), "suggested",
-             json.dumps(l.get("alternatives") or [], ensure_ascii=False)))
     # ── GAP CHẶN VẬT TƯ → HIỆN THÀNH DÒNG BOM ───────────────────────────────
     # Thiếu dữ liệu KHÔNG có nghĩa là bỏ vật tư khỏi BOM. Trước đây gap nằm ở danh
     # sách RIÊNG nên bảng BOM trông như đủ: nhập mã xy-lanh mà không khai cấu hình
@@ -1056,7 +1073,21 @@ def build(con, inputs, project=None, project_name="demo"):
                 cur["note"] = f"{cur['note']} · {g['fix']}" if cur["note"] else g["fix"]
     lines.extend(by_item.values())
 
+    # ── ghi DB ──────────────────────────────────────────────────────────────
+    # PHẢI SAU vòng gộp gap→dòng. Trước đây ghi TRƯỚC, nên vật tư chưa có mã không
+    # bao giờ vào project_output: bảng BOM trên UI có nó (UI đọc `lines` trả về),
+    # còn CSV xuất ra thì KHÔNG — hai bản BOM khác nhau, mà bản đem đi mua hàng là
+    # bản thiếu.
+    save_lines(con, pid, lines)
+
+    # Gap KHÔNG thành vật tư (gap cấu hình thuần) vẫn ghi để giữ lịch sử, nhưng
+    # gap ĐÃ thành dòng thì bỏ — nếu không CSV có hai hàng cho cùng một thứ: một
+    # hàng đẹp và một hàng layer '?'.
+    became_line = {(g.get("layer"), g.get("item") or g.get("field")) for g in gaps
+                   if g.get("layer")}
     for g in gaps:
+        if (g.get("layer"), g.get("item") or g.get("field")) in became_line:
+            continue
         con.execute(
             """insert into project_output (project_id, qty, layer, rule_code, rationale,
                                            status, requirement)

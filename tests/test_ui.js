@@ -232,6 +232,23 @@ check('sơ đồ tô node chưa có mã bằng màu --gap, cùng màu với dòn
 check('BOM khớp dòng-với-node bằng khoá chung, không bằng part_number',
   /const keyOf=/.test(html) && /inTree\.has\(keyOf\(l\)\)/.test(html));
 
+// ── thêm thiết bị BẰNG MÃ (yêu cầu 2) ──────────────────────────────────────
+// Không click được, nên kiểm HỢP ĐỒNG giữa UI và server: đúng endpoint, đúng thứ
+// tự ưu tiên, và không tự dịch thiết bị sang chỗ khác.
+console.log('\nthem_thiet_bi_bang_ma');
+check('có ô gõ mã, không chỉ có danh sách chọn loại',
+  /Gõ mã hàng rồi Enter/.test(html));
+check('gọi /api/classify để phân loại', /fetch\('\/api\/classify'/.test(html));
+check('gửi kèm CÂY để biết chỗ gắn được',
+  /JSON\.stringify\(\{code:code,tree:TREE\}\)/.test(html));
+// Ô mã phải nằm TRƯỚC danh sách loại: chọn loại là bắt người dùng biết trước KQ2
+// là đầu nối hay ống — đúng cái phần mềm phải biết hộ.
+check('ô gõ mã đứng TRƯỚC danh sách chọn loại',
+  html.indexOf('Gõ mã hàng rồi Enter') < html.indexOf('+ Thêm loại rỗng'));
+check('chỗ đang chọn không nhận thì hiện các chỗ nhận được, KHÔNG tự dịch',
+  /→ đặt dưới/.test(html) && /okHere/.test(html));
+check('phân loại xong thì nói ra lý do (mã → loại)', /r\.why/.test(html));
+
 // ── giao diện: các tab không đè nhau ────────────────────────────────────────
 console.log('\ntab_khong_de_nhau');
 const views = [...html.matchAll(/id="v-(\w+)"/g)].map(m => m[1]);

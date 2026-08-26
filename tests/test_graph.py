@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import tmpdb                                # noqa: E402,F401  PHẢI trước crawler.db
 from crawler import db                      # noqa: E402
+from engine import classify as CL           # noqa: E402
 from engine import graph as G               # noqa: E402
 from engine import materialize              # noqa: E402
 from engine import tree as T                # noqa: E402
@@ -523,6 +524,167 @@ def test_khai_du_du_lieu_thi_dau_chua_co_ma_phai_MAT():
           str(fit))
 
 
+def test_cong_phan_loai_theo_ma():
+    """CỔNG: series nào gõ mã vào được thì phải phân loại được.
+
+    Không có cổng này thì thêm một tệp ngữ pháp mới là người dùng gõ mã hợp lệ mà
+    phần mềm nói "không biết đây là gì" — im lặng tụt hậu.
+    """
+    con = db.connect()
+    ok, rep = CL.gate(con)
+    con.close()
+    for name, good, detail in rep:
+        check(f"{name} — {detail[:70]}", good, detail)
+    check("cổng phân loại ĐẠT", ok)
+
+
+def test_go_ma_thi_tu_phan_loai():
+    """Gõ mã → biết loại thiết bị. Yêu cầu (2) của bạn.
+
+    ĐO TRƯỚC KHI LÀM: phân loại theo `category.layer` của crawl thì 48 mã BOM có
+    layer mà chỉ 5 mã suy ra được DUY NHẤT một loại — layer gộp van/đế/gasket vào
+    một chỗ, và AS (tiết lưu) còn bị crawl xếp 'electrical'. Nên bảng khai tay
+    19 dòng, kèm cổng ở test trên.
+    """
+    con = db.connect()
+    want = {
+        "CDM2B40-150AZ": "cylinder", "SY5220-5MZE-C6": "valve",
+        "SS5Y5-20-04": "manifold", "AS2201F-02-06SA": "speed_controller",
+        "KQ2L06-02NS": "fitting", "TU0604BU-20": "tubing",
+        "D-M9BW": "sensor", "JA40-14-150": "joint", "JB20-5-080-X11": "joint",
+        "AN15-02": "silencer", "AC30-03DG-A": "frl",
+    }
+    for code, nt in want.items():
+        r = CL.classify(con, code)
+        check(f"{code} → {nt}", r.get("ok") and r["node_type"] == nt,
+              str(r.get("node_type") or r.get("reason")))
+    # VAI TRÒ THẮNG SERIES: gasket parse ra họ SY-5-E (van) nhưng nó là phụ kiện đế.
+    for code in ("SY5000-GS-1", "SY5000-26-20A"):
+        r = CL.classify(con, code)
+        check(f"{code} là phụ kiện đế, KHÔNG phải van",
+              r.get("ok") and r["node_type"] == "manifold_part",
+              str(r.get("node_type") or r.get("reason")))
+    # Mã đọc được nhưng chưa khai loại, và mã sai: phải NÓI KHÔNG BIẾT, không đoán.
+    for code in ("ISE20-N-M-C6L-B", "XYZ123", ""):
+        r = CL.classify(con, code)
+        check(f"{code or '(rỗng)'} → nói không biết, kèm cách đi tiếp",
+              not r.get("ok") and r.get("reason") and r.get("how"), str(r))
+    con.close()
+
+
+def test_phan_loai_noi_ro_gan_duoc_vao_dau():
+    """Phân loại xong phải nói gắn được vào đâu — không bắt người dùng tự dò."""
+    con = db.connect()
+    tree = _tree(["CDM2B40-150AZ"])
+    r = W.api_classify(con, "AN15-02", tree)
+    labels = [p["label"] for p in r.get("placements") or []]
+    check("giảm âm gắn được lên van (BOM thật AN15-02 ×2 cho 11 van)",
+          any("SV" in l for l in labels), str(labels))
+    check("giảm âm KHÔNG gắn vào xy-lanh", not any("lanh" in l for l in labels),
+          str(labels))
+    r = W.api_classify(con, "SY5000-GS-1", tree)
+    check("cây chưa có manifold → gasket không có chỗ nào, và nói ra",
+          r["ok"] and not r["placements"], str(r.get("placements")))
+    check("nhưng vẫn cho biết nó cần cha loại gì",
+          r["allowed_parents"] == ["manifold"], str(r.get("allowed_parents")))
+    con.close()
+
+
+def test_goi_y_ma_khong_lan_loai_khac():
+    """Danh sách mã gợi ý phải theo LOẠI, không theo tiền tố mã.
+
+    LỖI CŨ ĐO ĐƯỢC: api_codes lọc bằng tiền tố viết tay theo layer, nên chọn
+    "Đế manifold" vẫn nhận mã VAN SY5220, và SY5000-GS-1 (gasket) hiện trong danh
+    sách van vì khớp tiền tố 'SY'.
+    """
+    con = db.connect()
+    mfd = W.api_codes(con, "manifold")["codes"]
+    val = W.api_codes(con, "valve")["codes"]
+    prt = W.api_codes(con, "manifold_part")["codes"]
+    con.close()
+    check("gợi ý cho đế manifold chỉ có mã SS5Y", mfd and all(c.startswith("SS5Y") for c in mfd),
+          str(mfd[:4]))
+    check("gợi ý cho van KHÔNG lẫn mã đế", not any(c.startswith("SS5Y") for c in val),
+          str([c for c in val if c.startswith("SS5Y")][:3]))
+    check("gợi ý cho van KHÔNG lẫn gasket/end plate",
+          not any("-GS-" in c or "-26-" in c for c in val),
+          str([c for c in val if "-GS-" in c or "-26-" in c][:3]))
+    check("phụ kiện đế có danh sách riêng và không rỗng", len(prt) > 0, str(prt[:3]))
+
+
+def test_quan_he_cha_con_khong_con_o_cut():
+    """Thiết bị đầu nối/ống/tiết lưu phải nối tiếp được nhau.
+
+    Bạn báo "quá ít lựa chọn". Đo được 8/14 loại node KHÔNG thêm được gì, trong đó
+    có mối nối vật lý hiển nhiên: ống cắm vào cửa one-touch của tiết lưu và của
+    đầu nối. Còn lại 5 loại là THIẾT BỊ ĐẦU CUỐI thật (cảm biến, giảm âm, khớp nối,
+    phụ kiện đế, PLC) — không có gì vặn lên chúng, nên 0 là đúng.
+    """
+    kids = lambda t: [k for k, (a, _) in T.PARENT_OF.items() if t in a]
+    check("ống cắm được vào tiết lưu (AS…F có one-touch sẵn)",
+          "tubing" in kids("speed_controller"), str(kids("speed_controller")))
+    check("ống cắm được vào đầu nối", "tubing" in kids("fitting"), str(kids("fitting")))
+    check("đầu nối nối tiếp được đoạn ống", "fitting" in kids("tubing"),
+          str(kids("tubing")))
+    check("thiết bị ngoài catalog nhận được phụ kiện", len(kids("custom")) >= 5,
+          str(kids("custom")))
+    leaves = [t for t in G.GROUPS if not kids(t)]
+    check("đúng 5 loại đầu cuối, và là những loại KHÔNG có gì vặn lên",
+          set(leaves) == {"sensor", "silencer", "joint", "manifold_part", "plc"},
+          str(sorted(leaves)))
+
+
+def test_thiet_bi_tu_them_phai_vao_BOM_va_CSV():
+    """Thiết bị bạn tự thêm (có mã) phải vào BOM, CSV và DB — không chỉ vẽ trên cây.
+
+    ĐO ĐƯỢC TRƯỚC KHI SỬA: thêm node giảm âm 'AN15-02' ×2 → BOM KHÔNG hề nhắc tới
+    nó. resolve() chỉ biến node actuator thành `inputs` và node 'Mã tự do' thành
+    `manual_lines`; mọi node khác CÓ MÃ rơi vào khoảng trống. Bảng BOM vẽ được nó
+    vì bảng vẽ theo cây, nhưng `lines` không có nên CSV và project_output đều thiếu
+    — tức đơn mua hàng thiếu thiết bị.
+
+    Phân loại theo mã (yêu cầu 2) làm lỗ này nặng hơn nhiều: giờ thêm thiết bị bất
+    kỳ là chuyện một dòng gõ.
+    """
+    con = db.connect()
+    tree = _tree(["CDM2B40-150AZ"])
+    tree["children"][0]["children"].append(
+        {"id": "s1", "type": "silencer", "name": "AN15-02", "code": "AN15-02",
+         "qty": 2, "attrs": {}, "children": []})
+    r = W.api_bom(con, {"tree": tree, "config": dict(CFG), "name": "tuthem"})
+    an = [l for l in r["lines"] if "AN15" in str(l.get("part_number"))]
+    check("thiết bị tự thêm có dòng BOM", len(an) == 1, str(len(an)))
+    check("đúng số lượng bạn khai", an and an[0]["qty"] == 2, str(an))
+    check("KHÔNG dán nhãn 'không qua kiểm tra kỹ thuật' — mã này parse được",
+          an and "kiểm tra kỹ thuật" not in an[0]["rationale"], str(an))
+    csv = W.api_csv(con, r["project_id"])
+    check("CSV xuất ra cũng có nó", "AN15-02" in csv, csv[:120])
+    # dựng lại nhiều lần: không được nhân đôi
+    t2 = r["tree"]
+    for i in range(2):
+        r = W.api_bom(con, {"tree": t2, "config": dict(CFG), "name": f"lai{i}"})
+        t2 = r["tree"]
+    an = [l for l in r["lines"] if "AN15" in str(l.get("part_number"))]
+    check("dựng lại 3 lần vẫn đúng 1 dòng", len(an) == 1, str(len(an)))
+    con.close()
+
+
+def test_ma_sai_van_vao_BOM_kem_canh_bao():
+    """Mã không đọc được: vẫn liệt kê, kèm cảnh báo. Bỏ đi là để đơn hàng thiếu."""
+    con = db.connect()
+    tree = _tree(["CDM2B40-150AZ"])
+    tree["children"][0]["children"].append(
+        {"id": "s1", "type": "silencer", "name": "?", "code": "AN15-KHONG-CO-THAT",
+         "qty": 1, "attrs": {}, "children": []})
+    r = W.api_bom(con, {"tree": tree, "config": dict(CFG), "name": "masai"})
+    con.close()
+    check("mã sai vẫn có dòng BOM",
+          any("KHONG-CO-THAT" in str(l.get("part_number")) for l in r["lines"]))
+    w = [x for x in r["warnings"] if x.get("code") == "NODE_CODE_UNPARSED"]
+    check("và có cảnh báo engine không kiểm được nó", len(w) == 1, str(len(w)))
+    check("cảnh báo nói cách đi tiếp", w and w[0].get("fix"), str(w[:1]))
+
+
 if __name__ == "__main__":
     print("Kiểm đồ thị đấu nối")
     print("=" * 60)
@@ -541,7 +703,14 @@ if __name__ == "__main__":
                test_node_manifold_khong_duoc_nhan_ma_VAN,
                test_van_dieu_khien_xylanh_chua_go_ma_thi_khong_doan,
                test_node_tren_so_do_khong_bi_bien_mat_khoi_BOM,
-               test_khai_du_du_lieu_thi_dau_chua_co_ma_phai_MAT):
+               test_khai_du_du_lieu_thi_dau_chua_co_ma_phai_MAT,
+               test_cong_phan_loai_theo_ma,
+               test_go_ma_thi_tu_phan_loai,
+               test_phan_loai_noi_ro_gan_duoc_vao_dau,
+               test_goi_y_ma_khong_lan_loai_khac,
+               test_quan_he_cha_con_khong_con_o_cut,
+               test_thiet_bi_tu_them_phai_vao_BOM_va_CSV,
+               test_ma_sai_van_vao_BOM_kem_canh_bao):
         print(f"\n{fn.__name__}")
         fn()
     print("\n" + "=" * 60)
