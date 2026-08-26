@@ -49,7 +49,9 @@ let S;
 try {
   S = new Function(stub + body + `
     return {layoutTree, boxW, walk, statusOf, gapWhy, allowedChildren, addStation,
-            BOXH, VGAP, HGAP, PADX, PADY,
+            BOXH, VGAP, HGAP, PADX, PADY, GUTTER,
+            setLinks: l => { LINKS = l; }, getLinks: () => LINKS,
+            renderDiagram, setEdgeKinds: k => { EDGE_KINDS = k; },
             setTree: t => { TREE = t; }, getTree: () => TREE,
             setGroups: g => { GROUPS = g; },
             setParentOf: p => { PARENT_OF = p; },
@@ -248,6 +250,58 @@ check('ô gõ mã đứng TRƯỚC danh sách chọn loại',
 check('chỗ đang chọn không nhận thì hiện các chỗ nhận được, KHÔNG tự dịch',
   /→ đặt dưới/.test(html) && /okHere/.test(html));
 check('phân loại xong thì nói ra lý do (mã → loại)', /r\.why/.test(html));
+
+// ── liên kết chéo trên sơ đồ (yêu cầu 4) ───────────────────────────────────
+// Dây liên kết đi trong MÁNG bên trái. Điều PHẢI chứng minh: máng đó KHÔNG có hộp
+// nào, nếu không thì dây cắt qua hộp — đúng cái mà cách bố cục này tồn tại để
+// tránh. Chứng minh bằng toạ độ, không bằng nhìn.
+console.log('\nlien_ket_cheo_khong_cat_qua_hop');
+{
+  const t = mkTree(4);
+  const noL = S.layoutTree(t, 0), withL = S.layoutTree(t, 3);
+  check('không có liên kết thì không chừa máng', noL.gut === 0, String(noL.gut));
+  check('có liên kết thì chừa máng đúng GUTTER', withL.gut === S.GUTTER, String(withL.gut));
+  let minX = Infinity;
+  for (const [n] of S.walk(t)) minX = Math.min(minX, withL.pos.get(n.id).x);
+  check('MỌI hộp nằm bên phải máng — dây không thể cắt qua hộp',
+    minX >= S.PADX + S.GUTTER, `minX=${minX} máng đến ${S.PADX + S.GUTTER}`);
+  check('sơ đồ rộng thêm đúng bằng máng',
+    withL.width === noL.width + S.GUTTER, `${withL.width} vs ${noL.width}`);
+  // và bố cục vẫn không chồng lấn khi đã dịch phải
+  const boxes = [...S.walk(t)].map(([n]) => {
+    const q = withL.pos.get(n.id); return {x: q.x, y: q.y, w: S.boxW(n), h: S.BOXH}; });
+  let over = 0;
+  for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+    const a = boxes[i], b = boxes[j];
+    if (a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h) over++; }
+  check('chừa máng rồi vẫn không hộp nào đè nhau', over === 0, String(over));
+}
+// CHẠY THẬT hàm vẽ sơ đồ. Phần vẽ liên kết là JS chỉ chạy trên trình duyệt, nên
+// một lỗi đánh máy ở đó sẽ không có gì bắt được — trừ khi gọi nó ở đây.
+{
+  const t = mkTree(3);
+  const ids = [...S.walk(t)].map(([n]) => n.id);
+  S.setTree(t);
+  S.setEdgeKinds({pneumatic_control: 'van điều khiển xy-lanh',
+                  electrical_signal: 'tín hiệu điện'});
+  S.setLinks([
+    {id: 'L1', from: ids[2], to: ids[6], kind: 'pneumatic_control'},
+    {id: 'L2', from: ids[1], to: ids[9], kind: 'electrical_signal'},
+    {id: 'L3', from: ids[0], to: 'da-bi-xoa', kind: 'pneumatic_control'}]);
+  let err = null;
+  try { S.renderDiagram(); } catch (e) { err = e; }
+  check('vẽ được sơ đồ có liên kết chéo, không nổ', !err, err && err.message);
+  S.setLinks([]);
+  try { S.renderDiagram(); } catch (e) { err = e; }
+  check('và vẫn vẽ được khi không có liên kết nào', !err, err && err.message);
+}
+check('liên kết gửi kèm khi dựng BOM', /links:LINKS/.test(html));
+check('nhận lại bản đã lọc từ engine', /if\(r\.links\) LINKS=r\.links/.test(html));
+check('xoá thiết bị thì xoá luôn liên kết của nó',
+  /LINKS=LINKS\.filter\(l=>!gone\.has\(l\.from\)&&!gone\.has\(l\.to\)\)/.test(html));
+check('nút Xoá NÓI SỐ thiết bị con sẽ mất', /kèm \$\{nsub\} thiết bị con/.test(html));
+check('chuyển chỗ gọi máy chủ, không tự làm ở UI', /fetch\('\/api\/move'/.test(html));
+check('danh sách chỗ chuyển bỏ con cháu của chính nó', /ownIds\.has\(x\.id\)/.test(html));
 
 // ── giao diện: các tab không đè nhau ────────────────────────────────────────
 console.log('\ntab_khong_de_nhau');

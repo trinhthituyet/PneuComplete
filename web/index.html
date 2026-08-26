@@ -9,7 +9,7 @@
 :root{
   --bg:#0D0F13; --panel:#151821; --panel2:#1C202B; --hover:#20242F;
   --line:#262B37; --line-soft:#1E222C;
-  --tx:#E8EAF0; --dim:#8D95A8; --gap:#F2637A;
+  --tx:#E8EAF0; --dim:#8D95A8; --gap:#F2637A; --link:#7FA9F0;
   --faint:#565D6D;
   --ok:#35D4AA; --ok-bg:#173C33; --warn:#F0A947; --warn-bg:#3A2D14;
   --err:#F2637A; --err-bg:#3A1B22; --acc:#6E8CFF; --acc-bg:#1B2440;
@@ -206,6 +206,10 @@ const sv=(t,a={})=>{const e=document.createElementNS(SVGNS,t);
 let DEF={}, NEEDS=[], VFUNC=[], GROUPS={}, PARENT_OF={}, SINGLETON=[], COMPUTED=[];
 let COMPUTED_VAL={};
 let TREE=null, sel=null, seq=1, lastProject=null, expanded=new Set(), undoStack=[];
+/* LIÊN KẾT CHÉO (yêu cầu 4): quan hệ mà cây một-cha không diễn đạt được — van
+   trạm này điều khiển xy-lanh trạm khác, PLC cấp tín hiệu cho nhiều trạm, nhánh
+   khí riêng. Lưu cùng cây trong project_graph nên mở lại project là còn. */
+let LINKS=[], EDGE_KINDS={};
 const ICON={frl:'FRL',manifold:'MFD',valve:'V',cylinder:'CY',speed_controller:'SC',
   regulator:'R',silencer:'SI',fitting:'F',tubing:'TU',sensor:'SN',plc:'PLC',custom:'?'};
 const LAYER_VN={actuator:'ACTUATOR',valve:'VAN',air_prep:'XỬ LÝ KHÍ',piping:'ĐƯỜNG ỐNG',
@@ -232,9 +236,9 @@ const gapWhy=n=>((n.gap_fields_vn&&n.gap_fields_vn.length?n.gap_fields_vn:n.gap_
    In "cần —" là bắt người dùng đoán, nên rơi về chính câu mô tả. */
 const gapText=n=>{ const w=gapWhy(n);
   return 'CHƯA CÓ MÃ — '+(w?'cần '+w:(n.gap_why||'thiếu dữ liệu đầu vào')); };
-function snap(){ undoStack.push(JSON.stringify({TREE,seq})); if(undoStack.length>50) undoStack.shift(); }
+function snap(){ undoStack.push(JSON.stringify({TREE,seq,LINKS})); if(undoStack.length>50) undoStack.shift(); }
 function undo(){ if(!undoStack.length) return; const d=JSON.parse(undoStack.pop());
-  TREE=d.TREE; seq=d.seq; sel=null; render(); }
+  TREE=d.TREE; seq=d.seq; LINKS=d.LINKS||[]; sel=null; render(); }
 
 async function boot(){
   const d=await (await fetch('/api/defaults')).json();
@@ -243,6 +247,7 @@ async function boot(){
   const g=await (await fetch('/api/groups')).json();
   g.groups.forEach(x=>GROUPS[x.key]=x);
   PARENT_OF=g.parent_of||{}; SINGLETON=g.singleton||[];
+  (g.edge_kinds||[]).forEach(x=>EDGE_KINDS[x.key]=x.label);
   TREE={id:'n0',type:'frl',name:'Bộ xử lý khí (nguồn chung)',code:'',qty:1,attrs:{},children:[]};
   expanded.add('n0');
   buildCfg(); addStation(); render();
@@ -318,9 +323,21 @@ function renderDetail(){
   t.appendChild(el('span','pill',g.label||n.type));
   if(n.filled_by_bom) t.appendChild(el('span','pill','engine chọn'));
   if(n.id!==TREE.id){
-    const del=el('button','ghost','Xoá'); del.style.marginLeft='auto';
+    const nsub=[...walk(n)].length-1;
+    const del=el('button','ghost','Xoá'+(nsub?` (kèm ${nsub} thiết bị con)`:''));
+    del.style.marginLeft='auto';
+    // NÓI SỐ THIẾT BỊ SẼ MẤT. Xoá một van là mất cả xy-lanh, tiết lưu, cảm biến
+    // dưới nó — im lặng thì người dùng chỉ phát hiện khi BOM hụt mấy chục dòng.
+    del.title=nsub?'Xoá cả nhánh: '+[...walk(n)].slice(1)
+      .map(([x])=>x.name||x.type).join(' · '):'Xoá thiết bị này';
     del.onclick=()=>{snap(); const p=parentOf(n.id);
-      p.children=p.children.filter(c=>c.id!==n.id); sel=p.id; render();};
+      p.children=p.children.filter(c=>c.id!==n.id);
+      const gone=new Set([...walk(n)].map(([x])=>x.id));
+      const before=LINKS.length;
+      LINKS=LINKS.filter(l=>!gone.has(l.from)&&!gone.has(l.to));
+      sel=p.id; render();
+      $('#sub').textContent=`đã xoá ${gone.size} thiết bị`
+        +(before-LINKS.length?` và ${before-LINKS.length} liên kết`:'');};
     t.appendChild(del);
   }
   v.appendChild(t);
@@ -464,6 +481,89 @@ function renderDetail(){
     if(why) c4.appendChild(el('div','hint','Chỉ hiện loại lắp được vào đây. '+why));
   }
   v.appendChild(c4);
+
+  /* ── CHUYỂN CHỖ + LIÊN KẾT CHÉO (yêu cầu 4) ────────────────────────────────
+     "thêm/bớt thiết bị ở bất kỳ vị trí và liên kết chúng giữa các trạm khác nhau".
+     Hai việc KHÁC NHAU, nên hai khối:
+       · CHUYỂN CHỖ  đổi cha trong cây — dùng khi đặt sai chỗ
+       · LIÊN KẾT    quan hệ cây KHÔNG diễn đạt được, vì cây chỉ có MỘT cha:
+                     van trạm 1 điều khiển xy-lanh đặt ở trạm 3, PLC cấp tín hiệu
+                     cho van nhiều trạm, nhánh khí riêng.
+     Liên kết KHÔNG phải trang trí: engine đọc nó để gán đúng mã van cho từng
+     xy-lanh, gom vùng khí và suy điện áp coil. */
+  if(n.id!==TREE.id){
+    const c5=el('div','card'); c5.appendChild(el('h2',null,'Chuyển sang chỗ khác'));
+    const mr=el('div','addrow');
+    const ms=el('select');
+    // Chỉ hiện chỗ THẬT SỰ nhận được: loại hợp lệ theo PARENT_OF, và không phải
+    // con cháu của chính nó (chuyển vào con cháu là cả nhánh rời khỏi cây).
+    const ownIds=new Set([...walk(n)].map(([x])=>x.id));
+    const okP=(PARENT_OF[n.type]||{allowed:[]}).allowed;
+    let nOpt=0;
+    for(const [x] of walk(TREE)){
+      if(ownIds.has(x.id)||!okP.includes(x.type)) continue;
+      if(parentOf(n.id)&&parentOf(n.id).id===x.id) continue;
+      ms.appendChild(new Option((x.name||x.type)+' ['+((GROUPS[x.type]||{}).label||x.type)+']',x.id));
+      nOpt++; }
+    if(!nOpt){
+      c5.appendChild(el('div','hint','Không có chỗ nào khác nhận thiết bị này. Cần: '
+        +okP.map(a=>(GROUPS[a]||{}).label||a||'gốc cây').join(' hoặc '))); }
+    else{
+      mr.appendChild(ms);
+      const mb=el('button','ghost','Chuyển');
+      mb.onclick=async()=>{
+        mb.disabled=true;
+        let r;
+        try{ r=await (await fetch('/api/move',{method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({tree:TREE,node:n.id,parent:ms.value})})).json(); }
+        catch(e){ r={ok:false,problem:{what:'không gọi được máy chủ: '+e.message}}; }
+        mb.disabled=false;
+        if(!r.ok){ $('#sub').innerHTML='<span style="color:var(--err)">'
+          +(r.problem&&r.problem.what||'không chuyển được')+'</span>'
+          +(r.problem&&r.problem.fix?' — '+r.problem.fix:''); return; }
+        snap(); TREE=r.tree; expanded.add(ms.value); render();
+        $('#sub').textContent='đã chuyển chỗ'; };
+      mr.appendChild(mb); c5.appendChild(mr);
+      c5.appendChild(el('div','hint','Máy chủ kiểm giúp: chỉ chuyển được vào cha '
+        +'hợp lệ, và không chuyển vào con cháu của chính nó.')); }
+    v.appendChild(c5);
+  }
+
+  const c6=el('div','card'); c6.appendChild(el('h2',null,'Liên kết chéo'));
+  const mine=LINKS.filter(l=>l.from===n.id||l.to===n.id);
+  if(!mine.length) c6.appendChild(el('div','hint','chưa có liên kết nào'));
+  mine.forEach(l=>{
+    const row=el('div','frow');
+    const other=findN(l.from===n.id?l.to:l.from);
+    row.appendChild(el('div','fname',(l.from===n.id?'→ ':'← ')
+      +((other||{}).name||'(đã xoá)')));
+    row.appendChild(el('div','why',EDGE_KINDS[l.kind]||l.kind));
+    const rm=el('div','xbtn','✕');
+    rm.onclick=()=>{snap(); LINKS=LINKS.filter(o=>o!==l); render();};
+    row.appendChild(rm); c6.appendChild(row); });
+  const lr=el('div','addrow');
+  const ts=el('select'); let nT=0;
+  for(const [x] of walk(TREE)){
+    if(x.id===n.id) continue;
+    ts.appendChild(new Option((x.name||x.type)+' ['+((GROUPS[x.type]||{}).label||x.type)+']',x.id));
+    nT++; }
+  const lkKind=el('select');
+  Object.entries(EDGE_KINDS).forEach(([k,lab])=>lkKind.appendChild(new Option(lab,k)));
+  if(nT){
+    lr.appendChild(ts); lr.appendChild(lkKind);
+    const lkAdd=el('button','ghost','+ Nối');
+    lkAdd.onclick=()=>{
+      if(LINKS.some(l=>l.from===n.id&&l.to===ts.value&&l.kind===lkKind.value)){
+        $('#sub').textContent='liên kết này đã có'; return; }
+      snap();
+      LINKS.push({id:'L'+(seq++),from:n.id,to:ts.value,kind:lkKind.value});
+      render(); $('#sub').textContent='đã nối · bấm Dựng BOM để engine dùng liên kết này'; };
+    lr.appendChild(lkAdd); c6.appendChild(lr);
+    c6.appendChild(el('div','hint','Dùng khi cây không nói được: van trạm này kéo '
+      +'xy-lanh trạm khác · PLC cấp tín hiệu nhiều trạm · nhánh khí riêng. '
+      +'Máy chủ kiểm miền tín hiệu (khí ↔ khí, điện ↔ điện) khi dựng BOM.')); }
+  v.appendChild(c6);
 }
 
 const codeCache={};
@@ -595,11 +695,14 @@ async function run(){
   try{
     const r=await (await fetch('/api/bom',{method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({tree:TREE,config:collectConfig(),name:'cây dự án'})})).json();
+      body:JSON.stringify({tree:TREE,links:LINKS,config:collectConfig(),
+                           name:'cây dự án'})})).json();
     if(r.error){ $('#sub').innerHTML=`<span style="color:var(--err)">${r.error}</span>`; return; }
     lastProject=r.project_id; $('#csv').disabled=false;
     // Engine trả về CÂY đã chuẩn hoá + đã điền mã → dùng làm nguồn sự thật mới.
     if(r.tree){ TREE=r.tree; for(const [n] of walk(TREE)) expanded.add(n.id); }
+    // engine có thể BỎ liên kết trỏ tới thiết bị đã xoá — nhận lại bản đã lọc
+    if(r.links) LINKS=r.links;
     // giữ giá trị engine vừa tính để tab Cấu hình hiện kết quả thay vì ô trống
     COMPUTED.forEach(c=>{ if(r.project&&r.project[c.key]!=null) COMPUTED_VAL[c.key]=r.project[c.key]; });
     buildCfg();
@@ -776,7 +879,7 @@ function renderBom(r){
    Hai điều đó ⇒ hai node không bao giờ trùng vùng.
    Không có toạ độ nào cố định sẵn — đây đúng chỗ prototype vỡ (mainY=380 cứng,
    và hàng phụ kiện rộng 210px nhét trong cột 176px). */
-const BOXH=44, VGAP=10, HGAP=48, PADX=16, PADY=16, CHARW=6.4;
+const BOXH=44, VGAP=10, HGAP=48, PADX=16, PADY=16, CHARW=6.4, GUTTER=26;
 function boxW(n){
   // dòng dưới có thể là mã hàng HOẶC 'CHƯA CÓ MÃ — cần …' — đo cái đang hiện thật,
   // không đo mã: hộp tính theo mã thì dòng thiếu-dữ-liệu bị cắt mất chữ.
@@ -784,11 +887,14 @@ function boxW(n){
   const a=(n.name||n.type||'').length, b=sub.length;
   return Math.max(126, Math.min(268, Math.round(Math.max(a,b*0.95)*CHARW)+24));
 }
-function layoutTree(root){
+function layoutTree(root,nLinks=0){
   const levels=[];
   for(const [n,,d] of walk(root)) (levels[d]||=[]).push(n);
   const colW=levels.map(l=>Math.max(...l.map(boxW)));
-  const colX=[]; let x=PADX;
+  // MÁNG bên trái để đi dây liên kết chéo. Không chừa máng thì dây phải cắt ngang
+  // qua các hộp — mà cả cách bố cục này tồn tại là để KHÔNG có gì đè lên nhau.
+  const gut=nLinks?GUTTER:0;
+  const colX=[]; let x=PADX+gut;
   colW.forEach((w,i)=>{ colX[i]=x; x+=w+HGAP; });
   const pos=new Map(); let cursor=PADY;
   (function place(n,d){
@@ -798,12 +904,14 @@ function layoutTree(root){
     const ys=kids.map(c=>pos.get(c.id).y);
     pos.set(n.id,{x:colX[d],y:(Math.min(...ys)+Math.max(...ys))/2,w:colW[d]});
   })(root,0);
-  return {pos,width:Math.max(x-HGAP+PADX,200),height:Math.max(cursor-VGAP+PADY,BOXH+2*PADY)};
+  return {pos,gut:gut,width:Math.max(x-HGAP+PADX,200),
+          height:Math.max(cursor-VGAP+PADY,BOXH+2*PADY)};
 }
 function renderDiagram(){
   const v=$('#v-diagram');
   if(!TREE){ v.innerHTML='<div class="hint">chưa có cây</div>'; return; }
-  const {pos,width,height}=layoutTree(TREE);
+  const shown=LINKS.filter(l=>findN(l.from)&&findN(l.to));
+  const {pos,gut,width,height}=layoutTree(TREE,LINKS.length);
   const svg=sv('svg',{viewBox:`0 0 ${width} ${height}`,width:width,height:height,
     style:`min-width:${width}px`});
   for(const [n] of walk(TREE)){
@@ -832,9 +940,28 @@ function renderDiagram(){
       :st==='type_only'?'(chưa chọn mã)':'(chưa nhập)')).slice(0,cap);
     svg.appendChild(t2);
   }
+  /* ── LIÊN KẾT CHÉO: đi trong MÁNG bên trái ────────────────────────────────
+     Vẽ SAU các hộp để nét không bị hộp che, và đi vòng ngoài cùng bên trái nên
+     KHÔNG cắt qua hộp nào. Nhiều liên kết chia nhau máng theo chỉ số, nên hai dây
+     có thể chạy sát nhau — cái đó thì có, còn cắt qua hộp thì không. */
+  shown.forEach((l,i)=>{
+    const a=pos.get(l.from), b=pos.get(l.to);
+    if(!a||!b) return;
+    const gx=4+(i%3)*6, y1=a.y+BOXH/2, y2=b.y+BOXH/2;
+    svg.appendChild(sv('path',{
+      d:`M${a.x},${y1} H${gx} V${y2} H${b.x}`, fill:'none',
+      stroke:'var(--link)','stroke-width':1.4,'stroke-dasharray':'6,4'}));
+    // mũi nhọn ở đầu ĐÍCH để biết chiều
+    svg.appendChild(sv('path',{d:`M${b.x-6},${y2-3} L${b.x},${y2} L${b.x-6},${y2+3}`,
+      fill:'none',stroke:'var(--link)','stroke-width':1.4}));
+    const t=sv('text',{x:gx+3,y:(y1+y2)/2-3,'font-size':9,fill:'var(--link)'});
+    t.textContent=(EDGE_KINDS[l.kind]||l.kind).slice(0,22);
+    svg.appendChild(t);
+  });
   v.innerHTML='';
   v.appendChild(el('div','hint',
-    'Sơ đồ sinh từ cây: cột theo cấp, mỗi lá một khe riêng — bố cục tính từ nội dung nên không chồng lấn.'));
+    'Sơ đồ sinh từ cây: cột theo cấp, mỗi lá một khe riêng — bố cục tính từ nội dung nên không chồng lấn.'
+    +(shown.length?` Nét đứt = ${shown.length} liên kết chéo, đi trong máng bên trái nên không cắt qua hộp.`:'')));
   const w=el('div','diagwrap'); w.style.marginTop='10px';
   w.appendChild(svg); v.appendChild(w);
 }

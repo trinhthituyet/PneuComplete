@@ -685,6 +685,219 @@ def test_ma_sai_van_vao_BOM_kem_canh_bao():
     check("cảnh báo nói cách đi tiếp", w and w[0].get("fix"), str(w[:1]))
 
 
+def test_lien_ket_cheo_van_tram_khac_dieu_khien():
+    """Van trạm này điều khiển xy-lanh trạm khác — cây một-cha KHÔNG nói được.
+
+    ĐO ĐƯỢC khi làm yêu cầu (4): đặt XL3 ở gốc rồi khai liên kết "SV3 điều khiển
+    XL3" thì normalize() vẫn dịch XL3 về van ĐẦU TIÊN (SV1), vì nó chỉ lấy "node
+    hợp lệ đầu tiên gặp được". Kết quả: bản đồ van↔xy-lanh nói XL3 do CẢ SV1 và SV3
+    điều khiển — hai câu trái nhau, và cỡ van SV1 bị cộng thêm lưu lượng của một
+    xy-lanh không thuộc nó. Nên liên kết bạn khai phải THẮNG phép đoán.
+    """
+    con = db.connect()
+    tree = {"id": "frl", "type": "frl", "name": "FRL", "code": "", "attrs": {},
+            "children": [_station(1, "CDM2B40-150AZ"), _station(2, "CDM2B32-100AZ"),
+                         {"id": "v3", "type": "valve", "name": "SV3", "code": "",
+                          "attrs": {}, "children": []},
+                         {"id": "c3", "type": "cylinder", "name": "XL3 xa trạm",
+                          "code": "CDM2B25-50AZ", "qty": 1, "attrs": {},
+                          "children": []}]}
+    links = [{"id": "L1", "from": "v3", "to": "c3", "kind": "pneumatic_control"}]
+    r = W.api_bom(con, {"tree": tree, "links": links, "config": dict(CFG),
+                        "name": "lienket"})
+    con.close()
+    ctrl = r["graph_info"]["controlled"]
+    check("XL3 do ĐÚNG SV3 điều khiển, không phải SV1", ctrl.get("c3") == ["v3"],
+          str(ctrl))
+    check("mỗi xy-lanh khác vẫn đúng van của nó",
+          ctrl.get("c1") == ["v1"] and ctrl.get("c2") == ["v2"], str(ctrl))
+    check("XL3 được dịch về con của SV3 theo liên kết",
+          (T.parent_of(r["tree"], "c3") or {}).get("id") == "v3")
+    check("và NÓI RA là dịch theo liên kết bạn khai",
+          any("theo liên kết" in (w.get("message") or "") for w in r["warnings"]),
+          str([w.get("message") for w in r["warnings"]])[:200])
+    check("SV3 nhận được mã van (trước đây để trống vì không biết nó kéo gì)",
+          (T.find(r["tree"], "v3").get("code") or "").startswith("SY"),
+          str(T.find(r["tree"], "v3").get("code")))
+
+
+def test_lien_ket_duoc_luu_va_doc_lai():
+    """Liên kết lưu CÙNG cây. Lưu riêng thì mở project cũ ra cây mới + liên kết cũ."""
+    con = db.connect()
+    tree = _tree(["CDM2B40-150AZ", "CDM2B32-100AZ"])
+    links = [{"id": "L1", "from": "v1", "to": "c2", "kind": "pneumatic_control"}]
+    r = W.api_bom(con, {"tree": tree, "links": links, "config": dict(CFG), "name": "luu"})
+    got = T.load_links(con, r["project_id"])
+    check("đọc lại đúng liên kết đã lưu", len(got) == 1 and got[0]["from"] == "v1",
+          str(got))
+    # project lưu TRƯỚC khi có tính năng này: không có khoá 'links', không phải lỗi
+    T.save(con, r["project_id"], r["tree"])
+    check("project không có liên kết trả về [] chứ không vỡ",
+          T.load_links(con, r["project_id"]) == [])
+    con.close()
+
+
+def test_xoa_thiet_bi_thi_lien_ket_treo_phai_bi_bo_va_BAO():
+    """Xoá node → liên kết trỏ vào hư không. Bỏ IM LẶNG là người dùng tưởng còn nối."""
+    con = db.connect()
+    tree = _tree(["CDM2B40-150AZ", "CDM2B32-100AZ"])
+    links = [{"id": "L1", "from": "v1", "to": "c2", "kind": "pneumatic_control"},
+             {"id": "L2", "from": "v1", "to": "khong-ton-tai",
+              "kind": "pneumatic_control"}]
+    r = W.api_bom(con, {"tree": tree, "links": links, "config": dict(CFG), "name": "treo"})
+    con.close()
+    check("liên kết treo bị bỏ", len(r["links"]) == 1, str(r["links"]))
+    check("và có báo, không im lặng",
+          any(w.get("code") == "LINKS_PRUNED" for w in r["warnings"]),
+          str([w.get("code") for w in r["warnings"]]))
+
+
+def test_lien_ket_sai_mien_tin_hieu_thi_bao():
+    """Nối tín hiệu ĐIỆN vào ống khí phải báo — kiểm bằng chính dữ liệu cổng."""
+    con = db.connect()
+    tree = _tree(["CDM2B40-150AZ"])
+    tree["children"][0]["children"].append(
+        {"id": "tu1", "type": "tubing", "name": "Ống", "code": "", "attrs": {},
+         "children": []})
+    bad = [{"id": "L1", "from": "tu1", "to": "c1", "kind": "electrical_signal"},
+           {"id": "L2", "from": "v1", "to": "v1", "kind": "pneumatic_supply"},
+           {"id": "L3", "from": "v1", "to": "c1", "kind": "khong-co-loai-nay"}]
+    r = W.api_bom(con, {"tree": tree, "links": bad, "config": dict(CFG), "name": "sai"})
+    con.close()
+    ws = [w for w in r["warnings"] if w.get("rule_code") == "T-LINK-01"]
+    check("ống khí không có cổng điện → báo",
+          any("cổng electrical" in (w.get("what") or "") for w in ws),
+          str([w.get("what") for w in ws]))
+    check("nối vào chính nó → báo",
+          any("chính nó" in (w.get("what") or "") for w in ws),
+          str([w.get("what") for w in ws]))
+    check("loại liên kết không có thật → báo",
+          any("không có thật" in (w.get("what") or "") for w in ws),
+          str([w.get("what") for w in ws]))
+
+
+def test_lien_ket_trung_canh_cha_con_khong_dem_hai_lan():
+    """Liên kết trùng đúng quan hệ cha–con thì bỏ, không sinh cạnh thứ hai."""
+    tree = _tree(["CDM2B40-150AZ"])
+    g1 = T.to_graph(tree)
+    g2 = T.to_graph(tree, [{"from": "v1", "to": "c1", "kind": "pneumatic_control"}])
+    check("cạnh không tăng lên", len(g1["edges"]) == len(g2["edges"]),
+          f'{len(g1["edges"])} → {len(g2["edges"])}')
+    g3 = T.to_graph(tree, [{"from": "v1", "to": "c1", "kind": "electrical_signal"}])
+    check("nhưng LOẠI khác thì vẫn là cạnh mới",
+          len(g3["edges"]) == len(g1["edges"]) + 1, str(len(g3["edges"])))
+
+
+def test_chuyen_cho_thiet_bi():
+    """Chuyển thiết bị sang cha khác — và ba điều phải chặn."""
+    def t():
+        return {"id": "frl", "type": "frl", "name": "FRL", "children": [
+            {"id": "v1", "type": "valve", "name": "SV1", "children": [
+                {"id": "c1", "type": "cylinder", "name": "XL1", "children": [
+                    {"id": "sc1", "type": "speed_controller", "name": "TL",
+                     "children": []}]}]},
+            {"id": "v2", "type": "valve", "name": "SV2", "children": []}]}
+    tr = t()
+    ok, pb = T.move(tr, "c1", "v2")
+    check("chuyển xy-lanh sang van khác được", ok and not pb, str(pb))
+    check("và nó thật sự nằm ở chỗ mới",
+          (T.parent_of(tr, "c1") or {}).get("id") == "v2")
+    check("cả nhánh con đi theo", T.find(tr, "sc1") is not None)
+    ok, pb = T.move(t(), "c1", "frl")
+    check("KHÔNG chuyển vào cha sai loại", not ok and "không lắp vào" in pb["what"],
+          str(pb))
+    check("và nói ra chỗ nào nhận được", "valve" in (pb or {}).get("fix", ""), str(pb))
+    ok, pb = T.move(t(), "frl", "v1")
+    check("KHÔNG chuyển được gốc", not ok, str(pb))
+    # con cháu + loại hợp lệ: đế manifold nhận cha 'regulator', đặt regulator làm
+    # con của đế rồi chuyển đế vào chính nó
+    cyc = {"id": "frl", "type": "frl", "name": "FRL", "children": [
+        {"id": "m1", "type": "manifold", "name": "Đế", "children": [
+            {"id": "rg", "type": "regulator", "name": "Điều áp", "children": []}]}]}
+    ok, pb = T.move(cyc, "m1", "rg")
+    check("KHÔNG chuyển vào con cháu của chính nó (mất cả nhánh)",
+          not ok and "con cháu" in pb["what"], str(pb))
+    check("cây không bị hỏng sau lần chuyển bị chặn",
+          len([n for n, _, _ in T.walk(cyc)]) == 3)
+
+
+def test_route_api_move_co_that():
+    """Route /api/move phải được đăng ký — môi trường chặn bind nên kiểm mã nguồn."""
+    import inspect
+    src = inspect.getsource(W.Handler.do_POST)
+    check('có route /api/move', '"/api/move"' in src)
+    check("gọi đúng hàm", "api_move(" in src)
+
+
+def test_lien_ket_dien_tu_PLC_doi_ma_van():
+    """Liên kết tín hiệu điện từ PLC phải ĐỔI ĐƯỢC mã van — không chỉ vẽ cho đẹp.
+
+    HAI LỖI ĐO ĐƯỢC khi làm yêu cầu (4):
+      1. PARENT_OF khai plc = ((None,),) tức PLC chỉ được làm GỐC, mà gốc luôn là
+         nguồn khí → KHÔNG BAO GIỜ thêm được node PLC từ giao diện cây. Vì thế
+         bước 4 của graph.resolve() (suy điện áp coil từ PLC) chưa từng dùng được.
+      2. Không có liên kết thì điện áp khai ở node PLC bị bỏ qua hoàn toàn.
+    Test này khoá bằng chứng CỤ THỂ: cùng một cây, chỉ thêm liên kết mà chữ số điện
+    áp trong mã van đổi 5 (24VDC) → 6 (12VDC).
+    """
+    con = db.connect()
+
+    def mk(v):
+        return {"id": "frl", "type": "frl", "name": "FRL", "code": "", "attrs": {},
+                "children": [_station(1, "CDM2B40-150AZ"),
+                             {"id": "plc1", "type": "plc", "name": "PLC", "code": "",
+                              "attrs": {}, "overrides": {"voltage": v},
+                              "children": []}]}
+    out = {}
+    for v in ("24VDC", "12VDC"):
+        for tag, links in (("khong", []),
+                           ("co", [{"from": "plc1", "to": "v1",
+                                    "kind": "electrical_signal"}])):
+            r = W.api_bom(con, {"tree": mk(v), "links": links,
+                                "config": {"valve_series_size": "SY5000"},
+                                "name": "plc"})
+            out[(v, tag)] = (next((n.get("code") for n, _, _ in T.walk(r["tree"])
+                                   if n["type"] == "valve"), None),
+                             r["graph_info"].get("voltage_from_plc"),
+                             T.find(r["tree"], "plc1") is not None)
+    con.close()
+    check("PLC đặt được vào cây (trước đây chỉ được làm gốc nên không thêm được)",
+          all(v[2] for v in out.values()), str(out))
+    check("không liên kết → điện áp PLC bị bỏ qua",
+          out[("12VDC", "khong")][1] is None, str(out[("12VDC", "khong")]))
+    check("có liên kết → engine suy được điện áp",
+          out[("12VDC", "co")][1] == "12VDC", str(out[("12VDC", "co")]))
+    check("và MÃ VAN đổi theo: 5 (24VDC) → 6 (12VDC)",
+          out[("24VDC", "co")][0] == "SY5220-5MZE-C6"
+          and out[("12VDC", "co")][0] == "SY5220-6MZE-C6",
+          f'{out[("24VDC", "co")][0]} vs {out[("12VDC", "co")][0]}')
+
+
+def test_hai_vung_khi_KHONG_khai_duoc_bang_cay():
+    """Khoá GIỚI HẠN đã đo, để không ai tưởng liên kết làm được việc này.
+
+    Cây có ĐÚNG MỘT gốc và mọi node đều có đường lên gốc, nên supply_zones() luôn
+    ra 1 vùng. Liên kết chỉ THÊM được kết nối, không cắt được cái sẵn có. Đã thử ba
+    cách; test này giữ hai cách tiêu biểu. Máy hai nhánh khí độc lập hiện chỉ khai
+    được qua payload {graph} — test_hai_vung_khi_thi_bao_thieu ở trên chứng minh
+    đường đó vẫn chạy.
+    """
+    con = db.connect()
+    base = {"id": "frl", "type": "frl", "name": "FRL", "code": "", "attrs": {},
+            "children": [_station(1, "CDM2B40-150AZ"),
+                         {"id": "src2", "type": "custom", "name": "Khí nhánh 2",
+                          "code": "", "attrs": {}, "children": []},
+                         _station(2, "CDM2B32-100AZ")]}
+    for tag, links in (("nguồn 2 khai bằng node custom, không nối", []),
+                       ("nối nguồn 2 tới van trạm 2 bằng liên kết cấp khí",
+                        [{"from": "src2", "to": "v2", "kind": "pneumatic_supply"}])):
+        r = W.api_bom(con, {"tree": json.loads(json.dumps(base)), "links": links,
+                            "config": dict(CFG), "name": "zone"})
+        check(f"vẫn 1 vùng khí — {tag}", r["graph_info"]["supply_zones"] == 1,
+              str(r["graph_info"]["supply_zones"]))
+    con.close()
+
+
 if __name__ == "__main__":
     print("Kiểm đồ thị đấu nối")
     print("=" * 60)
@@ -710,7 +923,16 @@ if __name__ == "__main__":
                test_goi_y_ma_khong_lan_loai_khac,
                test_quan_he_cha_con_khong_con_o_cut,
                test_thiet_bi_tu_them_phai_vao_BOM_va_CSV,
-               test_ma_sai_van_vao_BOM_kem_canh_bao):
+               test_ma_sai_van_vao_BOM_kem_canh_bao,
+               test_lien_ket_cheo_van_tram_khac_dieu_khien,
+               test_lien_ket_duoc_luu_va_doc_lai,
+               test_xoa_thiet_bi_thi_lien_ket_treo_phai_bi_bo_va_BAO,
+               test_lien_ket_sai_mien_tin_hieu_thi_bao,
+               test_lien_ket_trung_canh_cha_con_khong_dem_hai_lan,
+               test_chuyen_cho_thiet_bi,
+               test_route_api_move_co_that,
+               test_lien_ket_dien_tu_PLC_doi_ma_van,
+               test_hai_vung_khi_KHONG_khai_duoc_bang_cay):
         print(f"\n{fn.__name__}")
         fn()
     print("\n" + "=" * 60)

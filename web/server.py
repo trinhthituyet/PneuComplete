@@ -18,6 +18,7 @@ API:
     GET  /api/ports?code=X&group=Y  cổng THẬT của một mã hàng
     GET  /api/codes?group=X    mã hàng gợi ý cho một nhóm (đọc DB, không hard-code)
     POST /api/classify         {code, tree} → loại thiết bị + chỗ gắn được
+    POST /api/move             {tree, node, parent} → chuyển thiết bị sang cha khác
     GET  /api/graph?project=N  đọc lại sơ đồ đã lưu
     POST /api/bom              nhận CẢ HAI: {inputs,config} phẳng, hoặc {graph,config}
 
@@ -189,6 +190,20 @@ def api_parse(con, code):
             "error": r.get("error")}
 
 
+def api_move(payload):
+    """Chuyển thiết bị sang cha khác. Yêu cầu (4): thêm/bớt ở BẤT KỲ vị trí.
+
+    Làm ở SERVER dù UI đã có bảng PARENT_OF: luật "không chuyển vào con cháu của
+    chính nó" là chỗ mất dữ liệu im lặng (cả nhánh rời khỏi cây), nên chỉ nên có
+    MỘT bản thực thi. Chuyển chỗ là thao tác thưa, thêm một lượt gọi không đáng lo.
+    """
+    tree = payload.get("tree")
+    if not tree:
+        return {"ok": False, "problem": {"what": "chưa có cây", "fix": "", "detail": ""}}
+    ok, pb = T.move(tree, payload.get("node"), payload.get("parent"))
+    return {"ok": ok, "problem": pb, "tree": tree if ok else None}
+
+
 def api_bom(con, payload):
     """Nhận payload PHẲNG (cũ) hoặc ĐỒ THỊ (mới).
 
@@ -238,7 +253,10 @@ def api_bom_tree(con, payload, root):
     # cộng dồn qua mỗi lần bấm Dựng BOM.
     T.drop_generated(root)
     problems = T.validate(root)
-    root, fixed = T.normalize(root)
+    # normalize PHẢI biết liên kết: không thì nó dịch thiết bị về cha đầu tiên gặp
+    # được, trái với liên kết bạn vừa khai. Nên lọc liên kết trước khi normalize.
+    links, dropped = T.prune_links(root, payload.get("links") or [])
+    root, fixed = T.normalize(root, links)
 
     # XOÁ mã do ENGINE điền ở lần dựng trước, giữ mã BẠN gõ.
     #
@@ -263,9 +281,13 @@ def api_bom_tree(con, payload, root):
         elif prev:
             n.pop("filled_by_bom", None)     # người dùng đã đè → quên dấu cũ đi
 
-    gr = T.to_graph(root)
+    # Liên kết đã lọc ở trên (trước normalize). Kiểm miền tín hiệu ở đây, sau khi
+    # cây đã về đúng dạng cuối.
+    link_problems = T.validate_links(root, links)
 
-    res = api_bom_graph(con, payload, gr, tree=root)
+    gr = T.to_graph(root, links)
+
+    res = api_bom_graph(con, payload, gr, tree=root, links=links)
     if res.get("error"):
         return res
 
@@ -280,13 +302,23 @@ def api_bom_tree(con, payload, root):
             "message": "Đã dịch về đúng cha: " + " · ".join(fixed),
             "fix": "Kiểm lại cây bên trái", "rationale": "",
             "detail": "\n".join(fixed)})
+    for pb in link_problems:
+        warns.append({**pb, "code": pb["rule_code"], "message": pb["what"],
+                      "rationale": pb.get("detail") or ""})
+    if dropped:
+        warns.append({
+            "severity": "info", "code": "LINKS_PRUNED", "rule_code": "T-LINK-01",
+            "what": f"đã bỏ {len(dropped)} liên kết trỏ tới thiết bị đã xoá",
+            "message": "Đã bỏ liên kết tới thiết bị đã xoá: " + " · ".join(dropped),
+            "fix": "Nối lại nếu cần", "rationale": "", "detail": "\n".join(dropped)})
     res["warnings"] = warns
     res["tree"] = root
+    res["links"] = links
     res["tree_fixed"] = fixed
     return res
 
 
-def api_bom_graph(con, payload, gr, tree=None):
+def api_bom_graph(con, payload, gr, tree=None, links=None):
     res_g = G.resolve(con, gr)
     if not res_g["inputs"] and not res_g["manual_lines"] and not res_g["own_lines"]:
         return {"error": "sơ đồ chưa có thiết bị nào dựng được BOM "
@@ -340,7 +372,7 @@ def api_bom_graph(con, payload, gr, tree=None):
         # (1) treo phụ kiện engine sinh vào đúng node cha → cây, bảng BOM và sơ
         # đồ cùng thấy quan hệ mẹ–con.
         T.attach_lines(tree, lines)
-        T.save(con, res["project_id"], tree)
+        T.save(con, res["project_id"], tree, links)
     else:
         G.save(con, res["project_id"], gr)
     return {
@@ -448,7 +480,8 @@ class Handler(BaseHTTPRequestHandler):
                                           (q.get("group") or ["custom"])[0]))
             elif u.path == "/api/graph":
                 pid = int((q.get("project") or ["0"])[0])
-                self._send(200, {"graph": G.load(con, pid), "tree": T.load(con, pid)})
+                self._send(200, {"graph": G.load(con, pid), "tree": T.load(con, pid),
+                                 "links": T.load_links(con, pid)})
             elif u.path == "/api/parse":
                 self._send(200, api_parse(con, (q.get("code") or [""])[0]))
             elif u.path == "/api/csv":
@@ -471,6 +504,8 @@ class Handler(BaseHTTPRequestHandler):
             payload = json.loads(raw.decode("utf-8") or "{}")
             if u.path == "/api/bom":
                 self._send(200, api_bom(con, payload))
+            elif u.path == "/api/move":
+                self._send(200, api_move(payload))
             elif u.path == "/api/classify":
                 # POST vì cần gửi kèm CÂY để trả về chỗ gắn được. GET thì cây phải
                 # nhồi vào query string.

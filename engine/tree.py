@@ -81,7 +81,16 @@ PARENT_OF = {
     "manifold_part":    (("manifold",),
                          "gasket/end plate lắp trên đế manifold"),
     "regulator":        (("frl", "manifold", None), "điều áp trên đường khí"),
-    "plc":              ((None,), "PLC đứng riêng, nối bằng tín hiệu điện"),
+    # PLC không nằm trên đường khí, nhưng phải ĐẶT ĐƯỢC vào sơ đồ. Trước đây khai
+    # ((None,),) nghĩa là chỉ được làm GỐC — mà gốc luôn là nguồn khí, nên thực tế
+    # KHÔNG BAO GIỜ thêm được node PLC. Đo được khi làm yêu cầu (4): danh sách "thêm
+    # con" của mọi loại đều không có PLC, và vì thế đường suy điện áp coil từ node
+    # PLC (graph.resolve bước 4) chưa bao giờ dùng được từ giao diện cây.
+    # Gốc đóng vai TỦ/MÁY cho thiết bị không thuộc đường khí — quan hệ CHỨA, không
+    # phải quan hệ dòng khí. Nối tới van bằng LIÊN KẾT electrical_signal.
+    "plc":              (("frl", "custom", None),
+                         "PLC nằm trong máy nhưng không trên đường khí; nối tới van "
+                         "bằng liên kết tín hiệu điện"),
     "frl":              ((None,), "nguồn khí là gốc cây"),
     "custom":           (("cylinder", "valve", "manifold", "frl", "custom", None),
                          "thiết bị ngoài catalog — gắn đâu cũng được"),
@@ -173,13 +182,28 @@ def validate(root):
     return problems
 
 
-def normalize(root):
+def normalize(root, links=None):
     """Chuyển node đặt sai về đúng cha. Trả (root, list mô tả đã sửa gì).
 
     Sửa TƯỜNG MINH và báo ra, không im lặng: người dùng phải biết cây họ nhập đã
     bị dịch chỗ, nếu không họ sẽ tưởng mình khai sai.
+
+    LIÊN KẾT BẠN KHAI THẮNG PHÉP ĐOÁN. Đo được khi làm yêu cầu (4): đặt xy-lanh XL3
+    ở gốc rồi khai liên kết "van SV3 điều khiển XL3" → hàm này vẫn dịch XL3 về van
+    ĐẦU TIÊN (SV1) vì nó chỉ lấy "node hợp lệ đầu tiên gặp được". Kết quả: bản đồ
+    van↔xy-lanh nói XL3 do CẢ SV1 và SV3 điều khiển — hai câu trái nhau, và cỡ van
+    của SV1 bị tính thêm lưu lượng của một xy-lanh không thuộc nó.
+    Nên khi có liên kết chỉ đúng một cha hợp lệ thì đi theo liên kết đó.
     """
     fixed = []
+    # {id node: các id nối tới nó bằng liên kết} — hai chiều, vì cha có thể ở đầu
+    # nào cũng được (control: van→xy-lanh · mount: van→manifold)
+    peers = {}
+    for l in links or []:
+        a, b = l.get("from"), l.get("to")
+        if a and b:
+            peers.setdefault(a, []).append(b)
+            peers.setdefault(b, []).append(a)
 
     def detach(target):
         for n, p, _ in walk(root):
@@ -199,9 +223,15 @@ def normalize(root):
             allowed, _ = rule
             if p.get("type") in allowed:
                 continue
-            # tìm cha hợp lệ: ưu tiên anh em ngay cạnh, rồi mới lên trên
-            cand = None
-            for sib in p.get("children") or []:
+            # (1) LIÊN KẾT BẠN KHAI trước mọi phép đoán
+            cand, why = None, ""
+            for pid in peers.get(n.get("id")) or []:
+                m = find(root, pid)
+                if m is not None and m is not n and m.get("type") in allowed:
+                    cand, why = m, " (theo liên kết bạn khai)"
+                    break
+            # (2) tìm cha hợp lệ: ưu tiên anh em ngay cạnh, rồi mới lên trên
+            for sib in (p.get("children") or []) if cand is None else []:
                 if sib is not n and sib.get("type") in allowed:
                     cand = sib
                     break
@@ -215,7 +245,7 @@ def normalize(root):
             detach(n)
             cand.setdefault("children", []).append(n)
             fixed.append(f"'{n.get('name') or t}' → con của "
-                         f"'{cand.get('name') or cand.get('type')}'")
+                         f"'{cand.get('name') or cand.get('type')}'{why}")
             changed = True
             break
     return root, fixed
@@ -238,8 +268,12 @@ EDGE_FOR = {
 }
 
 
-def to_graph(root):
-    """Cây → {nodes, edges}. Cạnh suy từ quan hệ cha–con, người dùng không vẽ dây."""
+def to_graph(root, links=None):
+    """Cây (+ liên kết chéo) → {nodes, edges}.
+
+    Cạnh CHA–CON suy từ cấu trúc, người dùng không vẽ dây. Cạnh CHÉO là `links` —
+    thứ mà cây một-cha không diễn đạt được (xem docstring LINK_DOMAIN).
+    """
     nodes, edges = [], []
     for n, p, _ in walk(root):
         nodes.append({
@@ -255,7 +289,163 @@ def to_graph(root):
                 edges.append({"id": f"e_{p['id']}_{n['id']}", "from": p["id"],
                               "to": n["id"], "from_port": None, "to_port": None,
                               "kind": kind})
+    # Liên kết TRÙNG cạnh cha–con thì bỏ. Xảy ra thật: khai liên kết "SV3 điều
+    # khiển XL3" rồi normalize() dịch XL3 về đúng con của SV3 theo chính liên kết
+    # đó — giữ cả hai thì control_map() đếm SV3 hai lần.
+    have = {(e["from"], e["to"], e["kind"]) for e in edges}
+    for l in links or []:
+        if (l.get("from"), l.get("to"), l.get("kind")) in have:
+            continue
+        edges.append({"id": l.get("id") or f"l_{l['from']}_{l['to']}",
+                      "from": l["from"], "to": l["to"],
+                      "from_port": l.get("from_port"), "to_port": l.get("to_port"),
+                      "kind": l["kind"], "link": True, "note": l.get("note")})
     return {"nodes": nodes, "edges": edges}
+
+
+# ── LIÊN KẾT CHÉO: thứ cây một-cha KHÔNG diễn đạt được ────────────────────────
+#
+# Bạn yêu cầu "thêm/bớt thiết bị ở bất kỳ vị trí nào và liên kết chúng giữa các
+# trạm khác nhau, càng linh hoạt càng tốt".
+#
+# VÌ SAO KHÔNG BỎ CÂY ĐI CHO LINH HOẠT: cây là chỗ engine suy thuộc tính của con
+# từ cha (cỡ ren tiết lưu lấy từ cửa xy-lanh). Bỏ cây là quay lại canvas kéo dây,
+# tức bắt người dùng vẽ mọi thứ. Nên giữ cây làm XƯƠNG SỐNG và thêm liên kết cho
+# đúng ba việc mà cây không làm được — và cả ba đều CÓ TÁC DỤNG THẬT ngay, vì
+# graph.resolve() đã đọc cạnh từ trước:
+#   1. pneumatic_control  van trạm này điều khiển xy-lanh trạm khác
+#                         → control_map() → gán đúng mã van cho từng xy-lanh
+#   2. electrical_signal   PLC cấp tín hiệu cho van ở nhiều trạm
+#                         → điện áp coil suy từ node PLC
+# mechanical_mount cũng nhận, cho quan hệ gá đặt không theo đường khí.
+#
+# GIỚI HẠN ĐÃ ĐO, KHÔNG PHẢI CHƯA LÀM: pneumatic_supply nhận được nhưng KHÔNG tạo
+# ra vùng khí thứ hai. Cây có ĐÚNG MỘT gốc, và mọi node đều có đường lên gốc, nên
+# supply_zones() luôn ra 1 vùng — liên kết chỉ THÊM được kết nối, không cắt được
+# cái sẵn có. Đã thử ba cách (nhánh regulator · nguồn thứ hai khai bằng node
+# custom · chèn thêm đế manifold): cả ba đều ra 1 vùng.
+# Máy hai nhánh khí độc lập hiện chỉ khai được qua payload {graph} (nodes+edges
+# tuỳ ý) — xem tests/test_graph.py::test_hai_vung_khi_thi_bao_thieu. Muốn khai từ
+# giao diện cây thì phải cho gốc là ĐƯỜNG KHÍ NHÀ MÁY và bộ FRL thành con, tức đổi
+# hình cây; chưa làm, và không giả vờ là đã làm.
+#
+# KIỂM MIỀN TÍN HIỆU: mỗi loại liên kết đòi hai đầu phải CÓ cổng thuộc miền đó,
+# đọc từ GROUPS[...]["ports"] — không phải bảng cặp-loại viết tay. Nhờ vậy "nối
+# tín hiệu điện vào ống khí" bị chặn bằng chính dữ liệu cổng đã có.
+LINK_DOMAIN = {
+    "pneumatic_control": "pneumatic",
+    "pneumatic_supply": "pneumatic",
+    "electrical_signal": "electrical",
+    "mechanical_mount": "mechanical",
+}
+
+
+def _domains(ntype):
+    return {p.get("kind") for p in (G.GROUPS.get(ntype) or {}).get("ports") or []}
+
+
+def prune_links(root, links):
+    """Bỏ liên kết trỏ tới node đã xoá. Trả (còn lại, [mô tả đã bỏ gì]).
+
+    XOÁ NODE thì liên kết của nó thành trỏ vào hư không. Bỏ IM LẶNG là người dùng
+    tưởng vẫn còn nối; giữ lại thì to_graph() sinh cạnh trỏ vào id không tồn tại và
+    resolve() gom vùng khí sai.
+    """
+    ids = {n.get("id") for n, _, _ in walk(root)}
+    keep, dropped = [], []
+    for l in links or []:
+        if l.get("from") in ids and l.get("to") in ids:
+            keep.append(l)
+        else:
+            missing = [x for x in (l.get("from"), l.get("to")) if x not in ids]
+            dropped.append(f"{l.get('from')}→{l.get('to')} (đã xoá: "
+                           + ", ".join(str(m) for m in missing) + ")")
+    return keep, dropped
+
+
+def validate_links(root, links):
+    """Trả list vấn đề dạng 3 phần. KHÔNG tự sửa."""
+    problems = []
+    by_id = {n.get("id"): n for n, _, _ in walk(root)}
+    seen = set()
+    for l in links or []:
+        a, b, kind = l.get("from"), l.get("to"), l.get("kind")
+        tag = f"{a}→{b}"
+
+        def bad(what, fix, detail):
+            problems.append({"rule_code": "T-LINK-01", "severity": "warn",
+                             "node": a, "what": what, "field": "link",
+                             "fix": fix, "detail": detail})
+        if a == b:
+            bad("liên kết nối node với chính nó", "Xoá liên kết này",
+                "Một thiết bị không tự cấp khí cho chính nó.")
+            continue
+        if kind not in LINK_DOMAIN:
+            bad(f"loại liên kết '{kind}' không có thật",
+                "Chọn lại loại: " + ", ".join(sorted(LINK_DOMAIN)),
+                "Loại liên kết dùng chung từ vựng với cạnh cha–con "
+                "(graph.EDGE_KINDS) để resolve() hiểu được.")
+            continue
+        if (a, b, kind) in seen:
+            bad(f"liên kết {tag} bị khai hai lần", "Xoá bản trùng",
+                "Khai hai lần thì vùng khí và bản đồ van↔xy-lanh đếm trùng.")
+            continue
+        seen.add((a, b, kind))
+        dom = LINK_DOMAIN[kind]
+        for nid in (a, b):
+            t = (by_id.get(nid) or {}).get("type")
+            if dom not in _domains(t):
+                bad(f"{(by_id.get(nid) or {}).get('name') or nid} không có cổng "
+                    f"{dom} nên không nối kiểu này được",
+                    "Chọn loại liên kết khác, hoặc nối tới thiết bị khác",
+                    f"Cổng của '{t}' theo GROUPS: "
+                    + (", ".join(sorted(_domains(t))) or "không có cổng nào"))
+    return problems
+
+
+def move(root, nid, new_parent_id):
+    """Chuyển thiết bị sang cha khác. Trả (ok, vấn đề hoặc None).
+
+    BA ĐIỀU PHẢI CHẶN, và điều thứ ba là chỗ dễ mất dữ liệu nhất:
+      · không chuyển được node GỐC (không có cha)
+      · cha mới phải hợp lệ theo PARENT_OF — nếu không thì normalize() lại dịch đi
+        ngay ở lần dựng sau, và người dùng thấy thao tác của mình 'tự hoàn tác'
+      · KHÔNG chuyển vào chính con cháu của nó: nhánh đó sẽ rời khỏi cây và biến
+        mất khỏi mọi vòng walk() — mất dữ liệu im lặng, không phải chỉ hiển thị sai
+    """
+    node = find(root, nid)
+    tgt = find(root, new_parent_id)
+    if node is None or tgt is None:
+        return False, {"rule_code": "T-MOVE-01", "severity": "warn", "node": nid,
+                       "what": "không tìm thấy thiết bị hoặc chỗ đến",
+                       "field": "parent", "fix": "Chọn lại", "detail": ""}
+    if node is root:
+        return False, {"rule_code": "T-MOVE-01", "severity": "warn", "node": nid,
+                       "what": "không chuyển được gốc cây", "field": "parent",
+                       "fix": "Gốc là nguồn khí, luôn ở trên cùng", "detail": ""}
+    allowed = PARENT_OF.get(node.get("type"), ((), ""))[0]
+    if tgt.get("type") not in allowed:
+        return False, {"rule_code": "T-MOVE-01", "severity": "warn", "node": nid,
+                       "what": f"{node.get('type')} không lắp vào "
+                               f"{tgt.get('type')} được",
+                       "field": "parent",
+                       "fix": "Chỗ nhận được: "
+                              + " · ".join(str(a or "gốc cây") for a in allowed),
+                       "detail": PARENT_OF.get(node.get("type"), ((), ""))[1]}
+    if any(d is tgt for d, _, _ in walk(node)):
+        return False, {"rule_code": "T-MOVE-01", "severity": "warn", "node": nid,
+                       "what": "không chuyển vào chính con cháu của nó",
+                       "field": "parent",
+                       "fix": f"Chuyển '{tgt.get('name') or tgt.get('id')}' ra "
+                              f"ngoài trước",
+                       "detail": "Làm vậy thì cả nhánh rời khỏi cây và biến mất "
+                                 "khỏi BOM mà không báo gì."}
+    par = parent_of(root, nid)
+    if par is tgt:
+        return True, None                    # đã ở đúng chỗ, không phải lỗi
+    par["children"] = [c for c in par["children"] if c is not node]
+    tgt.setdefault("children", []).append(node)
+    return True, None
 
 
 def inputs_from(root):
@@ -382,7 +572,13 @@ def attach_lines(root, lines):
                     if n.get("type") == ctype and not n.get("from_bom")
                     and id(n) not in hosted]
             if same:
-                h = same[0]
+                # DÒNG CHƯA CÓ MÃ tìm node CHƯA CÓ MÃ trước. Đo được (yêu cầu 4):
+                # ba trạm, van của trạm 3 không sinh được mã → dòng gap 'Van điện
+                # từ' chọn node van ĐẦU TIÊN, mà node đó vừa được fill_codes điền
+                # mã xong nên không đánh dấu gì, rồi CHIẾM luôn chỗ. Kết quả: BOM
+                # nói thiếu một van, còn sơ đồ không chỉ ra van nào.
+                h = next((x for x in same if not x.get("code")), same[0]) if gap \
+                    else same[0]
                 hosted.add(id(h))
                 if gap and not h.get("code"):
                     h["gap_item"] = l.get("item")
@@ -435,13 +631,19 @@ def drop_generated(root):
     return root
 
 
-def save(con, project_id, root):
+def save(con, project_id, root, links=None):
+    """Lưu cây + liên kết chéo vào CÙNG một bản ghi.
+
+    Lưu chung vì chúng là một sơ đồ: lưu riêng thì mở lại project cũ có thể ra cây
+    mới với liên kết cũ trỏ vào node không còn tồn tại.
+    """
     G.ensure_table(con)
     con.execute(
         """insert into project_graph (project_id, graph_json) values (?,?)
            on conflict (project_id) do update set
              graph_json=excluded.graph_json, updated_at=datetime('now')""",
-        (project_id, json.dumps({"tree": root}, ensure_ascii=False)))
+        (project_id, json.dumps({"tree": root, "links": links or []},
+                                ensure_ascii=False)))
     con.commit()
 
 
@@ -450,3 +652,12 @@ def load(con, project_id):
     if not d:
         return None
     return d.get("tree") if isinstance(d, dict) and "tree" in d else None
+
+
+def load_links(con, project_id):
+    """Liên kết chéo đã lưu. Trả [] cho project lưu TRƯỚC khi có tính năng này —
+    bản ghi cũ không có khoá 'links', và thiếu nó không phải lỗi."""
+    d = G.load(con, project_id)
+    if not isinstance(d, dict):
+        return []
+    return d.get("links") or []
