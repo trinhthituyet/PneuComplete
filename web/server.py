@@ -57,6 +57,12 @@ NEEDS_INPUT = [
      "Áp khí máy nén cấp vào FRL. Engine cần nó để chọn cỡ AC: đồ thị catalog có "
      "hai họ đường theo áp vào (0,7 và 1,0 MPa) cho số khác nhau, mà không điều "
      "áp LÊN được nên áp vào phải ≤ áp nguồn. Catalog không có thông số này."),
+    ("fitting_points", "Điểm nối ống → ren (kiểu · cỡ ống · cỡ ren · số lượng)",
+     "Engine KHÔNG suy được SỐ LƯỢNG đầu nối: đo trên hai máy thật, tỉ lệ cút vuông "
+     "trên mỗi thiết bị là 1,42 và 2,74 — chênh gấp đôi. Van dùng cửa one-touch và "
+     "tiết lưu AS…F đã có one-touch sẵn nên đoạn van↔xy-lanh không cần đầu nối rời; "
+     "toàn bộ đầu nối thuộc mạng phân phối khí mà engine không thấy cách đi ống. "
+     "Bạn khai điểm nối, engine chọn ĐÚNG MÃ và chặn tổ hợp không tồn tại."),
     ("manifold_type", "Kiểu manifold",
      "Type 20 và Type 20P dùng end plate khác nhau; chọn sai thì không lắp được."),
     # Ba khoá SỞ THÍCH — nhiều phương án đều lắp được nên engine không tự chọn,

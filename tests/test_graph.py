@@ -387,6 +387,8 @@ def test_khoa_engine_tu_tinh_khong_con_bat_khai():
           "frl_size" in comp and "frl_size" not in keys)
     check("áp nguồn xưởng VẪN hỏi — catalog không có thông số này",
           "supply_pressure_mpa" in keys)
+    check("điểm nối đầu nối VẪN hỏi — số lượng không suy được từ đồ thị",
+          "fitting_points" in keys and "fitting_points" not in comp)
     check("cỡ cửa đường trục chuyển sang engine tự tính — đọc từ đồ thị",
           "main_line_port_size" in comp and "main_line_port_size" not in keys)
 

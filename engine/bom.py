@@ -109,6 +109,11 @@ DEFAULT_PROJECT = {
     # thế hệ AC: AC-A-E hoặc AC-D-E — hai catalog khác nhau, mã khác nhau
     "frl_series": "AC-A-E",
     "frl_size": None,            # engine TỰ TÍNH từ đồ thị lưu lượng (xem dưới)
+    # ── ĐIỂM NỐI ỐNG → REN, người dùng khai ─────────────────────────────────
+    # Danh sách [{shape, tube_od, port_size, qty}]. Engine KHÔNG suy được số lượng
+    # (đo: 1,42 vs 2,74 cút/thiết bị trên hai máy thật) nhưng chọn ĐÚNG MÃ được.
+    # shape: L=cút vuông · H=nối thẳng · U=chữ Y chia nhánh · F=ren trong · E=xuyên vách
+    "fitting_points": [],
     # ÁP NGUỒN của xưởng — engine KHÔNG suy được, và cần nó để chọn cỡ FRL:
     # đồ thị catalog có hai họ đường theo áp vào (0,7 và 1,0 MPa) cho số khác
     # nhau, mà không điều áp LÊN được nên áp vào phải ≤ áp nguồn.
@@ -684,6 +689,55 @@ def build(con, inputs, project=None, project_name="demo"):
                         onetouch_by_od[float(r_ot["od"])] += \
                             r_ot["n"] * res["qty"] * count
                         onetouch_open += r_ot["n"] * res["qty"] * count
+
+    # ── ĐẦU NỐI ONE-TOUCH từ điểm nối người dùng khai (R-FIT-01) ────────────
+    # Engine chọn mã, không đếm số. Xem rationale của R-FIT-01: đo trên hai máy
+    # thật, tỉ lệ đầu nối trên mỗi thiết bị chênh gấp đôi nên không suy được.
+    pts = project.get("fitting_points") or []
+    if pts:
+        sid_kq2 = con.execute(
+            "select id from series where catalog_id='KQ2-E'").fetchone()
+        for i, pt in enumerate(pts):
+            if not sid_kq2:
+                gaps.append(PB.as_gap(PB.problem(
+                    "R-FIT-01", "chưa có ngữ pháp đầu nối KQ2",
+                    field="fitting_points",
+                    detail="cần nạp db/seed/grammar/kq2.yaml")))
+                break
+            want = {k: v for k, v in pt.items() if k != "qty"}
+            g = generate.generate(con, sid_kq2["id"], dict(want))
+            if not g.get("ok"):
+                # Tổ hợp không tồn tại theo ràng buộc đọc từ catalog → NÓI RA kèm
+                # các lựa chọn còn lắp được, không sinh mã bịa.
+                gaps.append(PB.as_gap(PB.problem(
+                    "R-FIT-01",
+                    f"điểm nối #{i + 1}: không có đầu nối nào thoả",
+                    field="fitting_points",
+                    options=g.get("options"),
+                    subject=", ".join(f"{k}={v}" for k, v in sorted(want.items())),
+                    detail=g.get("gap") or g.get("error"))))
+                continue
+            mm = materialize.materialize(con, g["part_number"], templates)
+            lines.append({
+                "layer": "piping", "part_number": g["part_number"],
+                "qty": float(pt.get("qty") or 1), "rule_code": "R-FIT-01",
+                "rationale": "đầu nối cho điểm nối bạn khai; engine chọn mã theo "
+                             "cỡ ống + cỡ ren, kiểm bằng ràng buộc từ catalog",
+                "confidence": 0.9 if mm.get("ok") else 0.7,
+                "note": None, "unit": None})
+    elif onetouch_open:
+        # CÓ ống nghĩa là CÓ điểm nối, nên im lặng bỏ qua là để BOM thiếu mà không
+        # ai biết. Báo gap kèm lý do vì sao engine không tự đếm được.
+        gaps.append(PB.as_gap(PB.problem(
+            "R-FIT-01", "chưa khai điểm nối ống → ren nên BOM thiếu đầu nối",
+            field="fitting_points",
+            fix="Khai danh sách điểm nối: kiểu (L/H/U/F/E) · cỡ ống · cỡ ren · số lượng",
+            detail="Engine KHÔNG suy được số lượng đầu nối: đo trên hai máy thật, "
+                   "tỉ lệ cút vuông trên mỗi thiết bị là 1,42 và 2,74 (chênh gấp "
+                   "đôi). Van dùng cửa one-touch và tiết lưu AS…F đã có one-touch "
+                   "sẵn nên đoạn van↔xy-lanh không cần đầu nối rời; toàn bộ đầu "
+                   "nối thuộc mạng phân phối khí, cách đi ống thật engine không "
+                   "thấy được. Khai điểm nối thì engine chọn đúng mã.")))
 
     # ── NÓI RA những gì engine tự quyết ─────────────────────────────────────
     # Tự quyết mà im lặng thì người dùng không biết có gì cần kiểm lại. Dùng

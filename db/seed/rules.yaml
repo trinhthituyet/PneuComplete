@@ -430,6 +430,29 @@
     DOCUMENT/FRL/es40-69-AC-D.pdf trang 22 (AC), 103 (AR), 128 (AW);
     ground truth db/seed/charts/_groundtruth-ac.yaml
 
+- code: R-FIT-01
+  name: Đầu nối one-touch cho điểm nối ống → ren
+  # Thực thi trong engine/bom.py, không bằng when/then: số điểm nối là DANH SÁCH
+  # người dùng khai, không suy được từ actuator. Điều kiện không bao giờ đúng.
+  scope: per_system
+  priority: 996
+  when:
+    all:
+      - {attr: __never__, eq: true}
+  then: {}
+  rationale: >
+    Engine KHÔNG suy được SỐ LƯỢNG đầu nối. Đo trên hai máy thật: tỉ lệ cút vuông
+    trên mỗi thiết bị là 1,42 và 2,74 — chênh gấp đôi; trên mỗi tiết lưu là 0,84 và
+    2,00. Không có tỉ lệ nào ổn định để suy.
+    Lý do cấu trúc: van dùng cửa one-touch (C6) và tiết lưu AS…F đã có one-touch
+    sẵn, nên đoạn van↔xy-lanh KHÔNG cần đầu nối rời. Toàn bộ cút và chữ Y thuộc
+    MẠNG PHÂN PHỐI KHÍ, mà cách đi ống thật không được ghi ở đâu engine thấy được.
+    Nên phân công: bạn khai ĐIỂM NỐI (bạn biết layout máy), engine chọn ĐÚNG MÃ —
+    đó mới là chỗ hay sai. Mã sinh ra được kiểm bằng ràng buộc đọc từ 1.366 mã KQ2
+    mà catalog liệt kê, nên không sinh tổ hợp không tồn tại.
+  source: >
+    Đo trên BOM thật 2 máy; ràng buộc mã từ DOCUMENT/FITTING/es50-37-kq2.pdf
+
 - code: R-PARSE-00
   name: Mã hàng không đọc được
   # Không tự kích hoạt — engine gọi trực tiếp khi materialize() thất bại.

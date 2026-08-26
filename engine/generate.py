@@ -160,11 +160,18 @@ def generate(con, series_id, want, prefix=None, soft=()):
             # không ràng buộc nào áp lên ô này → chỉ dám chọn khi có Nil (mặc định)
             nil = next((o for o in picks if o["code"].lower() in NIL), None)
             if nil is None:
-                if len(opts) == 1:                 # ô literal, cố định
-                    picks = opts
-                elif not slot.get("is_required", True):
+                # THỨ TỰ QUAN TRỌNG: kiểm TUỲ CHỌN trước, literal-một-option sau.
+                # Ngược lại thì ô tuỳ chọn có đúng 1 option vẫn bị điền: đo được
+                # KQ2-E.undecoded_digit (is_required=0, một option '1') làm engine
+                # sinh 'KQ2L06-02NS1' trong khi mã BOM thật là 'KQ2L06-02NS'.
+                # Chính kq2.yaml ghi ở ô đó: "KHÔNG tự sinh ra".
+                # Đã đo: đó là ô DUY NHẤT vừa tuỳ chọn vừa có 1 option, nên đổi
+                # thứ tự không ảnh hưởng ngữ pháp nào khác.
+                if not slot.get("is_required", True):
                     # ô tuỳ chọn không bị ràng buộc → bỏ qua, mã vẫn hợp lệ
                     continue
+                elif len(opts) == 1:               # ô literal BẮT BUỘC → cố định
+                    picks = opts
                 else:
                     undecided.append({
                         "slot": slot["name"], "reason": "không có ràng buộc và không "

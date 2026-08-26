@@ -684,7 +684,10 @@ def test_cua_khong_co_o_co_engine_chon_thi_nang_co():
     assert w, [x.get("code") for x in r["warnings"]]
     frl = next((l["part_number"] for l in r["lines"] if l["layer"] == "air_prep"), None)
     assert frl and frl.startswith("AC50"), f"phải nâng lên cỡ 50: {frl}"
-    assert not r["gaps"], r["gaps"]
+    # Chỉ đòi KHÔNG có gap về FRL. Gap 'fitting_points' là chuyện khác (engine
+    # không suy được số đầu nối) và luôn có khi chưa khai điểm nối.
+    assert not [g for g in r["gaps"] if (g.get("field") or "").startswith("frl")], \
+        r["gaps"]
 
 
 def test_khong_sinh_ma_khong_ton_tai_theo_bang_how_to_order():
@@ -786,6 +789,48 @@ def test_AR_D_chan_to_hop_khong_co_trong_bang():
         con.close()
 
 
+FIT_PTS = [
+    {"shape": "L", "tube_od": "06", "port_size": "1/4", "thread_material": "N",
+     "port_standard": "R", "seal_method": "S", "qty": 28},
+    {"shape": "L", "tube_od": "10", "port_size": "1/4", "thread_material": "A",
+     "port_standard": "R", "seal_method": "S", "qty": 26},
+    {"shape": "U", "tube_od": "06", "port_size": "00", "thread_material": "A",
+     "qty": 64},
+]
+
+
+def test_dau_noi_sinh_dung_ma_BOM_that():
+    """Engine không đếm được số đầu nối, nhưng phải chọn ĐÚNG MÃ.
+
+    Ba mã dưới đây lấy nguyên từ BOM khách hàng, kèm số lượng thật.
+    """
+    r = _build([("CDM2B40-150AZ", 4)],
+               dict(FRL_AUTO, frl_series="AC-D-E", fitting_points=FIT_PTS))
+    got = {l["part_number"]: l["qty"] for l in r["lines"]
+           if l["layer"] == "piping" and l["part_number"].startswith("KQ2")}
+    assert got == {"KQ2L06-02NS": 28, "KQ2L10-02AS": 26, "KQ2U06-00A": 64}, got
+
+
+def test_chua_khai_diem_noi_thi_BAO_GAP_khong_im_lang():
+    """Có ống nghĩa là có điểm nối — bỏ qua im lặng là để BOM thiếu mà không ai biết."""
+    r = _build([("CDM2B40-150AZ", 4)], dict(FRL_AUTO, frl_series="AC-D-E"))
+    g = next((x for x in r["gaps"] if x.get("field") == "fitting_points"), None)
+    assert g, [x.get("field") for x in r["gaps"]]
+    # lý do phải nêu SỐ ĐO, không nói chung chung
+    assert "1,42" in (g.get("detail") or "") and "2,74" in (g.get("detail") or ""), g
+
+
+def test_diem_noi_khong_ton_tai_thi_bao_chu_khong_bia_ma():
+    """Ràng buộc KQ2 phải chặn tổ hợp không có, và liệt kê cái còn lắp được."""
+    bad = [{"shape": "H", "tube_od": "02", "port_size": "3/8",
+            "thread_material": "A", "port_standard": "R", "qty": 2}]
+    r = _build([("CDM2B40-150AZ", 4)],
+               dict(FRL_AUTO, frl_series="AC-D-E", fitting_points=bad))
+    assert not [l for l in r["lines"] if l["part_number"].startswith("KQ2")], r["lines"]
+    g = next((x for x in r["gaps"] if x.get("field") == "fitting_points"), None)
+    assert g and g.get("options"), g
+
+
 def test_KQ2_chan_to_hop_khong_co_trong_catalog():
     """Ràng buộc rút từ 1366 mã KQ2 catalog LIỆT KÊ, không từ ma trận đánh dấu."""
     from engine import generate as G
@@ -799,10 +844,13 @@ def test_KQ2_chan_to_hop_khong_co_trong_catalog():
                 ({"shape": "H", "tube_od": "02", "port_size": "3/8"}, "ø2 + cửa 3/8")):
             g = G.generate(con, sid, dict(base, **want))
             assert not g.get("ok"), f"{tag} không có trong catalog mà vẫn sinh: {g}"
+        # KHÔNG có '1' ở cuối: ô undecoded_digit là TUỲ CHỌN nên engine không tự
+        # điền. Mã BOM thật cũng vậy — 'KQ2H06-08A', 'KQ2L06-01NS'. Test này từng
+        # kỳ vọng 'KQ2H06-02A1', tức đã encode chính cái lỗi của generate().
         for want, exp in (
-                ({"shape": "H", "tube_od": "06", "port_size": "1/4"}, "KQ2H06-02A1"),
+                ({"shape": "H", "tube_od": "06", "port_size": "1/4"}, "KQ2H06-02A"),
                 ({"shape": "L", "tube_od": "06", "port_size": "1/8",
-                  "thread_material": "N"}, "KQ2L06-01N1")):
+                  "thread_material": "N"}, "KQ2L06-01N")):
             got = G.generate(con, sid, dict(base, **want)).get("part_number")
             assert got == exp, f"{want} → {got}, cần {exp}"
     finally:
