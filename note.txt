@@ -1,72 +1,52 @@
-Xong yêu cầu 3. Câu trả lời ngắn: không dùng được, và lý do không phải kỹ 
-  thuật.
+Host tới được rồi, cảm ơn. Tôi đã khảo sát — nhưng rào cản không nằm ở tầng 
+  mạng, nên kết luận không đổi.
 
-  Cổng đăng nhập
+  Đo được
 
-  Nguyên văn trên trang từng công cụ:
+  ┌──────────────────────────────┬────────────────────────────────────────┐
+  │             thứ              │                kết quả                 │
+  ├──────────────────────────────┼────────────────────────────────────────┤
+  │ mssc.smcworld.com/robots.txt │ HTTP 404 → không có luật riêng, cho    │
+  │                              │ phép (RFC 9309)                        │
+  ├──────────────────────────────┼────────────────────────────────────────┤
+  │ /fccs/                       │ HTTP 200 · 3.156 byte · vỏ Vue SPA, 21 │
+  │                              │  tệp JS                                │
+  ├──────────────────────────────┼────────────────────────────────────────┤
+  │ dữ liệu sản phẩm trong JS    │ KHÔNG — chunk lớn nhất 18 KB, 0 lần có │
+  │ tĩnh?                        │  SY3000/5000/7000, AC20/AC30, sonic,   │
+  │                              │ conductance, Cv                        │
+  ├──────────────────────────────┼────────────────────────────────────────┤
+  │ nơi tính toán                │ máy chủ: /fccs_server/index.php/api/   │
+  └──────────────────────────────┴────────────────────────────────────────┘
 
-  ▎ This service is for registered users only. Please log in to use it.
-  ▎ NOTICE — Effective from the end of February 2026, user registration will 
-  ▎ be mandatory for using the selection software.
+  Đây là chỗ tôi hy vọng nhất và nó không thành: nếu bảng hệ số nằm trong JS
+  tĩnh thì đọc là xong, không cần tài khoản, không qua cổng nào. Nhưng không
+  có. Mọi con số chỉ ra từ endpoint calculate — tức từ bên trong dịch vụ mà
+  chủ trang ghi rõ "This service is for registered users only."
 
-  Hôm nay là 26/8/2026, nên quy định đó đã có hiệu lực. Toàn bộ phần tính toán
-  nằm ở host riêng mssc.smcworld.com sau cổng đăng nhập; trang công khai chỉ
-  còn danh sách công cụ, 0 bảng số liệu. Tôi không tạo tài khoản và không đăng
-  nhập thay bạn — việc đó cần thông tin cá nhân của bạn và đồng ý điều khoản
-  dịch vụ nhân danh bạn.
+  Hai đường tôi từ chối, và không phải vì không làm được
 
-  Tải 5 request, ≤1 req/s, UA PneuCompleteBot/0.1. Ghi đủ trong
-  docs/smc-selection-software.md: 12 công cụ tính toán đọc được tên; 18 công
-  cụ chọn model có tên nằm trong ảnh (alt rỗng) nên tôi chỉ ghi slug — không
-  suy tên từ chữ viết tắt.
+  1. Gọi calculate mà không đăng nhập. Bộ đăng nhập của app đặt một khoá ở
+  sessionStorage tên __fake_token__, và interceptor axios không gắn header
+  Authorization nào — dấu hiệu cổng đăng nhập nằm ở phía client. Nhưng ổ khoá
+  lỏng không phải là lời mời. Chủ trang đã nói rõ dịch vụ dành cho người đã
+  đăng ký, nên gọi vòng qua đó là dùng thứ mình không được phép dùng, dù máy
+  chủ có kiểm hay không. Tôi không thử calculate, và cũng không dò các
+  endpoint khác xem chỗ nào bỏ ngỏ.
 
-  Nếu bạn tự đăng nhập, ba phép kiểm đáng làm
+  Nhân đây: bạn là khách hàng của SMC, nên nếu muốn thì đây là điều đáng báo
+  cho họ. Tôi chỉ nêu sự kiện.
 
-  Không phải để lấy dữ liệu hàng loạt, mà để kiểm chéo độc lập — mỗi phép chỉ
-  cần vài số:
+  2. Đăng nhập bằng tài khoản của bạn. Mật khẩu vào phiên này là vào cả lịch
+  sử shell và log. Và trích tự động từ sau cổng đăng nhập là chuyện điều khoản
+  dịch vụ — khác hẳn đọc trang công khai; tôi chưa đọc điều khoản đó và nó
+  không phải việc tôi quyết thay bạn.
 
-  ┌───────────┬─────────────┬────────────────────────────────────────────┐
-  │  công cụ  │    nhập     │                   so với                   │
-  ├───────────┼─────────────┼────────────────────────────────────────────┤
-  │ fccs (dẫn │ SY5000, 0,5 │ ngưỡng cỡ van trong R-VLV-02 → có thể bỏ   │
-  │  nạp âm   │  MPa        │ được câu hỏi valve_series_size             │
-  │ C)        │             │                                            │
-  ├───────────┼─────────────┼────────────────────────────────────────────┤
-  │           │ lưu lượng + │ chart.pick_frl_size() đọc từ đồ thị đã số  │
-  │ acmss     │  áp nguồn   │ hoá — phép kiểm mạnh nhất cho cả vòng số   │
-  │           │             │ hoá                                        │
-  ├───────────┼─────────────┼────────────────────────────────────────────┤
-  │ accs      │ ø40 × 150,  │ engine/calc.py                             │
-  │           │ 30 ck/ph    │                                            │
-  └───────────┴─────────────┴────────────────────────────────────────────┘
+  Hai đường sạch
 
-  Đưa tôi con số là tôi thêm vào ground truth và cổng kiểm, không cần vào
-  trang.
-
-  Kết quả dùng được nhất: ba lỗi tuân thủ robots.txt
-
-  robots.txt của smcworld.com có hai khối User-agent: * — một do Cloudflare
-  chèn (Allow: /), một của chính SMC (3 dòng Disallow).
-
-  1. urllib.robotparser bỏ khối * thứ hai — CPython _add_entry() ghi rõ "the 
-  first default entry wins".
-  2. Stdlib URL-encode dấu * thành %2A, nên mọi luật có * vô hiệu im lặng. Gộp
-  khối xong vẫn không chặn được vì lỗi này.
-  3. robots_ok() coi mọi lỗi là "mặc định cho phép" — proxy trả 403 cho
-  mssc.smcworld.com mà hàm vẫn nói CHO PHÉP, tức crawler sẵn sàng tải một host
-  nó chưa từng đọc được luật.
-
-  Hậu quả: crawler tưởng được phép tải ba đường dẫn chủ site đã chặn. Đã kiểm 
-  DB: 0/2718 URL đã tải thuộc các đường đó — chưa từng vi phạm, nhưng đó là
-  may, không phải do luật đang chạy đúng.
-
-  Sửa bằng crawler/robots.py (stdlib-only) + tests/test_robots.py (32 kiểm,
-  fixture là robots.txt thật nên chạy offline). Có test khẳng định stdlib sai
-  ở đúng hai chỗ — ngày nào stdlib sửa thì test đỏ và bỏ được bộ đọc riêng. Đã
-  thêm test_robots.py vào cổng của tools/package.py: mã tuân thủ không được
-  hỏng lặng lẽ.
-
-  Một điều bạn nên biết: robots.txt chặn ClaudeBot, GPTBot, CCBot và 5 bot AI
-  khác toàn site. Crawler của dự án khai đúng danh tính riêng nên rơi vào nhóm
-  *; tôi giữ nguyên nguyên tắc không giả dạng trình duyệt và không mượn tên
-  bot khác — có test khoá điều này.
+  - Bạn đọc 10 số trong trình duyệt rồi điền vào db/seed/_doi-chieu-mss.yaml.
+  Phần việc của bạn chỉ là đọc số — phép so, sai số và đối chứng âm đã dựng
+  sẵn.
+  - Xin phép SMC (API hoặc thoả thuận dùng dữ liệu). Đường này mở ra nhiều hơn
+  10 con số, và giải quyết luôn chỗ engine đang bó tay nhất: mạng phân phối
+  khí và số lượng đầu nối.
