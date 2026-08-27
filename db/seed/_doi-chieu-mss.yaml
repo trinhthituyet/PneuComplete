@@ -1,0 +1,84 @@
+# Đối chiếu số của engine với Model Selection Software của SMC (mssc.smcworld.com)
+#
+# VÌ SAO CÓ TỆP NÀY: 19 tiêu chí ở _groundtruth-ac.yaml chỉ chứng minh phép trích
+# đồ thị TỰ NHẤT QUÁN với nhãn trục in trong PDF. Chúng KHÔNG chứng minh con số
+# cuối cùng đúng. MSS là nguồn thứ hai, do chính SMC tính, nên nó là đối chiếu
+# ĐỘC LẬP thật — đúng loại bằng chứng dự án này vẫn dựa vào (mã BOM khách hàng cho
+# đồ thị FRL, 1.366 mã KQ2 cho ngữ pháp).
+#
+# CÁCH DÙNG: bạn đăng nhập mssc.smcworld.com bằng tay, gõ đúng phần `nhap:` dưới
+# đây, rồi điền số đọc được vào `mss:`. Sau đó:
+#     python3 tools/doi_chieu_mss.py
+# Ô `mss:` để null nghĩa là CHƯA KIỂM — công cụ báo "chờ", KHÔNG báo đạt. Một cổng
+# mà bỏ trống cũng xanh thì không phải cổng.
+#
+# VÌ SAO KHÔNG PHẢI TÔI LÀM: xem docs/smc-selection-software.md. Ba lý do đo được:
+# host mssc.smcworld.com bị chặn ở tầng mạng (403 tunnel), trang đăng nhập trả 403
+# cho UA trung thực, và công cụ là ứng dụng một trang cần chạy JavaScript.
+#
+# LƯU Ý DỮ LIỆU: đây là MỘT NHÚM giá trị để kiểm chéo, không phải bản sao dữ liệu
+# SMC. Dùng nội bộ, không phát hành lại — cùng quy tắc với DOCUMENT/.
+
+nguon: "https://mssc.smcworld.com/ — bản web, cần đăng nhập tài khoản SMC"
+nguoi_kiem: null            # ai đọc số, để lần sau hỏi lại được
+ngay_kiem: null             # YYYY-MM-DD
+
+# Sai số cho phép. Không phải con số tôi tự đặt: đồ thị catalog vẽ nét dày ~3 px và
+# _groundtruth-ac.yaml đo được sai số đọc trục 0,002 MPa. MSS nội suy từ cùng dữ
+# liệu gốc nhưng có thể dùng bảng mịn hơn, nên nới ra một mức.
+sai_so:
+  ap_mpa: 0.03              # áp ra: lệch quá 0,03 MPa là phải giải thích
+  luu_luong_pc: 10          # lưu lượng: lệch quá 10%
+  cỡ: 0                     # CỠ THÂN phải khớp TUYỆT ĐỐI — lệch 1 cỡ là mua sai
+
+# ── (1) CỠ AC THEO LƯU LƯỢNG — công cụ acmss ─────────────────────────────────
+# Đây là phép kiểm QUAN TRỌNG NHẤT: nó kiểm cả vòng số hoá đồ thị (75 ô đồ thị,
+# 29 model) bằng một nguồn ngoài. engine đọc db/seed/charts/ac-flow.yaml.
+co_ac:
+  - nhap: {luu_luong_lpm: 200, ap_can_mpa: 0.4, ap_nguon_mpa: 0.7, ho: "AC-D"}
+    engine: {co: "20", ap_ra_mpa: 0.448, dat_mpa: 0.5}
+    mss: {co: null, ap_ra_mpa: null}
+  - nhap: {luu_luong_lpm: 500, ap_can_mpa: 0.4, ap_nguon_mpa: 0.7, ho: "AC-D"}
+    engine: {co: "20", ap_ra_mpa: 0.416, dat_mpa: 0.5}
+    mss: {co: null, ap_ra_mpa: null}
+  - nhap: {luu_luong_lpm: 1000, ap_can_mpa: 0.4, ap_nguon_mpa: 0.7, ho: "AC-D"}
+    engine: {co: "30", ap_ra_mpa: 0.436, dat_mpa: 0.5}
+    mss: {co: null, ap_ra_mpa: null}
+    # engine nói rõ cỡ nhỏ hơn KHÔNG đủ: AC20-D chỉ còn 0,365 MPa. Nếu MSS cho
+    # AC20 ở ca này thì một trong hai bên sai — đó là ca đáng giá nhất.
+  - nhap: {luu_luong_lpm: 1500, ap_can_mpa: 0.5, ap_nguon_mpa: 1.0, ho: "AC-D"}
+    engine: {co: "30", ap_ra_mpa: 0.530, dat_mpa: 0.6}
+    mss: {co: null, ap_ra_mpa: null}
+
+# ── (2) DẪN NẠP ÂM C CỦA VAN — công cụ fccs ───────────────────────────────────
+# engine/chart.py đã trích C từ DOCUMENT/MAINFOLD/7-1-2-p0387-0722-SY_en.pdf tr43,
+# nhưng ghi chú của chính nó là "(CHỜ NGƯỜI ĐỐI CHIẾU)". Đây là chỗ xoá được chữ đó.
+# Nếu khớp thì bỏ được câu hỏi `valve_series_size` — engine tự chọn cỡ van.
+dan_nap_am_van:
+  - nhap: {ho_van: "SY3000", don_vi: "dm3/(s·bar)"}
+    engine: {C: 1.3, luu_luong_lpm_tai_0_5mpa: 469}
+    mss: {C: null, luu_luong_lpm: null}
+  - nhap: {ho_van: "SY5000", don_vi: "dm3/(s·bar)"}
+    engine: {C: 3.1, luu_luong_lpm_tai_0_5mpa: 1118}
+    mss: {C: null, luu_luong_lpm: null}
+  - nhap: {ho_van: "SY7000", don_vi: "dm3/(s·bar)"}
+    engine: {C: 4.4, luu_luong_lpm_tai_0_5mpa: 1587}
+    mss: {C: null, luu_luong_lpm: null}
+
+# ── (3) LƯU LƯỢNG TIÊU THỤ — công cụ accs ─────────────────────────────────────
+# engine/calc.py tính bằng công thức, không tra bảng, nên đây là kiểm CÔNG THỨC.
+# Lệch hệ thống (mọi ca lệch cùng một tỉ lệ) thường là quy đổi ANR hoặc chuyện
+# tính/không tính thể tích cần đẩy — nên ghi cả L/chu kỳ, không chỉ L/phút.
+luu_luong_tieu_thu:
+  - nhap: {nong_mm: 40, hanh_trinh_mm: 150, ap_mpa: 0.5, chu_ky_s: 2.0,
+           tac_dong: "2 chiều", so_luong: 1}
+    engine: {L_moi_chu_ky: 2.2373, lpm: 67.12}
+    mss: {L_moi_chu_ky: null, lpm: null}
+  - nhap: {nong_mm: 25, hanh_trinh_mm: 50, ap_mpa: 0.5, chu_ky_s: 1.0,
+           tac_dong: "2 chiều", so_luong: 1}
+    engine: {L_moi_chu_ky: 0.2913, lpm: 17.48}
+    mss: {L_moi_chu_ky: null, lpm: null}
+  - nhap: {nong_mm: 63, hanh_trinh_mm: 200, ap_mpa: 0.5, chu_ky_s: 3.0,
+           tac_dong: "2 chiều", so_luong: 1}
+    engine: {L_moi_chu_ky: 7.3999, lpm: 148.00}
+    mss: {L_moi_chu_ky: null, lpm: null}

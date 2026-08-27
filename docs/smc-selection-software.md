@@ -81,6 +81,40 @@ Ba phép kiểm cụ thể, mỗi phép chỉ cần vài số:
 Nếu bạn chạy ba phép đó và đưa tôi con số, tôi thêm chúng vào ground truth và cổng
 kiểm — không cần tôi vào trang.
 
+**Đã dựng sẵn chỗ điền:** `db/seed/_doi-chieu-mss.yaml` có 10 ca, mỗi ca ghi rõ phần
+`nhap:` (gõ đúng thế vào MSS) và số `engine:` đang cho, còn `mss:` để trống.
+Điền xong chạy `python3 tools/doi_chieu_mss.py`.
+
+Ô để trống = CHƯA KIỂM, không phải đạt: lệnh luôn in số ca chờ và trả mã 2 khi còn
+ca chờ. `--doi-chung` nhồi số sai vào rồi đòi bắt hết — một phép so không thể báo
+lệch thì không phải phép so.
+
+## Đưa tài khoản cho tôi đăng nhập thì sao?
+
+Đã hỏi, và câu trả lời là KHÔNG — lý do đầu tiên là kỹ thuật, đo được:
+
+| thử | kết quả |
+|---|---|
+| `https://mssc.smcworld.com/` | `Tunnel connection failed: 403` — host bị chặn ở tầng mạng của môi trường này |
+| `https://mssc.smcworld.com/fccs/` | cùng lỗi |
+| `https://www.smcworld.com/customer/en/tologin.do` | **HTTP 403** — máy chủ từ chối chính UA trung thực `PneuCompleteBot/0.1` |
+
+Ba thứ có tài khoản cũng không sửa được:
+1. Host chứa công cụ không tới được. Không phải chuyện đăng nhập.
+2. Trang đăng nhập trả 403 cho UA trung thực. Muốn qua thì phải giả dạng trình
+   duyệt — đúng cái ta đã thống nhất KHÔNG làm, và cũng là cái robots.txt của họ
+   thể hiện rõ ý (chặn 8 bot AI theo tên).
+3. Công cụ là ứng dụng một trang (`mssc.smcworld.com/fccs/#/permit`) chạy bằng
+   JavaScript. Không có HTML để đọc; cần trình duyệt thật.
+
+Hai lý do nữa, không kỹ thuật:
+- Mật khẩu của bạn nằm trong phiên làm việc này thì nó cũng nằm trong lịch sử
+  shell và log. Tôi không muốn tạo ra rủi ro đó cho bạn khi việc chính vẫn không
+  chạy được.
+- Trích dữ liệu tự động từ sau cổng đăng nhập là chuyện ĐIỀU KHOẢN DỊCH VỤ, khác
+  hẳn đọc trang công khai. Tôi chưa đọc điều khoản đó, và nó không phải việc tôi
+  quyết thay bạn.
+
 ## Ba lỗi tuân thủ robots.txt phát hiện nhờ lần thử này
 
 Đây là phần **có sửa được ngay**, và là kết quả dùng được nhất của yêu cầu (3).
