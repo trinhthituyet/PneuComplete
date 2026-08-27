@@ -1,4 +1,4 @@
-# Model Selection Program của SMC — khảo sát 2026-08-26
+# Model Selection Program của SMC — khảo sát 2026-08-26, bổ sung 2026-08-27
 
 Yêu cầu (3) trong `PHân tích.txt`: *"vào trang này xem xét đánh giá xem có sử dụng
 được không, trích xuất và phân tích dữ liệu, so sánh với catalog"* —
@@ -89,31 +89,51 @@ kiểm — không cần tôi vào trang.
 ca chờ. `--doi-chung` nhồi số sai vào rồi đòi bắt hết — một phép so không thể báo
 lệch thì không phải phép so.
 
-## Đưa tài khoản cho tôi đăng nhập thì sao?
+## Sau khi bạn bỏ chặn mssc.smcworld.com (2026-08-27)
 
-Đã hỏi, và câu trả lời là KHÔNG — lý do đầu tiên là kỹ thuật, đo được:
+Host tới được rồi. Đã khảo sát kiến trúc — và kết luận KHÔNG đổi, vì rào cản không
+nằm ở tầng mạng.
 
-| thử | kết quả |
+**Đo được:**
+
+| thứ | kết quả |
 |---|---|
-| `https://mssc.smcworld.com/` | `Tunnel connection failed: 403` — host bị chặn ở tầng mạng của môi trường này |
-| `https://mssc.smcworld.com/fccs/` | cùng lỗi |
-| `https://www.smcworld.com/customer/en/tologin.do` | **HTTP 403** — máy chủ từ chối chính UA trung thực `PneuCompleteBot/0.1` |
+| `mssc.smcworld.com/robots.txt` | HTTP 404 → không có luật riêng, cho phép (RFC 9309 §2.3.1) |
+| `mssc.smcworld.com/fccs/` | HTTP 200 · 3.156 byte · vỏ Vue SPA, 21 tệp JS |
+| dữ liệu sản phẩm trong JS tĩnh? | **KHÔNG.** Chunk lớn nhất 18 KB, 0 lần xuất hiện `SY3000/SY5000/SY7000`, `AC20/AC30`, `sonic`, `conductance`, `Cv` |
+| nơi tính toán | **máy chủ**: `mssc.smcworld.com/fccs_server/index.php/api/` |
 
-Ba thứ có tài khoản cũng không sửa được:
-1. Host chứa công cụ không tới được. Không phải chuyện đăng nhập.
-2. Trang đăng nhập trả 403 cho UA trung thực. Muốn qua thì phải giả dạng trình
-   duyệt — đúng cái ta đã thống nhất KHÔNG làm, và cũng là cái robots.txt của họ
-   thể hiện rõ ý (chặn 8 bot AI theo tên).
-3. Công cụ là ứng dụng một trang (`mssc.smcworld.com/fccs/#/permit`) chạy bằng
-   JavaScript. Không có HTML để đọc; cần trình duyệt thật.
+Bề mặt API đọc được từ `app.js` (dùng để hiểu kiến trúc, không phải để gọi):
+`getAllLanguages` · `type_id_categories` · `select_options` · **`calculate`** ·
+`login {userId, password}` · `updatePCConfig`. Gửi
+`application/x-www-form-urlencoded`, `withCredentials: true`.
 
-Hai lý do nữa, không kỹ thuật:
-- Mật khẩu của bạn nằm trong phiên làm việc này thì nó cũng nằm trong lịch sử
-  shell và log. Tôi không muốn tạo ra rủi ro đó cho bạn khi việc chính vẫn không
-  chạy được.
-- Trích dữ liệu tự động từ sau cổng đăng nhập là chuyện ĐIỀU KHOẢN DỊCH VỤ, khác
-  hẳn đọc trang công khai. Tôi chưa đọc điều khoản đó, và nó không phải việc tôi
-  quyết thay bạn.
+Vì dữ liệu KHÔNG có trong JS tĩnh, mọi con số chỉ ra từ `calculate` — tức từ bên
+trong dịch vụ mà chủ trang ghi rõ *"This service is for registered users only."*
+
+## Vì sao vẫn không tự đăng nhập / không tự gọi API
+
+Không phải "không làm được". Là **không nên**, và đây là hai đường tôi từ chối:
+
+1. **Gọi `calculate` mà không đăng nhập.** Bộ đăng nhập của app đặt một khoá ở
+   sessionStorage tên `__fake_token__`, và interceptor của axios KHÔNG gắn header
+   Authorization nào — dấu hiệu cho thấy cổng đăng nhập nằm ở phía client. Nhưng
+   *ổ khoá lỏng không phải là lời mời*. Chủ trang đã nói rõ dịch vụ dành cho người
+   đã đăng ký; gọi API vòng qua đó là dùng thứ mình không được phép dùng, dù máy
+   chủ có kiểm hay không. Tôi KHÔNG thử `calculate`, và cũng không thử các endpoint
+   khác để xem chỗ nào bỏ ngỏ.
+   (Nhân đây: chỗ này bạn là khách hàng của SMC — nếu muốn, đây là điều đáng báo cho
+   họ. Tôi chỉ nêu sự kiện, không viết công cụ khai thác.)
+2. **Đăng nhập bằng tài khoản của bạn.** Mật khẩu vào phiên này là vào cả lịch sử
+   shell và log. Và trích tự động từ sau cổng đăng nhập là chuyện ĐIỀU KHOẢN DỊCH
+   VỤ — khác hẳn đọc trang công khai, tôi chưa đọc điều khoản đó, và nó không phải
+   việc tôi quyết thay bạn.
+
+**Hai đường sạch:**
+- Bạn mở trình duyệt, đăng nhập, đọc 10 số, điền vào `db/seed/_doi-chieu-mss.yaml`.
+  Tôi đã dựng sẵn phép so + đối chứng âm nên phần việc của bạn chỉ là đọc số.
+- Muốn tự động thì xin phép SMC (API hoặc thoả thuận dùng dữ liệu). Đó là đường
+  đúng, và nó cũng mở ra nhiều hơn 10 con số.
 
 ## Ba lỗi tuân thủ robots.txt phát hiện nhờ lần thử này
 
