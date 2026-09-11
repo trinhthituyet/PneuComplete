@@ -85,3 +85,7 @@ Catalog_Tieng_Viet/
 /PH*n*t*ch*.txt
 /Ph*n*t*ch*.txt
 *.rar
+
+# Cấu hình Claude Code của TỪNG MÁY — không commit. Skill trong .claude/skills/ thì
+# CÓ commit, vì nó là quy trình của dự án, không phải thiết lập cá nhân.
+.claude/settings.local.json

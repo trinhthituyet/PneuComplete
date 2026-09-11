@@ -989,12 +989,37 @@ def main(argv):
             if r.get(k):
                 print(f"    {k}: {r[k]}")
         return 1
-    print(f"✓ trang {page}: {r['n_paths']} polyline · {len(r['series'])} đường trích được")
-    print(f"    trục X: {r['x_unit']}  nhãn {[v for _, v in r['x_ticks']][:6]}")
-    print(f"    trục Y: {r['y_unit']}  nhãn {[v for _, v in r['y_ticks']][:6]}")
-    print(f"    ô đồ thị trên trang: {r['panels']}")
-    for i, s in enumerate(r["series"], 1):
-        print(f"    đường {i}: {s['n_points']} điểm gốc → {s['points'][:4]}…")
+    # In theo TỪNG Ô. Bản trước in `r['n_paths']`, `r['series']`, `r['x_unit']` —
+    # những khoá của thời digitize() còn coi mỗi trang là MỘT đồ thị. Từ khi đổi
+    # sang nhiều ô mỗi trang, lệnh xem trước này chết bằng KeyError: 'n_paths', tức
+    # nhịp "đo trước khi ghi" của cả quy trình không dùng được. Không ai thấy vì
+    # cổng và bộ sinh gọi digitize() trực tiếp, không qua main().
+    print(f"✓ trang {page}: {r['n_curves']} đường cong thô · {r['n_ok']}/"
+          f"{len(r['panels'])} ô hiệu chuẩn được · nguồn {r['source']}"
+          + (f" · loại {r['kind']}" if r["kind"] else f" · loại lẫn {r['kinds']}"))
+    for p in r["panels"]:
+        print(f"\n    ── ô {p.get('title') or '(không đọc được tiêu đề)'}"
+              f"   [{p['kind']}]"
+              + (f"   cửa {p['port']}" if p.get("port") else ""))
+        print(f"       trục X: {p['x_caption']}")
+        print(f"               nhãn {p['x_ticks'][:6]}")
+        print(f"       trục Y: {p['y_caption']}")
+        print(f"               nhãn {p['y_ticks'][:6]}")
+        print(f"       {p['n_curves']} đường"
+              + (f" · BỎ {len(p['dropped'])}: {p['dropped'][:3]}" if p.get("dropped") else "")
+              + (f" · cắt {p['trimmed_points']} điểm vượt trục"
+                 if p.get("trimmed_points") else ""))
+        # Vượt trục là thước đo chất lượng hiệu chuẩn: đường cong không được ra
+        # ngoài khung quá dung sai. In ra để thấy ngay ô nào đáng ngờ.
+        print(f"       vượt trục: x {p['overshoot_x_frac'] * 100:.2f}% · "
+              f"y {p['overshoot_y_mpa']:.4f} MPa")
+        for i, ser in enumerate(p["series"], 1):
+            tag = f"áp vào {ser['inlet_mpa']} MPa" if ser.get("inlet_mpa") else "—"
+            if ser.get("set_mpa") is not None:
+                tag += f" · áp đặt {ser['set_mpa']}"
+            print(f"       đường {i}: {tag}"
+                  f"{' (nét đứt)' if ser.get('dashed') else ''}"
+                  f" → {[[round(x, 1), round(y, 3)] for x, y in ser['points'][:3]]}…")
     return 0
 
 

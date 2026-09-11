@@ -574,6 +574,39 @@ def negative_controls(got, gt):
     return ok_all
 
 
+def _cli_xem_truoc():
+    """`python3 -m parsers.pdf_chart <pdf> <trang>` phải chạy được.
+
+    VÌ SAO KIỂM: đó là nhịp ĐẦU TIÊN của quy trình nạp dữ liệu ("đo trước khi ghi",
+    xem .claude/skills/nap-data). Và nó đã CHẾT một thời gian mà không ai biết:
+    main() còn in r['n_paths'] / r['series'] / r['x_unit'] — các khoá của thời
+    digitize() coi mỗi trang là MỘT đồ thị. Từ khi đổi sang nhiều ô mỗi trang, lệnh
+    này ném KeyError: 'n_paths'. Cổng và bộ sinh gọi digitize() trực tiếp nên không
+    ai chạm vào main(), và bước "xem trước" âm thầm không dùng được — người ta sẽ
+    nhảy thẳng sang ghi YAML.
+    Kiểm cả trang lưu lượng (22) và trang áp-vào→áp-ra (23): hai loại ô khác nhau,
+    và ô pressure_char không có `inlet_mpa` trên mỗi đường.
+    """
+    import contextlib
+    import io
+
+    from parsers import pdf_chart
+    for page in ("22", "23"):
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                rc = pdf_chart.main([AC_PDF, page])
+        except Exception as e:            # noqa: BLE001 — báo, không che
+            print(f"  FAIL  lệnh xem trước   trang {page}: "
+                  f"{type(e).__name__}: {e}")
+            return False
+        if rc != 0:
+            print(f"  FAIL  lệnh xem trước   trang {page} trả mã {rc}")
+            return False
+    print("  PASS  lệnh-xem-trước  python3 -m parsers.pdf_chart chạy được "
+          "trên cả 2 loại ô (tr22 lưu lượng, tr23 áp vào→áp ra)")
+    return True
+
+
 def main():
     if not Path(AC_PDF).exists():
         print("BỎ QUA: không có DOCUMENT/ (catalog có bản quyền, không đóng gói)")
@@ -602,12 +635,14 @@ def main():
     n_pass = sum(1 for _, ok, _ in rows if ok)
 
     neg_ok = negative_controls(got, gt)
+    cli_ok = _cli_xem_truoc()
 
     print()
     print("=" * 70)
     print(f"{n_pass}/{len(rows)} tiêu chí PASS · đối chứng âm "
-          f"{'ĐẠT' if neg_ok else 'KHÔNG ĐẠT'}")
-    if n_pass == len(rows) and neg_ok:
+          f"{'ĐẠT' if neg_ok else 'KHÔNG ĐẠT'} · lệnh xem trước "
+          f"{'CHẠY' if cli_ok else 'HỎNG'}")
+    if n_pass == len(rows) and neg_ok and cli_ok:
         print("→ ĐẠT CỔNG: được phép sinh db/seed/charts/ac-flow.yaml")
         print("  CHƯA BAO GỒM (xem `gaps` trong ground truth):")
         for g in gt.get("gaps") or []:
